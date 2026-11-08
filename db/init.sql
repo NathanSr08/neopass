@@ -61,3 +61,28 @@ SELECT * FROM (VALUES
    '["Chaînes en direct", "Replay 7 jours", "Compatible mobile et TV"]'::jsonb, 40, FALSE, TRUE, 60)
 ) AS v(slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort)
 WHERE NOT EXISTS (SELECT 1 FROM offers);
+
+-- Avis clients (publiés après validation par l'admin)
+CREATE TABLE IF NOT EXISTS reviews (
+  id          SERIAL PRIMARY KEY,
+  offer_id    INTEGER NOT NULL REFERENCES offers(id) ON DELETE CASCADE,
+  author      TEXT NOT NULL,
+  rating      SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment     TEXT NOT NULL DEFAULT '',
+  approved    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reviews_offer_idx ON reviews (offer_id, approved, created_at DESC);
+
+-- Codes promo
+CREATE TABLE IF NOT EXISTS promo_codes (
+  code        TEXT PRIMARY KEY,
+  pct         INTEGER NOT NULL CHECK (pct BETWEEN 1 AND 90),
+  expires_at  TIMESTAMPTZ,
+  max_uses    INTEGER CHECK (max_uses IS NULL OR max_uses > 0),
+  uses        INTEGER NOT NULL DEFAULT 0,
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_pct INTEGER;

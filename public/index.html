@@ -303,6 +303,51 @@ footer { border-top: 1px solid var(--line); padding-block: 40px 110px; color: va
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
+/* Étoiles et avis */
+.stars { --pct: 0%; position: relative; display: inline-block; font-size: 16px; line-height: 1; letter-spacing: 2px; color: rgba(255, 255, 255, .16); white-space: nowrap; }
+.stars::before { content: "★★★★★"; }
+.stars::after { content: "★★★★★"; position: absolute; left: 0; top: 0; width: var(--pct); overflow: hidden; color: #ffc94d; text-shadow: 0 0 10px rgba(255, 201, 77, .45); }
+.rating-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: none; border: 0; padding: 0; color: var(--muted); font: 500 13px/1 var(--font-body); cursor: pointer; text-align: left; }
+.rating-row b { color: var(--text); font: 700 13px/1 var(--font-mono); }
+.rating-row:hover u, .rating-row:focus-visible u { color: var(--cyan); }
+.rating-row u { text-decoration: none; transition: color .2s; }
+.rating-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 4px; }
+dialog.rv-dlg { width: min(560px, calc(100vw - 24px)); max-height: 90vh; overflow: auto; padding: 26px; border-radius: 22px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur(4px); }
+.rv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+.rv-head h3 { font-size: 20px; }
+.rv-close { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; }
+.rv-close:hover { border-color: var(--cyan); color: var(--cyan); }
+.rv-sum { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 14px; }
+.rv-sum strong { font: 800 30px/1 var(--font-display); color: var(--text); }
+.rv-sum .stars { font-size: 20px; }
+.rv-list { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 10px; }
+.rv-list li { padding: 14px 16px; border-radius: 14px; background: var(--ink-2); border: 1px solid var(--line); }
+.rv-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rv-meta span { font-weight: 600; font-size: 14px; }
+.rv-meta time { color: var(--muted); font: 500 12px/1 var(--font-mono); }
+.rv-list p { margin: 8px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.rv-form { display: grid; gap: 12px; margin-top: 22px; padding-top: 20px; border-top: 1px dashed rgba(160, 150, 255, .3); }
+.rv-form h4 { margin: 0; font: 700 15px/1.2 var(--font-display); }
+.star-input { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 4px; border: 0; padding: 0; margin: 0; }
+.star-input input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.star-input label { font-size: 30px; line-height: 1; color: rgba(255, 255, 255, .18); cursor: pointer; transition: color .15s, transform .15s; }
+.star-input label:hover, .star-input label:hover ~ label, .star-input input:checked ~ label { color: #ffc94d; }
+.star-input label:hover { transform: scale(1.15); }
+.star-input input:focus-visible + label { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
+.rv-form textarea { resize: vertical; min-height: 90px; font: 400 14px/1.5 var(--font-body); }
+.rv-note { margin: 0; color: var(--muted); font-size: 12px; }
+
+/* Code promo */
+.promo { display: flex; gap: 8px; }
+.promo .name-input { flex: 1; min-width: 0; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: .04em; }
+.promo .name-input::placeholder { text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+.promo .btn { flex: none; padding: 10px 16px; }
+.promo-ok { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(43, 230, 255, .45); background: rgba(43, 230, 255, .08); font: 500 13px/1.3 var(--font-mono); color: var(--cyan); }
+.promo-ok button { background: none; border: 0; color: var(--muted); cursor: pointer; font: 500 12px/1 var(--font-body); text-decoration: underline; padding: 0; }
+.promo-ok button:hover { color: var(--text); }
+.promo-banner { display: inline-flex; align-items: center; gap: 8px; margin: -12px 0 22px; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(43, 230, 255, .45); background: rgba(43, 230, 255, .08); color: var(--cyan); font: 500 13px/1.3 var(--font-mono); }
+
 .muted { color: var(--muted); }
 .name-input {
   width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
@@ -394,6 +439,7 @@ footer { border-top: 1px solid var(--line); padding-block: 40px 110px; color: va
         <p>Chaque offre s'active rapidement. Sélectionnez une formule : le message de commande s'ouvre pré-rempli dans WhatsApp, avec le nom de l'offre et son tarif annuel.</p>
       </div>
       <div class="tabs" role="tablist" aria-label="Filtrer les offres" id="tabs"></div>
+      <div class="promo-banner" id="promoBanner" hidden></div>
       <div class="grid" id="grid"><p class="muted">Chargement du catalogue…</p></div>
     </div>
   </section>
@@ -413,6 +459,11 @@ footer { border-top: 1px solid var(--line); padding-block: 40px 110px; color: va
           <hr>
           <div class="total"><span style="color:var(--muted);font-size:14px">Total / an</span><b id="rcTotal">0 €</b></div>
           <div class="disc" id="rcDisc"></div>
+          <form class="promo" id="promoForm" novalidate>
+            <input class="name-input" id="promoInput" type="text" maxlength="30" placeholder="Code promo" autocomplete="off" spellcheck="false" aria-label="Code promo">
+            <button class="btn btn-ghost" type="submit">Appliquer</button>
+          </form>
+          <div class="promo-ok" id="promoOk" hidden><span id="promoOkText"></span><button type="button" id="promoRemove">Retirer</button></div>
           <input class="name-input" id="rcAffil" type="text" maxlength="60" placeholder="Affiliation : nom du parrain (facultatif)" aria-label="Affiliation">
           <input class="name-input" id="rcName" type="text" maxlength="60" placeholder="Votre prénom (facultatif)" autocomplete="given-name" aria-label="Votre prénom">
           <a class="btn btn-primary" id="rcBtn" href="#" target="_blank" rel="noopener">
@@ -469,6 +520,32 @@ footer { border-top: 1px solid var(--line); padding-block: 40px 110px; color: va
   <span>Une question ?</span>
 </a>
 
+
+<dialog class="rv-dlg" id="rvDlg" aria-labelledby="rvTitle">
+  <div class="rv-head">
+    <div>
+      <span class="eyebrow">Avis clients</span>
+      <h3 id="rvTitle" style="margin-top:8px">Avis</h3>
+    </div>
+    <button class="rv-close" type="button" id="rvClose" aria-label="Fermer">×</button>
+  </div>
+  <div class="rv-sum" id="rvSum"></div>
+  <ul class="rv-list" id="rvList"></ul>
+  <form class="rv-form" id="rvForm" novalidate>
+    <h4>Donner mon avis</h4>
+    <fieldset class="star-input" aria-label="Ta note">
+      <input type="radio" name="rating" id="st5" value="5"><label for="st5" title="5 étoiles">★</label>
+      <input type="radio" name="rating" id="st4" value="4"><label for="st4" title="4 étoiles">★</label>
+      <input type="radio" name="rating" id="st3" value="3"><label for="st3" title="3 étoiles">★</label>
+      <input type="radio" name="rating" id="st2" value="2"><label for="st2" title="2 étoiles">★</label>
+      <input type="radio" name="rating" id="st1" value="1"><label for="st1" title="1 étoile">★</label>
+    </fieldset>
+    <input class="name-input" id="rvAuthor" type="text" maxlength="40" placeholder="Ton prénom" autocomplete="given-name" aria-label="Ton prénom" required>
+    <textarea class="name-input" id="rvComment" maxlength="600" placeholder="Ton expérience avec cette offre…" aria-label="Ton avis" required></textarea>
+    <p class="rv-note">Les avis sont vérifiés avant publication.</p>
+    <button class="btn btn-primary" type="submit" id="rvSubmit">Publier mon avis</button>
+  </form>
+</dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/app.js"></script>

@@ -13,6 +13,10 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const CATEGORIES = ['packs', 'streaming', 'vpn', 'musique', 'tv'];
 const STATUSES = ['new', 'confirmed', 'cancelled'];
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
+const SITE_URL = 'https://' + (process.env.DOMAIN || 'neonpass.uned.live');
 
 function fatal(msg) {
   console.error('[config] ' + msg);
@@ -48,6 +52,47 @@ const slugify = (s) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 
+// ---------- Notifications admin (Telegram / Discord) ----------
+const notifyChannels = () => ({
+  telegram: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID),
+  discord: /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(DISCORD_WEBHOOK_URL)
+});
+
+async function notify(text) {
+  const ch = notifyChannels();
+  const jobs = [];
+  if (ch.telegram) {
+    jobs.push(
+      fetch('https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, disable_web_page_preview: true }),
+        signal: AbortSignal.timeout(6000)
+      }).then(async (r) => { if (!r.ok) throw new Error('Telegram ' + r.status + ' ' + (await r.text()).slice(0, 200)); })
+    );
+  }
+  if (ch.discord) {
+    jobs.push(
+      fetch(DISCORD_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text.slice(0, 1900), allowed_mentions: { parse: [] } }),
+        signal: AbortSignal.timeout(6000)
+      }).then(async (r) => { if (!r.ok) throw new Error('Discord ' + r.status + ' ' + (await r.text()).slice(0, 200)); })
+    );
+  }
+  const results = await Promise.allSettled(jobs);
+  const errors = results.filter((r) => r.status === 'rejected').map((r) => r.reason.message);
+  errors.forEach((e) => console.error('[notify] ' + e));
+  return { sent: jobs.length - errors.length, errors };
+}
+// Envoi en arrière-plan : ne bloque jamais la réponse au client
+const notifyLater = (text) => { notify(text).catch(() => {}); };
+
+// ---------- Codes promo ----------
+const normCode = (v) => str(v, 30).toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+const PROMO_VALID = `active AND (expires_at IS NULL OR expires_at > now()) AND (max_uses IS NULL OR uses < max_uses)`;
+
 function rateLimit(max, windowMs) {
   const hits = new Map();
   setInterval(() => hits.clear(), 10 * 60 * 1000).unref();
@@ -77,9 +122,15 @@ function toOffer(r) {
     hue: r.hue,
     isPack: r.is_pack,
     active: r.active,
-    sort: r.sort
+    sort: r.sort,
+    rating: r.rating_avg == null ? null : Math.round(Number(r.rating_avg) * 10) / 10,
+    reviewCount: Number(r.review_count) || 0
   };
 }
+
+const REVIEW_AGG = `
+  LEFT JOIN (SELECT offer_id, avg(rating) AS rating_avg, count(*) AS review_count
+             FROM reviews WHERE approved GROUP BY offer_id) ra ON ra.offer_id = o.id`;
 
 async function getSettings() {
   const { rows } = await pool.query('SELECT key, value FROM settings');
@@ -182,8 +233,62 @@ app.get(
 app.get(
   '/api/offers',
   wrap(async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM offers WHERE active ORDER BY sort, id');
+    const { rows } = await pool.query(`SELECT o.*, ra.rating_avg, ra.review_count FROM offers o ${REVIEW_AGG}
+                                       WHERE o.active ORDER BY o.sort, o.id`);
     res.json(rows.map(toOffer));
+  })
+);
+
+// ----- Avis -----
+app.get(
+  '/api/offers/:id/reviews',
+  wrap(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT r.id, r.author, r.rating, r.comment, r.created_at
+       FROM reviews r JOIN offers o ON o.id = r.offer_id
+       WHERE r.offer_id = $1 AND r.approved AND o.active
+       ORDER BY r.created_at DESC LIMIT 50`,
+      [Number(req.params.id) || 0]
+    );
+    res.json(rows);
+  })
+);
+
+app.post(
+  '/api/offers/:id/reviews',
+  rateLimit(3, 10 * 60 * 1000),
+  wrap(async (req, res) => {
+    const offerId = Number(req.params.id);
+    const author = str(req.body.author, 40);
+    const rating = parseInt(req.body.rating, 10);
+    const comment = str(req.body.comment, 600);
+    if (!author) throw new HttpError(400, 'Indique ton prénom.');
+    if (!(rating >= 1 && rating <= 5)) throw new HttpError(400, 'Choisis une note de 1 à 5 étoiles.');
+    if (comment.length < 5) throw new HttpError(400, 'Ton avis doit faire au moins 5 caractères.');
+    const o = await pool.query('SELECT 1 FROM offers WHERE id = $1 AND active', [offerId || 0]);
+    if (!o.rowCount) throw new HttpError(404, 'Offre introuvable.');
+    await pool.query('INSERT INTO reviews (offer_id, author, rating, comment) VALUES ($1, $2, $3, $4)', [
+      offerId, author, rating, comment
+    ]);
+    const on = await pool.query('SELECT name FROM offers WHERE id = $1', [offerId]);
+    notifyLater(
+      '⭐ Nouvel avis à valider\n' +
+      (on.rows[0] ? on.rows[0].name : 'Offre #' + offerId) + ' — ' + '★'.repeat(rating) + '☆'.repeat(5 - rating) + '\n' +
+      author + ' : « ' + comment.slice(0, 300) + ' »\n' + SITE_URL + '/admin'
+    );
+    res.status(201).json({ ok: true, message: 'Merci ! Ton avis sera publié après validation.' });
+  })
+);
+
+app.post(
+  '/api/promo/check',
+  rateLimit(15, 60 * 1000),
+  wrap(async (req, res) => {
+    const code = normCode(req.body.code);
+    if (!code) throw new HttpError(400, 'Saisis un code promo.');
+    const r = await pool.query(`SELECT code, pct FROM promo_codes WHERE code = $1 AND ${PROMO_VALID}`, [code]);
+    if (!r.rowCount) throw new HttpError(404, 'Ce code promo est invalide ou expiré.');
+    res.json({ code: r.rows[0].code, pct: r.rows[0].pct });
   })
 );
 
@@ -201,24 +306,60 @@ app.post(
     const settings = await getSettings();
     const sum = rows.reduce((s, r) => s + Number(r.price), 0);
     const discount = rows.length >= settings.discountMin && settings.discountPct > 0;
-    const total = discount ? round2(sum * (1 - settings.discountPct / 100)) : round2(sum);
     const items = rows.map((r) => ({ id: r.id, name: r.name, price: Number(r.price) }));
     const name = str(req.body.name, 60);
     const affiliation = str(req.body.affiliation, 60);
+    const promoCode = normCode(req.body.promoCode);
 
-    const ins = await pool.query(
-      'INSERT INTO orders (customer_name, items, total, discount) VALUES ($1, $2, $3, $4) RETURNING id',
-      [name, JSON.stringify(items), total, discount]
-    );
-    const orderId = ins.rows[0].id;
+    // Transaction : l'utilisation du code promo n'est comptée que si la commande est bien créée
+    const client = await pool.connect();
+    let orderId, total, promo = null;
+    try {
+      await client.query('BEGIN');
+      if (promoCode) {
+        const pr = await client.query(
+          `UPDATE promo_codes SET uses = uses + 1 WHERE code = $1 AND ${PROMO_VALID} RETURNING code, pct`,
+          [promoCode]
+        );
+        if (!pr.rowCount) throw new HttpError(400, 'Ce code promo est invalide ou expiré.');
+        promo = pr.rows[0];
+      }
+      let t = discount ? sum * (1 - settings.discountPct / 100) : sum;
+      if (promo) t = t * (1 - promo.pct / 100);
+      total = round2(t);
+      const ins = await client.query(
+        `INSERT INTO orders (customer_name, items, total, discount, promo_code, promo_pct)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [name, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null]
+      );
+      orderId = ins.rows[0].id;
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
 
     const message =
       'Bonjour, je souhaite commander (réf. #' + orderId + ') : ' +
       items.map((i) => i.name).join(' + ') +
       '. Total : ' + money(total) + '/an' +
-      (discount ? ' (remise ' + settings.discountPct + ' % incluse)' : '') + '.' +
+      (discount ? ' (remise ' + settings.discountPct + ' % incluse)' : '') +
+      (promo ? ' (code ' + promo.code + ' −' + promo.pct + ' % inclus)' : '') + '.' +
       (name ? ' Prénom : ' + name + '.' : '') +
       (affiliation ? ' Affiliation : ' + affiliation + '.' : '');
+
+    notifyLater(
+      '🛒 Nouvelle commande #' + orderId + '\n' +
+      items.map((i) => '• ' + i.name + ' — ' + money(i.price)).join('\n') + '\n' +
+      'Total : ' + money(total) + '/an' +
+      (discount ? ' · remise pack −' + settings.discountPct + ' %' : '') +
+      (promo ? ' · code ' + promo.code + ' −' + promo.pct + ' %' : '') +
+      (name ? '\nPrénom : ' + name : '') +
+      (affiliation ? '\nAffiliation : ' + affiliation : '') +
+      '\n' + SITE_URL + '/admin'
+    );
 
     res.status(201).json({
       orderId,
@@ -248,7 +389,8 @@ admin.get(
              count(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS last7
       FROM orders`);
     const o = await pool.query('SELECT count(*)::int AS n FROM offers WHERE active');
-    res.json({ ...rows[0], activeOffers: o.rows[0].n });
+    const rv = await pool.query('SELECT count(*) FILTER (WHERE NOT approved)::int AS pending FROM reviews');
+    res.json({ ...rows[0], activeOffers: o.rows[0].n, pendingReviews: rv.rows[0].pending });
   })
 );
 
@@ -257,7 +399,7 @@ admin.get(
   wrap(async (req, res) => {
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
-      `SELECT id, customer_name, items, total::float AS total, discount, status, created_at
+      `SELECT id, customer_name, items, total::float AS total, discount, promo_code, promo_pct, status, created_at
        FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 500`,
       [status]
     );
@@ -287,7 +429,8 @@ admin.delete(
 admin.get(
   '/offers',
   wrap(async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM offers ORDER BY sort, id');
+    const { rows } = await pool.query(`SELECT o.*, ra.rating_avg, ra.review_count FROM offers o ${REVIEW_AGG}
+                                       ORDER BY o.sort, o.id`);
     res.json(rows.map(toOffer));
   })
 );
@@ -340,6 +483,108 @@ admin.delete(
   wrap(async (req, res) => {
     await pool.query('DELETE FROM offers WHERE id = $1', [Number(req.params.id)]);
     res.status(204).end();
+  })
+);
+
+admin.get(
+  '/reviews',
+  wrap(async (req, res) => {
+    const f = req.query.status === 'pending' ? false : req.query.status === 'approved' ? true : null;
+    const { rows } = await pool.query(
+      `SELECT r.id, r.offer_id, o.name AS offer_name, r.author, r.rating, r.comment, r.approved, r.created_at
+       FROM reviews r JOIN offers o ON o.id = r.offer_id
+       WHERE ($1::boolean IS NULL OR r.approved = $1) ORDER BY r.created_at DESC LIMIT 500`,
+      [f]
+    );
+    res.json(rows);
+  })
+);
+
+admin.patch(
+  '/reviews/:id',
+  wrap(async (req, res) => {
+    const r = await pool.query('UPDATE reviews SET approved = $1 WHERE id = $2 RETURNING id', [
+      !!req.body.approved, Number(req.params.id) || 0
+    ]);
+    if (!r.rowCount) throw new HttpError(404, 'Avis introuvable.');
+    res.json({ ok: true });
+  })
+);
+
+admin.delete(
+  '/reviews/:id',
+  wrap(async (req, res) => {
+    await pool.query('DELETE FROM reviews WHERE id = $1', [Number(req.params.id) || 0]);
+    res.status(204).end();
+  })
+);
+
+admin.get(
+  '/promos',
+  wrap(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT code, pct, expires_at, max_uses, uses, active, created_at,
+              (${PROMO_VALID}) AS usable FROM promo_codes ORDER BY created_at DESC`
+    );
+    res.json(rows);
+  })
+);
+
+admin.post(
+  '/promos',
+  wrap(async (req, res) => {
+    const code = normCode(req.body.code);
+    if (code.length < 3) throw new HttpError(400, 'Le code doit faire au moins 3 caractères (lettres, chiffres, - ou _).');
+    const pct = parseInt(req.body.pct, 10);
+    if (!(pct >= 1 && pct <= 90)) throw new HttpError(400, 'La remise doit être comprise entre 1 et 90 %.');
+    let expires = null;
+    if (req.body.expiresAt) {
+      expires = new Date(req.body.expiresAt);
+      if (isNaN(expires)) throw new HttpError(400, "Date d'expiration invalide.");
+    }
+    let maxUses = null;
+    if (req.body.maxUses !== '' && req.body.maxUses != null) {
+      maxUses = parseInt(req.body.maxUses, 10);
+      if (!(maxUses >= 1 && maxUses <= 100000)) throw new HttpError(400, "Nombre d'utilisations invalide.");
+    }
+    try {
+      await pool.query('INSERT INTO promo_codes (code, pct, expires_at, max_uses) VALUES ($1, $2, $3, $4)', [code, pct, expires, maxUses]);
+    } catch (e) {
+      if (e && e.code === '23505') throw new HttpError(409, 'Ce code existe déjà.');
+      throw e;
+    }
+    res.status(201).json({ ok: true, code });
+  })
+);
+
+admin.patch(
+  '/promos/:code',
+  wrap(async (req, res) => {
+    const r = await pool.query('UPDATE promo_codes SET active = $1 WHERE code = $2 RETURNING code', [!!req.body.active, normCode(req.params.code)]);
+    if (!r.rowCount) throw new HttpError(404, 'Code introuvable.');
+    res.json({ ok: true });
+  })
+);
+
+admin.delete(
+  '/promos/:code',
+  wrap(async (req, res) => {
+    await pool.query('DELETE FROM promo_codes WHERE code = $1', [normCode(req.params.code)]);
+    res.status(204).end();
+  })
+);
+
+admin.get('/notify', (req, res) => res.json(notifyChannels()));
+
+admin.post(
+  '/notify/test',
+  rateLimit(5, 60 * 1000),
+  wrap(async (req, res) => {
+    const ch = notifyChannels();
+    if (!ch.telegram && !ch.discord) throw new HttpError(400, 'Aucun canal configuré dans le fichier .env.');
+    const r = await notify('✅ Test NeonPass : les notifications fonctionnent.');
+    if (r.errors.length) throw new HttpError(502, 'Échec : ' + r.errors.join(' | '));
+    res.json({ ok: true, sent: r.sent });
   })
 );
 

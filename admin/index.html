@@ -42,6 +42,17 @@ td.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular
 .pill { display: inline-block; padding: 4px 9px; border-radius: 6px; font: 700 11px/1 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .06em; }
 .pill.on { background: rgba(94, 234, 212, .15); color: var(--ok); }
 .pill.off { background: rgba(255, 255, 255, .08); color: var(--muted); }
+.pill.wait { background: rgba(251, 191, 36, .15); color: var(--warn); }
+.stars { color: #ffc94d; letter-spacing: 1px; white-space: nowrap; }
+.stars i { font-style: normal; color: rgba(255, 255, 255, .18); }
+.promo-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; margin-bottom: 20px; }
+.promo-form input { text-transform: none; }
+#pCode { text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+.code { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+.channels { display: grid; gap: 8px; margin: 0 0 14px; }
+.channels div { display: flex; align-items: center; gap: 10px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 60ch; }
+td.comment { max-width: 380px; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 select, input[type="text"], input[type="number"], textarea {
   background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%;
@@ -78,6 +89,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" data-panel="orders" aria-selected="true">Commandes</button>
     <button class="tab" role="tab" data-panel="offers" aria-selected="false">Offres</button>
+    <button class="tab" role="tab" data-panel="reviews" aria-selected="false" id="reviewsTab">Avis</button>
+    <button class="tab" role="tab" data-panel="promos" aria-selected="false">Codes promo</button>
     <button class="tab" role="tab" data-panel="settings" aria-selected="false">Réglages</button>
   </div>
 
@@ -115,7 +128,51 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     </div>
   </section>
 
+  <section class="panel" id="panel-reviews" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Avis clients</h2>
+      <label style="display:flex;align-items:center;gap:10px">Afficher
+        <select id="reviewFilter">
+          <option value="pending">En attente</option>
+          <option value="approved">Publiés</option>
+          <option value="">Tous</option>
+        </select>
+      </label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Offre</th><th>Auteur</th><th>Note</th><th>Avis</th><th>État</th><th></th></tr></thead>
+        <tbody id="reviewsBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="reviewsEmpty" hidden>Aucun avis dans cette vue.</p>
+  </section>
+
+  <section class="panel" id="panel-promos" hidden>
+    <h2>Codes promo</h2>
+    <p class="hint">La remise du code s'ajoute à la remise pack éventuelle. Lien direct à partager : <span class="code" id="promoLinkEx">/?promo=CODE</span></p>
+    <form class="promo-form" id="promoForm">
+      <label for="pCode">Code<input type="text" id="pCode" maxlength="30" placeholder="NOEL15" required></label>
+      <label for="pPct">Remise (%)<input type="number" id="pPct" min="1" max="90" step="1" placeholder="15" required></label>
+      <label for="pExp">Expire le (facultatif)<input type="datetime-local" id="pExp" style="background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%"></label>
+      <label for="pMax">Utilisations max (facultatif)<input type="number" id="pMax" min="1" step="1" placeholder="illimité"></label>
+      <div><button class="btn primary" type="submit">Créer le code</button></div>
+    </form>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Code</th><th>Remise</th><th>Utilisations</th><th>Expiration</th><th>État</th><th></th></tr></thead>
+        <tbody id="promosBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="promosEmpty" hidden>Aucun code promo. Crée le premier ci-dessus.</p>
+  </section>
+
   <section class="panel" id="panel-settings" hidden>
+    <h2>Notifications</h2>
+    <p class="hint">Reçois un message à chaque nouvelle commande et à chaque avis à valider. Configure <span class="code">TELEGRAM_BOT_TOKEN</span> + <span class="code">TELEGRAM_CHAT_ID</span> et/ou <span class="code">DISCORD_WEBHOOK_URL</span> dans le fichier .env, puis redémarre le conteneur.</p>
+    <div class="channels" id="channels"></div>
+    <div style="margin-bottom:32px"><button class="btn" type="button" id="notifyTest">Envoyer un message de test</button></div>
+
     <h2>Remise du pack sur mesure</h2>
     <form class="settings" id="settingsForm">
       <label for="setPct">Remise en pourcentage (0 pour désactiver)
@@ -208,8 +265,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       [s.confirmed_count, 'confirmées'],
       [fmt(s.confirmed_total), 'montant confirmé (démo)'],
       [s.last7, 'sur 7 jours'],
-      [s.activeOffers, 'offres visibles']
+      [s.activeOffers, 'offres visibles'],
+      [s.pendingReviews, 'avis en attente']
     ];
+    $('#reviewsTab').textContent = 'Avis' + (s.pendingReviews ? ' (' + s.pendingReviews + ')' : '');
     const box = $('#stats');
     box.textContent = '';
     tiles.forEach(([v, l]) => box.append(h('div', { className: 'stat' }, h('b', {}, String(v)), h('span', {}, l))));
@@ -248,7 +307,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', { className: 'num' }, when),
         h('td', {}, o.customer_name || '—'),
         h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
-        h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : '')),
+        h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : ''),
+          o.promo_code ? h('small', { style: 'display:block;color:var(--cyan)' }, o.promo_code + ' −' + o.promo_pct + ' %') : ''),
         h('td', {}, sel),
         h('td', {}, h('div', { className: 'row-actions' }, del))
       ));
@@ -272,7 +332,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       });
       body.append(h('tr', {},
         h('td', { className: 'num' }, String(o.sort)),
-        h('td', {}, o.name),
+        h('td', {}, o.name, o.reviewCount ? h('small', { style: 'display:block;color:var(--muted)' }, '★ ' + String(o.rating).replace('.', ',') + ' · ' + o.reviewCount + ' avis') : ''),
         h('td', {}, CAT_LABEL[o.category] || o.category),
         h('td', { className: 'num' }, fmt(o.price)),
         h('td', {}, h('span', { className: 'pill ' + (o.active ? 'on' : 'off') }, o.active ? 'Visible' : 'Masquée')),
@@ -329,6 +389,109 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     } catch (err) { toast(err.message, true); }
   });
 
+  // ----- Avis -----
+  async function loadReviews() {
+    const status = $('#reviewFilter').value;
+    const rows = await api('/reviews' + (status ? '?status=' + status : ''));
+    const body = $('#reviewsBody');
+    body.textContent = '';
+    $('#reviewsEmpty').hidden = rows.length > 0;
+    rows.forEach((r) => {
+      const toggle = h('button', { className: 'btn small' + (r.approved ? '' : ' primary'), type: 'button' }, r.approved ? 'Masquer' : 'Publier');
+      toggle.addEventListener('click', async () => {
+        try {
+          await api('/reviews/' + r.id, { method: 'PATCH', body: { approved: !r.approved } });
+          toast(r.approved ? 'Avis masqué.' : 'Avis publié.');
+          loadReviews(); loadStats(); loadOffers();
+        } catch (e) { toast(e.message, true); }
+      });
+      const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
+      del.addEventListener('click', async () => {
+        if (!confirm('Supprimer l\'avis de « ' + r.author + ' » ?')) return;
+        try { await api('/reviews/' + r.id, { method: 'DELETE' }); loadReviews(); loadStats(); loadOffers(); }
+        catch (e) { toast(e.message, true); }
+      });
+      const stars = h('span', { className: 'stars', title: r.rating + ' / 5' }, '★'.repeat(r.rating), h('i', {}, '★'.repeat(5 - r.rating)));
+      const when = new Date(r.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, when),
+        h('td', {}, r.offer_name),
+        h('td', {}, r.author),
+        h('td', {}, stars),
+        h('td', { className: 'comment' }, r.comment),
+        h('td', {}, h('span', { className: 'pill ' + (r.approved ? 'on' : 'wait') }, r.approved ? 'Publié' : 'En attente')),
+        h('td', {}, h('div', { className: 'row-actions' }, toggle, del))
+      ));
+    });
+  }
+  $('#reviewFilter').addEventListener('change', loadReviews);
+
+  // ----- Codes promo -----
+  $('#promoLinkEx').textContent = location.origin + '/?promo=CODE';
+  async function loadPromos() {
+    const rows = await api('/promos');
+    const body = $('#promosBody');
+    body.textContent = '';
+    $('#promosEmpty').hidden = rows.length > 0;
+    rows.forEach((p) => {
+      const toggle = h('button', { className: 'btn small', type: 'button' }, p.active ? 'Désactiver' : 'Activer');
+      toggle.addEventListener('click', async () => {
+        try { await api('/promos/' + encodeURIComponent(p.code), { method: 'PATCH', body: { active: !p.active } }); loadPromos(); }
+        catch (e) { toast(e.message, true); }
+      });
+      const copy = h('button', { className: 'btn small', type: 'button' }, 'Copier le lien');
+      copy.addEventListener('click', async () => {
+        const url = location.origin + '/?promo=' + encodeURIComponent(p.code);
+        try { await navigator.clipboard.writeText(url); toast('Lien copié : ' + url); }
+        catch (e) { prompt('Lien à copier :', url); }
+      });
+      const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
+      del.addEventListener('click', async () => {
+        if (!confirm('Supprimer le code ' + p.code + ' ?')) return;
+        try { await api('/promos/' + encodeURIComponent(p.code), { method: 'DELETE' }); loadPromos(); }
+        catch (e) { toast(e.message, true); }
+      });
+      const expired = p.expires_at && new Date(p.expires_at) <= new Date();
+      const used = p.max_uses != null && p.uses >= p.max_uses;
+      const state = !p.active ? ['off', 'Désactivé'] : expired ? ['off', 'Expiré'] : used ? ['off', 'Épuisé'] : ['on', 'Actif'];
+      body.append(h('tr', {},
+        h('td', { className: 'code' }, p.code),
+        h('td', { className: 'num' }, '−' + p.pct + ' %'),
+        h('td', { className: 'num' }, p.uses + (p.max_uses != null ? ' / ' + p.max_uses : '')),
+        h('td', { className: 'num' }, p.expires_at ? new Date(p.expires_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—'),
+        h('td', {}, h('span', { className: 'pill ' + state[0] }, state[1])),
+        h('td', {}, h('div', { className: 'row-actions' }, copy, toggle, del))
+      ));
+    });
+  }
+  $('#promoForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const exp = $('#pExp').value;
+    try {
+      await api('/promos', { method: 'POST', body: {
+        code: $('#pCode').value, pct: $('#pPct').value,
+        expiresAt: exp ? new Date(exp).toISOString() : '', maxUses: $('#pMax').value
+      } });
+      toast('Code créé.');
+      $('#promoForm').reset();
+      loadPromos();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  // ----- Notifications -----
+  async function loadNotify() {
+    const c = await api('/notify');
+    const box = $('#channels');
+    box.textContent = '';
+    [['telegram', 'Telegram'], ['discord', 'Discord']].forEach(([k, l]) => box.append(
+      h('div', {}, h('span', { className: 'pill ' + (c[k] ? 'on' : 'off') }, c[k] ? 'Configuré' : 'Non configuré'), l)
+    ));
+  }
+  $('#notifyTest').addEventListener('click', async () => {
+    try { const r = await api('/notify/test', { method: 'POST', body: {} }); toast('Message de test envoyé (' + r.sent + ' canal/canaux).'); }
+    catch (e) { toast(e.message, true); }
+  });
+
   // ----- Réglages -----
   async function loadSettings() {
     const s = await api('/settings');
@@ -346,11 +509,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    ['orders', 'offers', 'settings'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
+    ['orders', 'offers', 'reviews', 'promos', 'settings'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadSettings()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadReviews(), loadPromos(), loadNotify(), loadSettings()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>

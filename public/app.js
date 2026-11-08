@@ -10,6 +10,7 @@
   let OFFERS = [];
   let current = 'all';
   const picked = new Set();
+  let PROMO = null; // { code, pct } une fois validé par le serveur
 
   const esc = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -35,10 +36,13 @@
       const r = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offerIds: ids, name: name || '', affiliation: affiliation || '' })
+        body: JSON.stringify({ offerIds: ids, name: name || '', affiliation: affiliation || '', promoCode: PROMO ? PROMO.code : '' })
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || 'La commande a échoué.');
+      if (!r.ok) {
+        if (PROMO && /code promo/i.test(data.error || '')) setPromo(null);
+        throw new Error(data.error || 'La commande a échoué.');
+      }
       toast('Commande n°' + data.orderId + ' enregistrée. Ouverture de WhatsApp…');
       if (popup) popup.location.href = data.whatsappUrl;
       else location.href = data.whatsappUrl;
@@ -94,6 +98,7 @@
       '<div class="card-top"><span class="tag">' + esc(o.tag || LABELS[o.category] || '') + '</span>' +
       (save ? '<span class="save">−' + save + ' %</span>' : '') + '</div>' +
       '<h3>' + esc(o.name) + '</h3>' +
+      ratingHTML(o) +
       '<p class="desc">' + esc(o.description) + '</p>' +
       '<div class="price"><span class="amount">' +
       (price !== null ? '<span data-count="' + price + '">' + price + '</span>' : esc(num(o.price))) +
@@ -108,6 +113,78 @@
       '</article>'
     );
   }
+
+  // ---------- Avis ----------
+  const starsHTML = (r) => '<span class="stars" style="--pct:' + Math.max(0, Math.min(100, (r / 5) * 100)) + '%" aria-hidden="true"></span>';
+  const avisWord = (n) => n + ' avis';
+
+  function ratingHTML(o) {
+    const label = o.reviewCount
+      ? 'Note ' + num(o.rating) + ' sur 5, ' + avisWord(o.reviewCount) + '. Voir les avis'
+      : 'Aucun avis. Donner le premier avis';
+    return (
+      '<button class="rating-row" type="button" data-reviews="' + o.id + '" aria-label="' + esc(label) + '">' +
+      starsHTML(o.rating || 0) +
+      (o.reviewCount ? '<b>' + esc(num(o.rating)) + '</b><u>(' + avisWord(o.reviewCount) + ')</u>' : '<u>Donner le premier avis</u>') +
+      '</button>'
+    );
+  }
+
+  let rvOffer = null;
+  async function openReviews(id) {
+    const o = OFFERS.find((x) => x.id === id);
+    if (!o) return;
+    rvOffer = o;
+    $('rvTitle').textContent = o.name;
+    $('rvSum').innerHTML = o.reviewCount
+      ? '<strong>' + esc(num(o.rating)) + '</strong>' + starsHTML(o.rating) + '<span>' + avisWord(o.reviewCount) + '</span>'
+      : '<span>Aucun avis pour le moment. Sois le premier à donner le tien.</span>';
+    $('rvList').innerHTML = o.reviewCount ? '<li class="muted">Chargement…</li>' : '';
+    $('rvForm').reset();
+    const dlg = $('rvDlg');
+    if (!dlg.open) dlg.showModal();
+    if (!o.reviewCount) return;
+    try {
+      const list = await fetch('/api/offers/' + id + '/reviews').then((r) => r.json());
+      if (rvOffer !== o) return;
+      $('rvList').innerHTML = list
+        .map((r) =>
+          '<li><div class="rv-meta"><span>' + esc(r.author) + '</span>' + starsHTML(r.rating) +
+          '<time datetime="' + esc(r.created_at) + '">' + esc(new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })) + '</time></div>' +
+          '<p>' + esc(r.comment) + '</p></li>')
+        .join('');
+    } catch (e) {
+      $('rvList').innerHTML = '<li class="muted">Impossible de charger les avis.</li>';
+    }
+  }
+
+  $('rvClose').addEventListener('click', () => $('rvDlg').close());
+  $('rvDlg').addEventListener('click', (e) => { if (e.target === $('rvDlg')) $('rvDlg').close(); });
+
+  $('rvForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!rvOffer) return;
+    const checked = $('rvForm').querySelector('input[name="rating"]:checked');
+    const body = { rating: checked ? Number(checked.value) : 0, author: $('rvAuthor').value, comment: $('rvComment').value };
+    if (!body.rating) return toast('Choisis une note en cliquant sur les étoiles.', true);
+    const btn = $('rvSubmit');
+    btn.setAttribute('aria-disabled', 'true');
+    try {
+      const r = await fetch('/api/offers/' + rvOffer.id + '/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "L'envoi a échoué.");
+      $('rvDlg').close();
+      toast(data.message || 'Merci pour ton avis !');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.removeAttribute('aria-disabled');
+    }
+  });
 
   function renderGrid() {
     const list = OFFERS.filter((o) => current === 'all' || o.category === current);
@@ -168,15 +245,17 @@
     const items = singles().filter((o) => picked.has(o.id));
     const sum = items.reduce((s, o) => s + o.price, 0);
     const discount = items.length >= CFG.discountMin && CFG.discountPct > 0;
-    const total = discount ? Math.round(sum * (1 - CFG.discountPct / 100) * 100) / 100 : sum;
+    let t = discount ? sum * (1 - CFG.discountPct / 100) : sum;
+    if (PROMO) t = t * (1 - PROMO.pct / 100);
+    const total = Math.round(t * 100) / 100;
     $('rcList').innerHTML = items.length
       ? items.map((o) => '<li><span>' + esc(o.name) + '</span><span>' + esc(euro(o.price)) + '</span></li>').join('')
       : '<li class="empty">Sélectionne au moins un service.</li>';
-    $('rcDisc').textContent = discount
-      ? 'Remise démo −' + CFG.discountPct + ' % appliquée (−' + euro(Math.round((sum - total) * 100) / 100) + ')'
-      : items.length && CFG.discountPct > 0
-        ? 'Ajoute ' + (CFG.discountMin - items.length) + ' service(s) pour la remise de ' + CFG.discountPct + ' %.'
-        : '';
+    const parts = [];
+    if (discount) parts.push('Remise pack −' + CFG.discountPct + ' %');
+    else if (items.length && CFG.discountPct > 0) parts.push('Ajoute ' + (CFG.discountMin - items.length) + ' service(s) pour la remise de ' + CFG.discountPct + ' %');
+    if (PROMO && items.length) parts.push('code ' + PROMO.code + ' −' + PROMO.pct + ' %');
+    $('rcDisc').textContent = parts.join(' · ') + (items.length && sum > total ? ' (−' + euro(Math.round((sum - total) * 100) / 100) + ')' : '');
     animateTotal(total);
     $('rcBtn').setAttribute('aria-disabled', items.length ? 'false' : 'true');
     const msg =
@@ -184,6 +263,45 @@
       '. Total : ' + euro(total) + '/an.' + DEMO_TAIL;
     $('rcBtn').href = items.length ? waLink(msg) : '#';
   }
+
+  // ---------- Code promo ----------
+  function setPromo(p) {
+    PROMO = p;
+    $('promoForm').hidden = !!p;
+    $('promoOk').hidden = !p;
+    $('promoBanner').hidden = !p;
+    if (p) {
+      $('promoOkText').textContent = '✓ ' + p.code + ' : −' + p.pct + ' %';
+      $('promoBanner').textContent = '✓ Code ' + p.code + ' actif : −' + p.pct + ' % sur ta commande';
+    }
+    try { p ? sessionStorage.setItem('np_promo', p.code) : sessionStorage.removeItem('np_promo'); } catch (e) {}
+    updateComposer();
+  }
+
+  async function checkPromo(code, silent) {
+    try {
+      const r = await fetch('/api/promo/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Code promo invalide.');
+      setPromo(data);
+      if (!silent) toast('Code ' + data.code + ' appliqué : −' + data.pct + ' % sur ta commande.');
+    } catch (e) {
+      if (!silent) toast(e.message, true);
+      else setPromo(null);
+    }
+  }
+
+  $('promoForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = $('promoInput').value.trim();
+    if (!code) return toast('Saisis un code promo.', true);
+    checkPromo(code, false);
+  });
+  $('promoRemove').addEventListener('click', () => { $('promoInput').value = ''; setPromo(null); });
 
   // ---------- Initialisation ----------
   function setWaLinks() {
@@ -228,6 +346,10 @@
     $('rcTotal').textContent = euro(0);
     updateComposer();
     setupCounters();
+    // Code promo : depuis l'URL (?promo=CODE) ou conservé pendant la session
+    let saved = new URLSearchParams(location.search).get('promo');
+    if (!saved) { try { saved = sessionStorage.getItem('np_promo'); } catch (e) {} }
+    if (saved) checkPromo(saved, !new URLSearchParams(location.search).get('promo'));
   }
 
   // ---------- Événements ----------
@@ -240,6 +362,8 @@
   });
 
   $('grid').addEventListener('click', (e) => {
+    const rvb = e.target.closest('.rating-row');
+    if (rvb) { openReviews(Number(rvb.dataset.reviews)); return; }
     const t = e.target.closest('.affil-toggle');
     if (t) {
       const inp = document.getElementById(t.getAttribute('aria-controls'));

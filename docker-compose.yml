@@ -9,6 +9,10 @@ services:
       WA_NUMBER: ${WA_NUMBER:?Définis WA_NUMBER dans .env}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Définis ADMIN_PASSWORD dans .env}
+      DOMAIN: ${DOMAIN:-neonpass.uned.live}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
     depends_on:
       db:
         condition: service_healthy
