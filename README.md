@@ -161,13 +161,27 @@ scp neonpass.sql.gz nouveau-serveur:~/neopass/
 ./scripts/import-db.sh neonpass.sql.gz
 ```
 
-### Sauvegarde automatique (optionnel)
+### Sauvegarde automatique chiffrée
 
-Exemple avec `cron` : un export chaque nuit à 3 h, suppression des exports de plus de 30 jours.
+`scripts/backup-auto.sh` enchaîne : export → chiffrement GPG (AES-256) → vérification du déchiffrement → envoi du fichier chiffré sur la branche Git `backups` → suppression des fichiers locaux de plus de 30 jours → notification Telegram/Discord (✅ ou ❌ avec l'étape en échec). Aucun fichier en clair n'est envoyé sur Git.
 
-```cron
-0 3 * * * cd /chemin/vers/neopass && ./scripts/export-db.sh >/dev/null && find backups -name 'neonpass-*.sql.gz' -mtime +30 -delete
-```
+1. Crée le mot de passe de chiffrement (à copier aussi dans un gestionnaire de mots de passe) :
+   ```bash
+   mkdir -p backups && (umask 077; openssl rand -base64 33 > backups/.backup-passphrase)
+   ```
+2. Crée la branche `backups` sur GitHub si elle n'existe pas (voir le README de cette branche).
+3. Teste à la main :
+   ```bash
+   BACKUP_SSH_KEY=~/.ssh/ma_cle ./scripts/backup-auto.sh
+   ```
+4. Planifie-la chaque nuit à 3 h (`/etc/cron.d/neonpass-backup`) :
+   ```cron
+   SHELL=/bin/bash
+   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+   0 3 * * * root BACKUP_SSH_KEY=/root/.ssh/ma_cle /chemin/vers/neopass/scripts/backup-auto.sh >> /var/log/neonpass-backup.log 2>&1
+   ```
+
+Options : `BACKUP_DIR`, `PASSPHRASE_FILE`, `KEEP_DAYS` (30), `BACKUP_BRANCH` (`backups`), `NO_PUSH=1` (local uniquement). Le dossier de travail Git est `backups/git-backups/`.
 
 Les noms de conteneurs et de base peuvent être changés via `DB_CONTAINER`, `APP_CONTAINER`, `DB_USER` et `DB_NAME` (voir l'en-tête des scripts).
 
