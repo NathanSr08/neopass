@@ -52,6 +52,15 @@ td.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular
 .channels { display: grid; gap: 8px; margin: 0 0 14px; }
 .channels div { display: flex; align-items: center; gap: 10px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 60ch; }
+.pick { display: grid; gap: 6px; max-height: 240px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .02); }
+.pick-row { display: grid; grid-template-columns: 1fr auto 70px; gap: 10px; align-items: center; font-size: 14px; color: var(--text); }
+.pick-row small { color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.pick-row input { padding: 6px 8px; text-align: center; }
+.pick-row.muted-row { opacity: .6; }
+.order-sum { font: 700 14px/1.4 'JetBrains Mono', monospace; color: var(--cyan); }
+.pill.src { background: rgba(122, 92, 255, .18); color: #c4b5ff; margin-left: 6px; vertical-align: middle; }
+.note-dot { display: inline-block; margin-left: 6px; color: var(--warn); cursor: help; }
+td small.sub { display: block; color: var(--muted); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
 td.comment { max-width: 380px; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 select, input[type="text"], input[type="number"], textarea {
@@ -97,6 +106,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   <section class="panel" id="panel-orders">
     <div class="toolbar">
       <h2 style="margin:0">Commandes</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+      <button class="btn primary" type="button" id="newOrder">Nouvelle commande</button>
       <label style="display:flex;align-items:center;gap:10px">Statut
         <select id="orderFilter">
           <option value="">Toutes</option>
@@ -105,10 +116,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
           <option value="cancelled">Annulées</option>
         </select>
       </label>
+      </div>
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Réf.</th><th>Date</th><th>Prénom</th><th>Offres</th><th>Total</th><th>Statut</th><th></th></tr></thead>
+        <thead><tr><th>Réf.</th><th>Date</th><th>Client</th><th>Offres</th><th>Total</th><th>Paiement</th><th>Statut</th><th></th></tr></thead>
         <tbody id="ordersBody"></tbody>
       </table>
     </div>
@@ -217,6 +229,51 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </form>
 </dialog>
 
+<dialog id="orderDlg">
+  <form id="orderForm" method="dialog">
+    <h2 id="orderDlgTitle">Nouvelle commande</h2>
+    <div class="grid">
+      <label for="oFirst">Prénom<input type="text" id="oFirst" maxlength="60" autocomplete="off"></label>
+      <label for="oLast">Nom<input type="text" id="oLast" maxlength="60" autocomplete="off"></label>
+      <label for="oPhone">Téléphone<input type="text" id="oPhone" maxlength="30" inputmode="tel" placeholder="+33 6 12 34 56 78" autocomplete="off"></label>
+      <label for="oPay">Moyen de paiement
+        <select id="oPay" style="width:100%">
+          <option value="">Non renseigné</option>
+          <option value="revolut">Revolut</option>
+          <option value="usdt">Crypto · USDT</option>
+          <option value="btc">Crypto · BTC</option>
+          <option value="eth">Crypto · ETH</option>
+          <option value="especes">Espèces</option>
+          <option value="virement">Virement</option>
+          <option value="autre">Autre</option>
+        </select>
+      </label>
+      <div class="full" id="oItemsBox">
+        <label style="margin-bottom:6px">Produits achetés (quantité)</label>
+        <div class="pick" id="oPick"></div>
+      </div>
+      <div class="full" id="oItemsRead" hidden>
+        <label>Produits achetés</label>
+        <div id="oItemsList" style="margin-top:6px"></div>
+      </div>
+      <label for="oTotal">Total (€)<input type="number" id="oTotal" min="0" step="0.01" placeholder="calcul auto"></label>
+      <label for="oStatus">Statut
+        <select id="oStatus" style="width:100%">
+          <option value="confirmed">Confirmée</option>
+          <option value="new">Nouvelle</option>
+          <option value="cancelled">Annulée</option>
+        </select>
+      </label>
+      <div class="full order-sum" id="oSum"></div>
+      <label class="full" for="oNotes">Commentaire interne (visible uniquement dans l'admin)<textarea id="oNotes" rows="4" maxlength="2000"></textarea></label>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="orderCancel">Annuler</button>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -224,6 +281,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   'use strict';
   const $ = (s) => document.querySelector(s);
   const STATUS_LABEL = { new: 'Nouvelle', confirmed: 'Confirmée', cancelled: 'Annulée' };
+  const PAY_LABEL = { revolut: 'Revolut', usdt: 'USDT', btc: 'BTC', eth: 'ETH', especes: 'Espèces', virement: 'Virement', autre: 'Autre' };
   const CAT_LABEL = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV' };
   const fmt = (n) => (Math.round(n * 100) / 100).toString().replace('.', ',') + ' €';
 
@@ -295,6 +353,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
           loadStats();
         } catch (e) { toast(e.message, true); loadOrders(); }
       });
+      const edit = h('button', { className: 'btn small', type: 'button' }, 'Détails');
+      edit.addEventListener('click', () => openOrderDialog(o));
       const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
       del.addEventListener('click', async () => {
         if (!confirm('Supprimer la commande n°' + o.id + ' ?')) return;
@@ -303,17 +363,99 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       });
       const when = new Date(o.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
       body.append(h('tr', {},
-        h('td', { className: 'num' }, '#' + o.id),
+        h('td', { className: 'num' }, '#' + o.id, o.source === 'admin' ? h('span', { className: 'pill src', title: 'Saisie dans l\'admin' }, 'admin') : ''),
         h('td', { className: 'num' }, when),
-        h('td', {}, o.customer_name || '—'),
+        h('td', {}, [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || '—',
+          o.notes ? h('span', { className: 'note-dot', title: o.notes }, '●') : '',
+          o.customer_phone ? h('small', { className: 'sub' }, o.customer_phone) : ''),
         h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
         h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : ''),
           o.promo_code ? h('small', { style: 'display:block;color:var(--cyan)' }, o.promo_code + ' −' + o.promo_pct + ' %') : ''),
+        h('td', {}, PAY_LABEL[o.payment_method] || '—'),
         h('td', {}, sel),
-        h('td', {}, h('div', { className: 'row-actions' }, del))
+        h('td', {}, h('div', { className: 'row-actions' }, edit, del))
       ));
     });
   }
+
+  // ----- Saisie / modification d'une commande -----
+  const orderDlg = $('#orderDlg');
+  let editingOrder = null;
+  let discountCfg = { discountPct: 0, discountMin: 99 };
+
+  function pickedItems() {
+    const out = [];
+    $('#oPick').querySelectorAll('input[data-id]').forEach((inp) => {
+      const n = Math.max(0, Math.min(9, parseInt(inp.value, 10) || 0));
+      for (let i = 0; i < n; i++) out.push(offers.find((x) => x.id === Number(inp.dataset.id)));
+    });
+    return out.filter(Boolean);
+  }
+  function updateOrderSum() {
+    if (editingOrder) { $('#oSum').textContent = ''; return; }
+    const items = pickedItems();
+    const sum = items.reduce((s, o) => s + o.price, 0);
+    const disc = items.length >= discountCfg.discountMin && discountCfg.discountPct > 0;
+    const auto = Math.round((disc ? sum * (1 - discountCfg.discountPct / 100) : sum) * 100) / 100;
+    $('#oSum').textContent = items.length
+      ? items.length + ' produit(s) · calcul auto : ' + fmt(auto) + (disc ? ' (remise pack −' + discountCfg.discountPct + ' %)' : '') +
+        ($('#oTotal').value !== '' ? ' · total saisi : ' + fmt(Number($('#oTotal').value)) : '')
+      : 'Aucun produit sélectionné.';
+  }
+  async function openOrderDialog(o) {
+    editingOrder = o || null;
+    if (!o) { try { discountCfg = await api('/settings'); } catch (e) {} }
+    $('#orderDlgTitle').textContent = o ? 'Commande n°' + o.id : 'Nouvelle commande';
+    $('#oFirst').value = o ? o.customer_name || '' : '';
+    $('#oLast').value = o ? o.customer_last_name || '' : '';
+    $('#oPhone').value = o ? o.customer_phone || '' : '';
+    $('#oPay').value = o ? o.payment_method || '' : '';
+    $('#oStatus').value = o ? o.status : 'confirmed';
+    $('#oNotes').value = o ? o.notes || '' : '';
+    $('#oTotal').value = o ? o.total : '';
+    $('#oTotal').disabled = !!o;
+    $('#oItemsBox').hidden = !!o;
+    $('#oItemsRead').hidden = !o;
+    if (o) {
+      $('#oItemsList').textContent = (o.items || []).map((i) => i.name + ' (' + fmt(i.price) + ')').join(' + ') || '—';
+    } else {
+      const box = $('#oPick');
+      box.textContent = '';
+      offers.forEach((x) => {
+        const qty = h('input', { type: 'number', min: 0, max: 9, step: 1, value: 0, ariaLabel: 'Quantité ' + x.name });
+        qty.dataset.id = x.id;
+        qty.addEventListener('input', updateOrderSum);
+        box.append(h('div', { className: 'pick-row' + (x.active ? '' : ' muted-row') },
+          h('span', {}, x.name + (x.active ? '' : ' (masquée)')), h('small', {}, fmt(x.price)), qty));
+      });
+    }
+    updateOrderSum();
+    orderDlg.showModal();
+  }
+  $('#newOrder').addEventListener('click', () => openOrderDialog(null));
+  $('#orderCancel').addEventListener('click', () => orderDlg.close());
+  $('#oTotal').addEventListener('input', updateOrderSum);
+
+  $('#orderForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const info = {
+      firstName: $('#oFirst').value, lastName: $('#oLast').value, phone: $('#oPhone').value,
+      paymentMethod: $('#oPay').value, status: $('#oStatus').value, notes: $('#oNotes').value
+    };
+    try {
+      if (editingOrder) {
+        await api('/orders/' + editingOrder.id, { method: 'PATCH', body: info });
+        toast('Commande n°' + editingOrder.id + ' mise à jour.');
+      } else {
+        const ids = pickedItems().map((x) => x.id);
+        const r = await api('/orders', { method: 'POST', body: { ...info, offerIds: ids, total: $('#oTotal').value } });
+        toast('Commande n°' + r.id + ' créée (' + fmt(r.total) + ').');
+      }
+      orderDlg.close();
+      loadOrders();
+      loadStats();
+    } catch (err) { toast(err.message, true); }
+  });
 
   // ----- Offres -----
   let offers = [];

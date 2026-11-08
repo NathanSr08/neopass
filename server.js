@@ -13,6 +13,7 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const CATEGORIES = ['packs', 'streaming', 'vpn', 'musique', 'tv'];
 const STATUSES = ['new', 'confirmed', 'cancelled'];
+const PAYMENT_METHODS = ['', 'revolut', 'usdt', 'btc', 'eth', 'especes', 'virement', 'autre'];
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
@@ -399,7 +400,8 @@ admin.get(
   wrap(async (req, res) => {
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
-      `SELECT id, customer_name, items, total::float AS total, discount, promo_code, promo_pct, status, created_at
+      `SELECT id, customer_name, customer_last_name, customer_phone, items, total::float AS total, discount,
+              promo_code, promo_pct, payment_method, notes, source, status, created_at
        FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 500`,
       [status]
     );
@@ -407,12 +409,80 @@ admin.get(
   })
 );
 
+// Champs client/paiement communs à la création et à la modification
+function parseOrderInfo(b) {
+  const out = {};
+  if (b.firstName !== undefined) out.customer_name = str(b.firstName, 60);
+  if (b.lastName !== undefined) out.customer_last_name = str(b.lastName, 60);
+  if (b.phone !== undefined) {
+    const phone = str(b.phone, 30);
+    if (phone && !/^\+?[0-9 ().-]{6,30}$/.test(phone)) throw new HttpError(400, 'Numéro de téléphone invalide.');
+    out.customer_phone = phone;
+  }
+  if (b.paymentMethod !== undefined) {
+    const pm = str(b.paymentMethod, 20);
+    if (!PAYMENT_METHODS.includes(pm)) throw new HttpError(400, 'Moyen de paiement invalide.');
+    out.payment_method = pm;
+  }
+  if (b.notes !== undefined) out.notes = str(b.notes, 2000);
+  if (b.status !== undefined) {
+    const st = str(b.status, 20);
+    if (!STATUSES.includes(st)) throw new HttpError(400, 'Statut invalide.');
+    out.status = st;
+  }
+  return out;
+}
+
+admin.post(
+  '/orders',
+  wrap(async (req, res) => {
+    const raw = Array.isArray(req.body.offerIds) ? req.body.offerIds : [];
+    const ids = raw.map(Number).filter(Number.isInteger).slice(0, 20);
+    if (!ids.length) throw new HttpError(400, 'Choisis au moins un produit.');
+    // L'admin peut ajouter des offres masquées ; une offre peut apparaître plusieurs fois
+    const { rows } = await pool.query('SELECT id, name, price FROM offers WHERE id = ANY($1)', [ids]);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    if (ids.some((id) => !byId.has(id))) throw new HttpError(400, 'Un des produits est introuvable.');
+    const items = ids.map((id) => ({ id, name: byId.get(id).name, price: Number(byId.get(id).price) }));
+
+    const info = parseOrderInfo(req.body);
+    if (!info.customer_name && !info.customer_last_name) throw new HttpError(400, 'Indique au moins le nom ou le prénom du client.');
+
+    let total;
+    let discount = false;
+    if (req.body.total !== '' && req.body.total != null) {
+      total = Number(req.body.total);
+      if (!(total >= 0 && total <= 99999)) throw new HttpError(400, 'Total invalide.');
+      total = round2(total);
+    } else {
+      const settings = await getSettings();
+      const sum = items.reduce((s, i) => s + i.price, 0);
+      discount = items.length >= settings.discountMin && settings.discountPct > 0;
+      total = round2(discount ? sum * (1 - settings.discountPct / 100) : sum);
+    }
+
+    const r = await pool.query(
+      `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount,
+                           payment_method, notes, status, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin') RETURNING id`,
+      [info.customer_name || '', info.customer_last_name || '', info.customer_phone || '', JSON.stringify(items),
+       total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed']
+    );
+    res.status(201).json({ ok: true, id: r.rows[0].id, total });
+  })
+);
+
 admin.patch(
   '/orders/:id',
   wrap(async (req, res) => {
-    const status = str(req.body.status, 20);
-    if (!STATUSES.includes(status)) throw new HttpError(400, 'Statut invalide.');
-    const r = await pool.query('UPDATE orders SET status = $1 WHERE id = $2 RETURNING id', [status, Number(req.params.id)]);
+    const info = parseOrderInfo(req.body);
+    const cols = Object.keys(info);
+    if (!cols.length) throw new HttpError(400, 'Rien à modifier.');
+    const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
+    const r = await pool.query(
+      'UPDATE orders SET ' + sets + ' WHERE id = $' + (cols.length + 1) + ' RETURNING id',
+      [...cols.map((c) => info[c]), Number(req.params.id) || 0]
+    );
     if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
     res.json({ ok: true });
   })
