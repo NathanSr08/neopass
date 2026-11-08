@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NeonPass">
+  <defs>
+    <linearGradient id="np-g" x1="10" y1="54" x2="54" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff4d94"/>
+      <stop offset="1" stop-color="#2be6ff"/>
+    </linearGradient>
+    <filter id="np-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Pass : carré arrondi avec deux encoches de ticket -->
+  <path fill="#110f26" stroke="url(#np-g)" stroke-width="3"
+        d="M14 4h36a10 10 0 0 1 10 10v12a6 6 0 0 0 0 12v12a10 10 0 0 1-10 10H14A10 10 0 0 1 4 50V38a6 6 0 0 0 0-12V14A10 10 0 0 1 14 4z"/>
+  <!-- N néon -->
+  <path fill="none" stroke="url(#np-g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"
+        filter="url(#np-glow)" d="M21 45V19l22 26V19"/>
+  <path fill="none" stroke="#fdf4ff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"
+        d="M21 45V19l22 26V19"/>
+</svg>

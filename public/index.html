@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="NeonPass : streaming, VPN, musique et chaînes TV. Des formules annuelles, une commande en un message WhatsApp.">
 <meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <title>NeonPass — Divertissement, VPN et TV en formules annuelles</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -66,6 +70,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; li
 }
 .nav-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; }
 .logo { font-family: var(--font-display); font-weight: 800; font-size: 20px; text-decoration: none; letter-spacing: -0.03em; }
+.logo { display: inline-flex; align-items: center; gap: 10px; }
+.logo img { width: 32px; height: 32px; flex: none; filter: drop-shadow(0 0 10px rgba(255, 77, 148, .35)); }
 .logo span { background: linear-gradient(100deg, var(--pink), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .nav-links { display: flex; gap: 24px; font-size: 14px; color: var(--muted); }
 .nav-links a { text-decoration: none; transition: color .2s; }
@@ -376,7 +382,7 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
 
 <header class="nav">
   <div class="wrap nav-in">
-    <a class="logo" href="#top"><span>Neon</span>Pass</a>
+    <a class="logo" href="#top"><img src="/logo.svg" alt="" width="32" height="32"><span>Neon</span>Pass</a>
     <nav class="nav-links" aria-label="Navigation">
       <a href="#offres">Offres</a>
       <a href="#composer">Composez votre pack</a>
