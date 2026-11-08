@@ -231,18 +231,20 @@
     raf = requestAnimationFrame(step);
   }
 
-  function singles() {
-    return OFFERS.filter((o) => !o.isPack);
+  // Toutes les offres sont combinables dans le sur-mesure, packs en premier
+  function composable() {
+    return OFFERS.filter((o) => o.isPack).concat(OFFERS.filter((o) => !o.isPack));
   }
 
   function renderChips() {
-    $('chips').innerHTML = singles()
-      .map((o) => '<button class="chip" type="button" data-id="' + o.id + '" aria-pressed="' + picked.has(o.id) + '">' + esc(o.name) + ' <small>' + esc(euro(o.price)) + '</small></button>')
+    $('chips').innerHTML = composable()
+      .map((o) => '<button class="chip' + (o.isPack ? ' chip-pack' : '') + '" type="button" data-id="' + o.id + '" aria-pressed="' + picked.has(o.id) + '">' +
+        (o.isPack ? '<em>Pack</em>' : '') + esc(o.name) + ' <small>' + esc(euro(o.price)) + '</small></button>')
       .join('');
   }
 
   function updateComposer() {
-    const items = singles().filter((o) => picked.has(o.id));
+    const items = composable().filter((o) => picked.has(o.id));
     const sum = items.reduce((s, o) => s + o.price, 0);
     const discount = items.length >= CFG.discountMin && CFG.discountPct > 0;
     let t = discount ? sum * (1 - CFG.discountPct / 100) : sum;
@@ -350,7 +352,7 @@
     renderTicker();
     renderTabs();
     renderGrid();
-    singles().slice(0, 2).forEach((o) => picked.add(o.id));
+    OFFERS.filter((o) => !o.isPack).slice(0, 2).forEach((o) => picked.add(o.id));
     renderChips();
     $('rcTotal').textContent = euro(0);
     updateComposer();
