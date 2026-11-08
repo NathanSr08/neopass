@@ -112,3 +112,9 @@ CREATE TABLE IF NOT EXISTS admin_audit (
   details    JSONB NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS admin_audit_at_idx ON admin_audit (at DESC);
+
+-- Échéances et rappels de renouvellement
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+UPDATE orders SET expires_at = created_at + interval '12 months' WHERE status = 'confirmed' AND expires_at IS NULL;
+CREATE INDEX IF NOT EXISTS orders_expires_idx ON orders (expires_at) WHERE status = 'confirmed';

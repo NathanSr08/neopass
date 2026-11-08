@@ -648,7 +648,8 @@ admin.get(
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
       `SELECT id, customer_name, customer_last_name, customer_phone, items, total::float AS total, discount,
-              promo_code, promo_pct, payment_method, notes, source, status, created_at
+              promo_code, promo_pct, payment_method, notes, source, status, created_at,
+              to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, reminder_sent_at
        FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 500`,
       [status]
     );
@@ -677,8 +678,18 @@ function parseOrderInfo(b) {
     if (!STATUSES.includes(st)) throw new HttpError(400, 'Statut invalide.');
     out.status = st;
   }
+  if (b.expiresAt !== undefined) {
+    const d = str(b.expiresAt, 10);
+    if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpError(400, "Date d'échéance invalide.");
+    out.expires_at = d ? d + ' 12:00 Europe/Paris' : null;
+  }
   return out;
 }
+
+// À la confirmation, l'échéance est fixée à +12 mois si elle n'est pas déjà renseignée
+const setDefaultExpiry = (id) => pool.query(
+  `UPDATE orders SET expires_at = now() + interval '12 months'
+   WHERE id = $1 AND status = 'confirmed' AND expires_at IS NULL`, [id]);
 
 admin.post(
   '/orders',
@@ -715,6 +726,7 @@ admin.post(
       [info.customer_name || '', info.customer_last_name || '', info.customer_phone || '', JSON.stringify(items),
        total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed']
     );
+    await setDefaultExpiry(r.rows[0].id);
     res.status(201).json({ ok: true, id: r.rows[0].id, total });
   })
 );
@@ -731,7 +743,57 @@ admin.patch(
       [...cols.map((c) => info[c]), Number(req.params.id) || 0]
     );
     if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
+    await setDefaultExpiry(Number(req.params.id) || 0);
     res.json({ ok: true });
+  })
+);
+
+// ----- Échéances -----
+// Numéro au format international pour wa.me (un numéro français en 0X est converti en 33X)
+function waPhone(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);
+  else if (/^0\d{9}$/.test(d)) d = '33' + d.slice(1);
+  return d.length >= 8 ? d : '';
+}
+const frDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+
+admin.get(
+  '/renewals',
+  wrap(async (req, res) => {
+    const days = clampInt(req.query.days, 1, 365, 30);
+    const { rows } = await pool.query(
+      `SELECT id, customer_name, customer_last_name, customer_phone, items, total::float AS total,
+              expires_at, reminder_sent_at,
+              ceil(extract(epoch FROM expires_at - now()) / 86400)::int AS days_left
+       FROM orders
+       WHERE status = 'confirmed' AND expires_at IS NOT NULL
+         AND expires_at <= now() + make_interval(days => $1)
+         AND expires_at >= now() - interval '30 days'
+       ORDER BY expires_at`,
+      [days]
+    );
+    res.json(rows.map((r) => ({ ...r, hasPhone: !!waPhone(r.customer_phone) })));
+  })
+);
+
+admin.post(
+  '/orders/:id/reminder',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const r = await pool.query(
+      'UPDATE orders SET reminder_sent_at = now() WHERE id = $1 RETURNING customer_name, customer_phone, items, expires_at',
+      [id]
+    );
+    if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
+    const o = r.rows[0];
+    const phone = waPhone(o.customer_phone);
+    const msg =
+      'Bonjour' + (o.customer_name ? ' ' + o.customer_name : '') + ', ton abonnement ' +
+      (o.items || []).map((i) => i.name).join(' + ') +
+      (o.expires_at ? ' arrive à échéance le ' + frDate(o.expires_at) : ' arrive bientôt à échéance') +
+      ' (réf. #' + id + '). Souhaites-tu le renouveler ? Réponds simplement à ce message.';
+    res.json({ ok: true, whatsappUrl: phone ? 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg) : null });
   })
 );
 
@@ -956,9 +1018,50 @@ async function initDb() {
   throw new Error('Base de données inaccessible.');
 }
 
+// ---------- Tâches planifiées (dans l'application, toutes les 15 min) ----------
+function parisNow() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map((p) => [p.type, p.value])
+  );
+  return { weekday: parts.weekday, hour: Number(parts.hour), date: parts.year + '-' + parts.month + '-' + parts.day };
+}
+
+// Résumé des échéances chaque lundi à partir de 9 h (heure de Paris)
+async function renewalsDigestJob() {
+  const now = parisNow();
+  if (now.weekday !== 'Mon' || now.hour < 9) return;
+  if ((await getSetting('renewals_digest_sent')) === now.date) return;
+  await putSetting('renewals_digest_sent', now.date);
+  const { rows } = await pool.query(
+    `SELECT count(*) FILTER (WHERE expires_at BETWEEN now() AND now() + interval '7 days')::int AS week,
+            count(*) FILTER (WHERE expires_at BETWEEN now() AND now() + interval '30 days')::int AS month,
+            count(*) FILTER (WHERE expires_at < now() AND expires_at >= now() - interval '30 days'
+                             AND reminder_sent_at IS NULL)::int AS expired
+     FROM orders WHERE status = 'confirmed'`
+  );
+  const c = rows[0];
+  notifyLater(
+    '📅 Échéances NeonPass\n' +
+    '• ' + c.week + ' cette semaine\n' +
+    '• ' + c.month + ' dans les 30 jours\n' +
+    (c.expired ? '• ' + c.expired + ' expirée(s) sans relance\n' : '') +
+    SITE_URL + '/admin'
+  );
+}
+
+const JOBS = [renewalsDigestJob];
+async function runJobs() {
+  for (const job of JOBS) {
+    try { await job(); } catch (e) { console.error('[job] ' + job.name + ' : ' + e.message); }
+  }
+}
+
 initDb()
   .then(() => {
     const server = app.listen(PORT, () => console.log('[http] NeonPass écoute sur le port ' + PORT));
+    setTimeout(runJobs, 60 * 1000).unref();
+    setInterval(runJobs, 15 * 60 * 1000).unref();
     const stop = () => {
       server.close(() => pool.end().then(() => process.exit(0)));
       setTimeout(() => process.exit(0), 8000).unref();

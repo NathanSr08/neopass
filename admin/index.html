@@ -75,6 +75,8 @@ td.details { font: 500 12px/1.4 'JetBrains Mono', monospace; color: var(--muted)
 .act { font: 700 12px/1 'JetBrains Mono', monospace; }
 .act.bad { color: var(--bad); }
 .act.ok { color: var(--ok); }
+.pill.soon { background: rgba(251, 191, 36, .15); color: var(--warn); }
+.pill.late { background: rgba(255, 122, 156, .15); color: var(--bad); }
 td.comment { max-width: 380px; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 select, input[type="text"], input[type="number"], textarea {
@@ -113,6 +115,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" data-panel="orders" aria-selected="true">Commandes</button>
+    <button class="tab" role="tab" data-panel="renewals" aria-selected="false" id="renewalsTab">Échéances</button>
     <button class="tab" role="tab" data-panel="offers" aria-selected="false">Offres</button>
     <button class="tab" role="tab" data-panel="reviews" aria-selected="false" id="reviewsTab">Avis</button>
     <button class="tab" role="tab" data-panel="promos" aria-selected="false">Codes promo</button>
@@ -143,6 +146,28 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       </table>
     </div>
     <p class="empty" id="ordersEmpty" hidden>Aucune commande pour le moment. Elles apparaissent ici dès qu'un bouton « Commander » est utilisé sur le site.</p>
+  </section>
+
+  <section class="panel" id="panel-renewals" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Échéances</h2>
+      <label style="display:flex;align-items:center;gap:10px">Expire dans
+        <select id="renewDays">
+          <option value="7">7 jours</option>
+          <option value="30" selected>30 jours</option>
+          <option value="60">60 jours</option>
+          <option value="90">90 jours</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">Commandes confirmées qui arrivent à échéance (et celles expirées depuis moins de 30 jours). L'échéance est fixée à +12 mois lors de la confirmation et se modifie dans « Détails ». Résumé envoyé sur Telegram chaque lundi à 9 h.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Échéance</th><th>Reste</th><th>Client</th><th>Offres</th><th>Total</th><th>Relance</th><th></th></tr></thead>
+        <tbody id="renewBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="renewEmpty" hidden>Aucune échéance sur cette période.</p>
   </section>
 
   <section class="panel" id="panel-offers" hidden>
@@ -337,6 +362,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
           <option value="cancelled">Annulée</option>
         </select>
       </label>
+      <label for="oExpires" id="oExpiresRow" hidden>Date d'échéance<input type="date" id="oExpires" style="background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;color-scheme:dark"></label>
       <div class="full order-sum" id="oSum"></div>
       <label class="full" for="oNotes">Commentaire interne (visible uniquement dans l'admin)<textarea id="oNotes" rows="4" maxlength="2000"></textarea></label>
     </div>
@@ -489,6 +515,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     $('#oNotes').value = o ? o.notes || '' : '';
     $('#oTotal').value = o ? o.total : '';
     $('#oTotal').disabled = !!o;
+    $('#oExpiresRow').hidden = !o;
+    $('#oExpires').value = o && o.expires_at ? o.expires_at : '';
     $('#oItemsBox').hidden = !!o;
     $('#oItemsRead').hidden = !o;
     if (o) {
@@ -519,6 +547,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     };
     try {
       if (editingOrder) {
+        if ($('#oExpires').value !== (editingOrder.expires_at || '')) info.expiresAt = $('#oExpires').value;
         await api('/orders/' + editingOrder.id, { method: 'PATCH', body: info });
         toast('Commande n°' + editingOrder.id + ' mise à jour.');
       } else {
@@ -529,8 +558,50 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       orderDlg.close();
       loadOrders();
       loadStats();
+      loadRenewals();
     } catch (err) { toast(err.message, true); }
   });
+
+  // ----- Échéances -----
+  async function loadRenewals() {
+    const rows = await api('/renewals?days=' + $('#renewDays').value);
+    const body = $('#renewBody');
+    body.textContent = '';
+    $('#renewEmpty').hidden = rows.length > 0;
+    const soon = rows.filter((r) => r.days_left >= 0 && r.days_left <= 7).length;
+    $('#renewalsTab').textContent = 'Échéances' + (soon ? ' (' + soon + ')' : '');
+    rows.forEach((r) => {
+      const left = r.days_left;
+      const pill = left < 0 ? ['late', 'Expirée (' + -left + ' j)'] : left <= 7 ? ['soon', left + ' j'] : ['off', left + ' j'];
+      const remind = h('button', { className: 'btn small primary', type: 'button', disabled: !r.hasPhone,
+        title: r.hasPhone ? 'Ouvre WhatsApp avec un message de renouvellement' : 'Aucun téléphone : ajoute-le dans Détails' }, 'Relancer');
+      remind.addEventListener('click', async () => {
+        const w = window.open('', '_blank');
+        try {
+          const x = await api('/orders/' + r.id + '/reminder', { method: 'POST', body: {} });
+          if (w && x.whatsappUrl) w.location.href = x.whatsappUrl; else if (w) w.close();
+          toast('Relance enregistrée pour la commande n°' + r.id + '.');
+          loadRenewals();
+        } catch (e) { if (w) w.close(); toast(e.message, true); }
+      });
+      const mark = h('button', { className: 'btn small', type: 'button' }, 'Marquer relancé');
+      mark.addEventListener('click', async () => {
+        try { await api('/orders/' + r.id + '/reminder', { method: 'POST', body: {} }); toast('Marqué comme relancé.'); loadRenewals(); }
+        catch (e) { toast(e.message, true); }
+      });
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, new Date(r.expires_at).toLocaleDateString('fr-FR')),
+        h('td', {}, h('span', { className: 'pill ' + pill[0] }, pill[1])),
+        h('td', {}, [r.customer_name, r.customer_last_name].filter(Boolean).join(' ') || '—',
+          r.customer_phone ? h('small', { className: 'sub' }, r.customer_phone) : ''),
+        h('td', {}, (r.items || []).map((i) => i.name).join(' + ')),
+        h('td', { className: 'num' }, fmt(r.total)),
+        h('td', { className: 'num' }, r.reminder_sent_at ? new Date(r.reminder_sent_at).toLocaleDateString('fr-FR') : '—'),
+        h('td', {}, h('div', { className: 'row-actions' }, remind, mark))
+      ));
+    });
+  }
+  $('#renewDays').addEventListener('change', () => loadRenewals().catch((e) => toast(e.message, true)));
 
   // ----- Offres -----
   let offers = [];
@@ -825,11 +896,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    ['orders', 'offers', 'reviews', 'promos', 'settings', 'security', 'audit'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
+    ['orders', 'renewals', 'offers', 'reviews', 'promos', 'settings', 'security', 'audit'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadAudit()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadAudit()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>
