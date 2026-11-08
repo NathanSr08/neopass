@@ -836,6 +836,112 @@ admin.delete(
   })
 );
 
+// ----- Statistiques & export -----
+// Période en dates locales (Europe/Paris), bornes incluses. Défaut : 12 derniers mois.
+function parsePeriod(q) {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const today = new Date();
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const def = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+  const from = re.test(q.from || '') ? q.from : iso(new Date(Date.UTC(def.getFullYear(), def.getMonth(), 1)));
+  const to = re.test(q.to || '') ? q.to : iso(today);
+  if (from > to) throw new HttpError(400, 'La date de début doit précéder la date de fin.');
+  return { from, to };
+}
+const PERIOD_SQL = `o.created_at >= ($1::date::timestamp AT TIME ZONE 'Europe/Paris')
+                AND o.created_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Paris')`;
+
+admin.get(
+  '/analytics',
+  wrap(async (req, res) => {
+    const { from, to } = parsePeriod(req.query);
+    const p = [from, to];
+    const [kpi, monthly, products, payments, promos, sources] = await Promise.all([
+      pool.query(`SELECT count(*)::int AS orders,
+                         count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+                         count(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
+                         COALESCE(sum(total) FILTER (WHERE status = 'confirmed'), 0)::float AS revenue,
+                         COALESCE(avg(total) FILTER (WHERE status = 'confirmed'), 0)::float AS basket
+                  FROM orders o WHERE ${PERIOD_SQL}`, p),
+      pool.query(`WITH m AS (
+                    SELECT generate_series(date_trunc('month', $1::date), date_trunc('month', $2::date), interval '1 month')::date AS month)
+                  SELECT to_char(m.month, 'YYYY-MM') AS month,
+                         COALESCE(sum(o.total), 0)::float AS revenue, count(o.id)::int AS orders
+                  FROM m LEFT JOIN orders o
+                    ON o.status = 'confirmed' AND ${PERIOD_SQL}
+                   AND date_trunc('month', o.created_at AT TIME ZONE 'Europe/Paris')::date = m.month
+                  GROUP BY m.month ORDER BY m.month`, p),
+      pool.query(`SELECT i->>'name' AS name, count(*)::int AS qty, sum((i->>'price')::numeric)::float AS value
+                  FROM orders o, jsonb_array_elements(o.items) i
+                  WHERE o.status = 'confirmed' AND ${PERIOD_SQL}
+                  GROUP BY 1 ORDER BY qty DESC, value DESC LIMIT 10`, p),
+      pool.query(`SELECT payment_method AS method, count(*)::int AS orders, sum(total)::float AS revenue
+                  FROM orders o WHERE status = 'confirmed' AND ${PERIOD_SQL}
+                  GROUP BY 1 ORDER BY revenue DESC`, p),
+      pool.query(`SELECT promo_code AS code, max(promo_pct)::int AS pct, count(*)::int AS orders,
+                         count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+                         COALESCE(sum(total) FILTER (WHERE status = 'confirmed'), 0)::float AS revenue
+                  FROM orders o WHERE promo_code IS NOT NULL AND ${PERIOD_SQL}
+                  GROUP BY 1 ORDER BY revenue DESC, orders DESC`, p),
+      pool.query(`SELECT source, count(*)::int AS orders,
+                         COALESCE(sum(total) FILTER (WHERE status = 'confirmed'), 0)::float AS revenue
+                  FROM orders o WHERE ${PERIOD_SQL} GROUP BY 1 ORDER BY 1`, p)
+    ]);
+    res.json({
+      from, to,
+      kpi: kpi.rows[0],
+      monthly: monthly.rows,
+      products: products.rows,
+      payments: payments.rows,
+      promos: promos.rows,
+      sources: sources.rows
+    });
+  })
+);
+
+// Export CSV (séparateur « ; » et BOM UTF-8 pour Excel en français)
+const csvCell = (v) => {
+  let t = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; // empêche l'injection de formules dans Excel
+  return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+};
+const PAY_NAMES = { revolut: 'Revolut', usdt: 'USDT', btc: 'BTC', eth: 'ETH', especes: 'Espèces', virement: 'Virement', autre: 'Autre' };
+const STATUS_NAMES = { new: 'Nouvelle', confirmed: 'Confirmée', cancelled: 'Annulée' };
+
+admin.get(
+  '/orders.csv',
+  wrap(async (req, res) => {
+    const { from, to } = parsePeriod(req.query);
+    const status = STATUSES.includes(req.query.status) ? req.query.status : null;
+    const { rows } = await pool.query(
+      `SELECT o.id, to_char(o.created_at AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY HH24:MI') AS date,
+              o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total, o.discount,
+              o.promo_code, o.promo_pct, o.payment_method, o.status, o.source, o.notes
+       FROM orders o WHERE ${PERIOD_SQL} AND ($3::text IS NULL OR o.status = $3)
+       ORDER BY o.created_at`,
+      [from, to, status]
+    );
+    const head = ['Référence', 'Date', 'Prénom', 'Nom', 'Téléphone', 'Produits', 'Total (€)', 'Remise pack',
+      'Code promo', 'Remise code (%)', 'Paiement', 'Statut', 'Origine', 'Commentaire'];
+    const lines = [head.map(csvCell).join(';')];
+    for (const o of rows) {
+      lines.push([
+        o.id, o.date, o.customer_name, o.customer_last_name, o.customer_phone,
+        (o.items || []).map((i) => i.name).join(' + '),
+        Number(o.total).toFixed(2).replace('.', ','), o.discount ? 'oui' : 'non',
+        o.promo_code || '', o.promo_pct || '', PAY_NAMES[o.payment_method] || '',
+        STATUS_NAMES[o.status] || o.status, o.source === 'admin' ? 'Admin' : 'Site', o.notes
+      ].map(csvCell).join(';'));
+    }
+    await audit(req, 'export.csv', { du: from, au: to, statut: status || 'toutes', lignes: rows.length });
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="neonpass-commandes-${from}-au-${to}.csv"`
+    });
+    res.send('\ufeff' + lines.join('\r\n') + '\r\n');
+  })
+);
+
 admin.get(
   '/promos',
   wrap(async (req, res) => {
