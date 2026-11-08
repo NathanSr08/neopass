@@ -93,6 +93,90 @@ const notifyLater = (text) => { notify(text).catch(() => {}); };
 const normCode = (v) => str(v, 30).toUpperCase().replace(/[^A-Z0-9_-]/g, '');
 const PROMO_VALID = `active AND (expires_at IS NULL OR expires_at > now()) AND (max_uses IS NULL OR uses < max_uses)`;
 
+// ---------- Comptes clients ----------
+const SESSION_COOKIE = 'np_sess';
+const SESSION_DAYS = 30;
+const sha256 = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+
+function hashPassword(pw) {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 });
+  return 'scrypt$16384$' + salt.toString('base64') + '$' + key.toString('base64');
+}
+function verifyPassword(pw, stored) {
+  const [alg, n, salt, key] = String(stored).split('$');
+  if (alg !== 'scrypt' || !salt || !key) return false;
+  const expected = Buffer.from(key, 'base64');
+  const got = crypto.scryptSync(pw, Buffer.from(salt, 'base64'), expected.length, { N: Number(n), r: 8, p: 1 });
+  return crypto.timingSafeEqual(got, expected);
+}
+// Hash factice pour que la durée de connexion soit la même que l'email existe ou non
+const DUMMY_HASH = hashPassword(crypto.randomBytes(12).toString('hex'));
+
+function checkPassword(pw) {
+  if (typeof pw !== 'string' || pw.length < 8) throw new HttpError(400, 'Le mot de passe doit faire au moins 8 caractères.');
+  if (pw.length > 200) throw new HttpError(400, 'Mot de passe trop long.');
+  return pw;
+}
+function checkEmail(v) {
+  const email = str(v, 254).toLowerCase();
+  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Adresse email invalide.');
+  return email;
+}
+
+function readCookie(req, name) {
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return '';
+}
+function setSessionCookie(res, token, maxAgeSec) {
+  res.append(
+    'Set-Cookie',
+    SESSION_COOKIE + '=' + encodeURIComponent(token) + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=' + maxAgeSec
+  );
+}
+async function createSession(res, customerId) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await pool.query(
+    `INSERT INTO sessions (token_hash, customer_id, expires_at) VALUES ($1, $2, now() + interval '${SESSION_DAYS} days')`,
+    [sha256(token), customerId]
+  );
+  await pool.query('UPDATE customers SET last_login_at = now() WHERE id = $1', [customerId]);
+  setSessionCookie(res, token, SESSION_DAYS * 86400);
+}
+
+// Charge req.customer si une session valide est présente (n'impose rien)
+async function loadCustomer(req, res, next) {
+  req.customer = null;
+  const token = readCookie(req, SESSION_COOKIE);
+  if (token) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT c.id, c.email, c.name, c.created_at FROM sessions s JOIN customers c ON c.id = s.customer_id
+         WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT c.blocked`,
+        [sha256(token)]
+      );
+      req.customer = rows[0] || null;
+    } catch (e) {
+      return next(e);
+    }
+  }
+  next();
+}
+function requireCustomer(req, res, next) {
+  if (!req.customer) return res.status(401).json({ error: 'Connecte-toi pour continuer.' });
+  next();
+}
+// Anti-CSRF : les écritures doivent être en JSON (impossible via un formulaire d'un autre site)
+function jsonOnly(req, res, next) {
+  if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'Requête invalide.' });
+  next();
+}
+
 function rateLimit(max, windowMs) {
   const hits = new Map();
   setInterval(() => hits.clear(), 10 * 60 * 1000).unref();
@@ -211,6 +295,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '20kb' }));
+app.use('/api', loadCustomer);
 
 app.get('/healthz', async (req, res) => {
   try {
@@ -307,7 +392,7 @@ app.post(
     const sum = rows.reduce((s, r) => s + Number(r.price), 0);
     const discount = rows.length >= settings.discountMin && settings.discountPct > 0;
     const items = rows.map((r) => ({ id: r.id, name: r.name, price: Number(r.price) }));
-    const name = str(req.body.name, 60);
+    const name = str(req.body.name, 60) || (req.customer ? str(req.customer.name, 60) : '');
     const affiliation = str(req.body.affiliation, 60);
     const promoCode = normCode(req.body.promoCode);
 
@@ -328,9 +413,10 @@ app.post(
       if (promo) t = t * (1 - promo.pct / 100);
       total = round2(t);
       const ins = await client.query(
-        `INSERT INTO orders (customer_name, items, total, discount, promo_code, promo_pct)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [name, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null]
+        `INSERT INTO orders (customer_name, items, total, discount, promo_code, promo_pct, customer_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [name, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null,
+         req.customer ? req.customer.id : null]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -358,6 +444,7 @@ app.post(
       (promo ? ' · code ' + promo.code + ' −' + promo.pct + ' %' : '') +
       (name ? '\nPrénom : ' + name : '') +
       (affiliation ? '\nAffiliation : ' + affiliation : '') +
+      (req.customer ? '\nCompte : ' + req.customer.email : '') +
       '\n' + SITE_URL + '/admin'
     );
 
@@ -368,6 +455,135 @@ app.post(
     });
   })
 );
+
+// ----- Espace client -----
+app.get('/compte', (req, res) => res.sendFile(path.join(__dirname, 'public', 'compte.html')));
+
+const account = express.Router();
+account.use(jsonOnly);
+const authLimit = rateLimit(10, 15 * 60 * 1000);
+
+const publicCustomer = (c) => ({ id: c.id, email: c.email, name: c.name, createdAt: c.created_at });
+
+account.post(
+  '/register',
+  authLimit,
+  wrap(async (req, res) => {
+    const email = checkEmail(req.body.email);
+    const password = checkPassword(req.body.password);
+    const name = str(req.body.name, 60);
+    if (!name) throw new HttpError(400, 'Indique ton prénom.');
+    let c;
+    try {
+      const r = await pool.query(
+        'INSERT INTO customers (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
+        [email, hashPassword(password), name]
+      );
+      c = r.rows[0];
+    } catch (e) {
+      if (e && e.code === '23505') throw new HttpError(409, 'Un compte existe déjà avec cet email. Connecte-toi.');
+      throw e;
+    }
+    await createSession(res, c.id);
+    notifyLater('👤 Nouveau compte client\n' + name + ' — ' + email);
+    res.status(201).json(publicCustomer(c));
+  })
+);
+
+account.post(
+  '/login',
+  authLimit,
+  wrap(async (req, res) => {
+    const email = str(req.body.email, 254).toLowerCase();
+    const password = String(req.body.password || '').slice(0, 200);
+    const { rows } = await pool.query('SELECT * FROM customers WHERE email = $1', [email]);
+    const c = rows[0];
+    const ok = verifyPassword(password, c ? c.password_hash : DUMMY_HASH) && !!c;
+    if (!ok) throw new HttpError(401, 'Email ou mot de passe incorrect.');
+    if (c.blocked) throw new HttpError(403, 'Ce compte est suspendu. Contacte-nous sur WhatsApp.');
+    await createSession(res, c.id);
+    res.json(publicCustomer(c));
+  })
+);
+
+account.post(
+  '/logout',
+  wrap(async (req, res) => {
+    const token = readCookie(req, SESSION_COOKIE);
+    if (token) await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
+    setSessionCookie(res, '', 0);
+    res.json({ ok: true });
+  })
+);
+
+account.get('/me', (req, res) => res.json(req.customer ? publicCustomer(req.customer) : null));
+
+account.put(
+  '/me',
+  requireCustomer,
+  wrap(async (req, res) => {
+    const name = str(req.body.name, 60);
+    if (!name) throw new HttpError(400, 'Indique ton prénom.');
+    await pool.query('UPDATE customers SET name = $1 WHERE id = $2', [name, req.customer.id]);
+    res.json({ ...publicCustomer(req.customer), name });
+  })
+);
+
+account.post(
+  '/password',
+  requireCustomer,
+  authLimit,
+  wrap(async (req, res) => {
+    const { rows } = await pool.query('SELECT password_hash FROM customers WHERE id = $1', [req.customer.id]);
+    if (!verifyPassword(String(req.body.current || '').slice(0, 200), rows[0].password_hash)) {
+      throw new HttpError(400, 'Mot de passe actuel incorrect.');
+    }
+    const next = checkPassword(req.body.password);
+    await pool.query('UPDATE customers SET password_hash = $1 WHERE id = $2', [hashPassword(next), req.customer.id]);
+    // Déconnecte les autres appareils
+    await pool.query('DELETE FROM sessions WHERE customer_id = $1 AND token_hash <> $2', [
+      req.customer.id, sha256(readCookie(req, SESSION_COOKIE))
+    ]);
+    res.json({ ok: true });
+  })
+);
+
+account.post(
+  '/reset',
+  authLimit,
+  wrap(async (req, res) => {
+    const token = str(req.body.token, 100);
+    const password = checkPassword(req.body.password);
+    const r = await pool.query(
+      `UPDATE password_resets SET used = TRUE
+       WHERE token_hash = $1 AND NOT used AND expires_at > now() RETURNING customer_id`,
+      [sha256(token)]
+    );
+    if (!r.rowCount) throw new HttpError(400, 'Ce lien de réinitialisation est invalide ou expiré.');
+    const id = r.rows[0].customer_id;
+    await pool.query('UPDATE customers SET password_hash = $1 WHERE id = $2', [hashPassword(password), id]);
+    await pool.query('DELETE FROM sessions WHERE customer_id = $1', [id]);
+    const c = await pool.query('SELECT id, email, name, created_at, blocked FROM customers WHERE id = $1', [id]);
+    if (c.rows[0].blocked) throw new HttpError(403, 'Ce compte est suspendu.');
+    await createSession(res, id);
+    res.json(publicCustomer(c.rows[0]));
+  })
+);
+
+account.get(
+  '/orders',
+  requireCustomer,
+  wrap(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT id, items, total::float AS total, discount, promo_code, promo_pct, status, created_at
+       FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 200`,
+      [req.customer.id]
+    );
+    res.json(rows);
+  })
+);
+
+app.use('/api/account', account);
 
 // ----- Administration -----
 app.get('/admin', adminAuth, (req, res) => {
@@ -390,7 +606,8 @@ admin.get(
       FROM orders`);
     const o = await pool.query('SELECT count(*)::int AS n FROM offers WHERE active');
     const rv = await pool.query('SELECT count(*) FILTER (WHERE NOT approved)::int AS pending FROM reviews');
-    res.json({ ...rows[0], activeOffers: o.rows[0].n, pendingReviews: rv.rows[0].pending });
+    const cu = await pool.query('SELECT count(*)::int AS n FROM customers');
+    res.json({ ...rows[0], activeOffers: o.rows[0].n, pendingReviews: rv.rows[0].pending, customers: cu.rows[0].n });
   })
 );
 
@@ -399,8 +616,10 @@ admin.get(
   wrap(async (req, res) => {
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
-      `SELECT id, customer_name, items, total::float AS total, discount, promo_code, promo_pct, status, created_at
-       FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 500`,
+      `SELECT o.id, o.customer_name, o.items, o.total::float AS total, o.discount, o.promo_code, o.promo_pct,
+              o.status, o.created_at, o.customer_id, c.email AS customer_email
+       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+       WHERE ($1::text IS NULL OR o.status = $1) ORDER BY o.created_at DESC LIMIT 500`,
       [status]
     );
     res.json(rows);
@@ -516,6 +735,63 @@ admin.delete(
   wrap(async (req, res) => {
     await pool.query('DELETE FROM reviews WHERE id = $1', [Number(req.params.id) || 0]);
     res.status(204).end();
+  })
+);
+
+admin.get(
+  '/customers',
+  wrap(async (req, res) => {
+    const q = str(req.query.q, 100).toLowerCase();
+    const { rows } = await pool.query(
+      `SELECT c.id, c.email, c.name, c.blocked, c.created_at, c.last_login_at,
+              count(o.id)::int AS orders,
+              COALESCE(sum(o.total) FILTER (WHERE o.status = 'confirmed'), 0)::float AS confirmed_total
+       FROM customers c LEFT JOIN orders o ON o.customer_id = c.id
+       WHERE ($1 = '' OR c.email LIKE '%' || $1 || '%' OR lower(c.name) LIKE '%' || $1 || '%')
+       GROUP BY c.id ORDER BY c.created_at DESC LIMIT 500`,
+      [q]
+    );
+    res.json(rows);
+  })
+);
+
+admin.get(
+  '/customers/:id/orders',
+  wrap(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT id, items, total::float AS total, discount, promo_code, promo_pct, status, created_at
+       FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 200`,
+      [Number(req.params.id) || 0]
+    );
+    res.json(rows);
+  })
+);
+
+admin.patch(
+  '/customers/:id',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const blocked = !!req.body.blocked;
+    const r = await pool.query('UPDATE customers SET blocked = $1 WHERE id = $2 RETURNING id', [blocked, id]);
+    if (!r.rowCount) throw new HttpError(404, 'Client introuvable.');
+    if (blocked) await pool.query('DELETE FROM sessions WHERE customer_id = $1', [id]);
+    res.json({ ok: true });
+  })
+);
+
+admin.post(
+  '/customers/:id/reset-link',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const c = await pool.query('SELECT id FROM customers WHERE id = $1', [id]);
+    if (!c.rowCount) throw new HttpError(404, 'Client introuvable.');
+    const token = crypto.randomBytes(24).toString('base64url');
+    await pool.query("UPDATE password_resets SET used = TRUE WHERE customer_id = $1 AND NOT used", [id]);
+    await pool.query(
+      "INSERT INTO password_resets (token_hash, customer_id, expires_at) VALUES ($1, $2, now() + interval '24 hours')",
+      [sha256(token), id]
+    );
+    res.json({ url: SITE_URL + '/compte#reset=' + token, expiresInHours: 24 });
   })
 );
 

@@ -86,3 +86,33 @@ CREATE TABLE IF NOT EXISTS promo_codes (
 );
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_pct INTEGER;
+
+-- Comptes clients
+CREATE TABLE IF NOT EXISTS customers (
+  id            SERIAL PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name          TEXT NOT NULL DEFAULT '',
+  blocked       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash  TEXT PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sessions_customer_idx ON sessions (customer_id);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash  TEXT PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used        BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders (customer_id, created_at DESC);
+DELETE FROM sessions WHERE expires_at < now();
