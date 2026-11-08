@@ -61,6 +61,20 @@ td.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular
 .pill.src { background: rgba(122, 92, 255, .18); color: #c4b5ff; margin-left: 6px; vertical-align: middle; }
 .note-dot { display: inline-block; margin-left: 6px; color: var(--warn); cursor: help; }
 td small.sub { display: block; color: var(--muted); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+[hidden] { display: none !important; }
+.alert { margin-bottom: 20px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(251, 191, 36, .5); background: rgba(251, 191, 36, .1); color: #fde68a; font-size: 14px; }
+.alert b { color: #fff3c4; }
+.sec-block { padding: 18px 0; border-top: 1px solid var(--line); }
+.sec-block:first-of-type { border-top: 0; padding-top: 0; }
+.sec-block h3 { font: 600 14px/1.2 'Unbounded', sans-serif; margin: 0 0 10px; }
+.qr { display: inline-block; padding: 12px; background: #fff; border-radius: 12px; margin: 10px 0; }
+.secret { font: 700 14px/1.6 'JetBrains Mono', monospace; letter-spacing: .08em; word-break: break-all; color: var(--cyan); }
+.code-input { max-width: 160px; font: 700 18px/1 'JetBrains Mono', monospace !important; letter-spacing: .25em; text-align: center; }
+.inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+td.details { font: 500 12px/1.4 'JetBrains Mono', monospace; color: var(--muted); max-width: 420px; overflow-wrap: anywhere; }
+.act { font: 700 12px/1 'JetBrains Mono', monospace; }
+.act.bad { color: var(--bad); }
+.act.ok { color: var(--ok); }
 td.comment { max-width: 380px; overflow-wrap: anywhere; color: var(--muted); font-size: 14px; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 select, input[type="text"], input[type="number"], textarea {
@@ -90,8 +104,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 <div class="wrap">
   <header>
     <h1><span>Neon</span>Pass · admin</h1>
-    <a href="/">Voir le site</a>
+    <div class="inline"><a href="/">Voir le site</a><button class="btn small" type="button" id="logoutBtn">Se déconnecter</button></div>
   </header>
+
+  <div class="alert" id="pwAlert" hidden>⚠️ <b>Mot de passe admin faible ou par défaut.</b> Change <code>ADMIN_PASSWORD</code> dans le fichier <code>.env</code> (12 caractères minimum), puis redémarre l'application. Active aussi la double authentification dans l'onglet Sécurité.</div>
 
   <div class="stats" id="stats"></div>
 
@@ -101,6 +117,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="tab" role="tab" data-panel="reviews" aria-selected="false" id="reviewsTab">Avis</button>
     <button class="tab" role="tab" data-panel="promos" aria-selected="false">Codes promo</button>
     <button class="tab" role="tab" data-panel="settings" aria-selected="false">Réglages</button>
+    <button class="tab" role="tab" data-panel="security" aria-selected="false">Sécurité</button>
+    <button class="tab" role="tab" data-panel="audit" aria-selected="false">Journal</button>
   </div>
 
   <section class="panel" id="panel-orders">
@@ -196,6 +214,61 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <div><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
   </section>
+  <section class="panel" id="panel-security" hidden>
+    <div class="sec-block">
+      <h3>Double authentification</h3>
+      <div id="totpOff" hidden>
+        <p class="hint">Protège l'admin avec un code à 6 chiffres généré par une application (Google Authenticator, Authy, 1Password…), demandé à chaque connexion en plus du mot de passe.</p>
+        <button class="btn primary" type="button" id="totpStart">Activer</button>
+        <div id="totpSetup" hidden>
+          <p class="hint" style="margin-top:14px">1. Scanne ce QR code avec ton application, ou saisis la clé manuellement :</p>
+          <div class="qr" id="totpQr"></div>
+          <div class="secret" id="totpSecret"></div>
+          <p class="hint" style="margin-top:14px">2. Saisis le code affiché par l'application pour confirmer :</p>
+          <form class="inline" id="totpEnableForm">
+            <input class="code-input" id="totpCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Code à 6 chiffres">
+            <button class="btn primary" type="submit">Confirmer</button>
+          </form>
+        </div>
+      </div>
+      <div id="totpOn" hidden>
+        <p class="hint"><span class="pill on">Active</span> Un code est demandé à chaque connexion.</p>
+        <form class="inline" id="totpDisableForm">
+          <input class="code-input" id="totpOffCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Code actuel pour désactiver">
+          <button class="btn danger" type="submit">Désactiver</button>
+        </form>
+      </div>
+    </div>
+    <div class="sec-block">
+      <h3>Sessions ouvertes</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Connexion</th><th>Expire</th><th>IP</th><th>Navigateur</th></tr></thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px"><button class="btn danger" type="button" id="logoutAll">Déconnecter toutes les sessions</button></div>
+    </div>
+    <div class="sec-block">
+      <h3>Protection contre les essais de mot de passe</h3>
+      <p class="hint" style="margin:0">Après 5 échecs en 15 minutes, l'adresse IP est bloquée 15 minutes et tu reçois une alerte Telegram. Chaque connexion réussie est aussi notifiée.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-audit" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Journal des actions</h2>
+      <button class="btn small" type="button" id="auditRefresh">Actualiser</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Date</th><th>IP</th><th>Action</th><th>Détails</th></tr></thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="auditEmpty" hidden>Aucune action enregistrée.</p>
+  </section>
+
 </div>
 
 <dialog id="offerDlg">
@@ -297,10 +370,12 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
   async function api(path, opts = {}) {
     const r = await fetch('/api/admin' + path, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-NP-Admin': '1' },
+      credentials: 'same-origin',
       ...opts,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
     });
+    if (r.status === 401) { location.href = '/admin/login'; throw new Error('Session expirée.'); }
     if (r.status === 204) return null;
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'Erreur ' + r.status);
@@ -634,6 +709,105 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     catch (e) { toast(e.message, true); }
   });
 
+  // ----- Sécurité -----
+  const ACTION_LABEL = {
+    'login.ok': 'Connexion', 'login.echec': 'Échec de connexion', 'login.blocage': 'IP bloquée',
+    'POST /orders': 'Commande créée', 'PATCH /orders': 'Commande modifiée', 'DELETE /orders': 'Commande supprimée',
+    'POST /offers': 'Offre créée', 'PUT /offers': 'Offre modifiée', 'DELETE /offers': 'Offre supprimée',
+    'PATCH /reviews': 'Avis modéré', 'DELETE /reviews': 'Avis supprimé',
+    'POST /promos': 'Code promo créé', 'PATCH /promos': 'Code promo modifié', 'DELETE /promos': 'Code promo supprimé',
+    'PUT /settings': 'Réglages modifiés', 'POST /logout': 'Déconnexion', 'POST /logout-all': 'Toutes les sessions fermées',
+    'POST /totp/setup': '2FA : configuration', 'POST /totp/enable': '2FA activée', 'POST /totp/disable': '2FA désactivée',
+    'POST /notify/test': 'Test de notification'
+  };
+  const actionLabel = (a) => {
+    if (ACTION_LABEL[a]) return ACTION_LABEL[a];
+    const m = a.match(/^(\w+) (\/[a-z-]+(?:\/[a-z-]+)?)\/[^/]+$/);
+    if (m && ACTION_LABEL[m[1] + ' ' + m[2]]) return ACTION_LABEL[m[1] + ' ' + m[2]] + ' (' + a.split('/').pop() + ')';
+    return a;
+  };
+  const dt = (d) => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+
+  async function loadSecurity() {
+    const s = await api('/security');
+    $('#pwAlert').hidden = !s.defaultPassword;
+    $('#totpOn').hidden = !s.totp;
+    $('#totpOff').hidden = s.totp;
+    const body = $('#sessionsBody');
+    body.textContent = '';
+    s.sessions.forEach((x) => body.append(h('tr', {},
+      h('td', { className: 'num' }, dt(x.created_at)), h('td', { className: 'num' }, dt(x.expires_at)),
+      h('td', { className: 'num' }, x.ip || '—'), h('td', { className: 'comment' }, x.user_agent || '—'))));
+  }
+  let qrLib = null;
+  function loadQrLib() {
+    if (qrLib) return qrLib;
+    qrLib = new Promise((ok, ko) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      sc.onload = ok; sc.onerror = ko;
+      document.head.append(sc);
+    });
+    return qrLib;
+  }
+  $('#totpStart').addEventListener('click', async () => {
+    try {
+      const r = await api('/totp/setup', { method: 'POST', body: {} });
+      $('#totpSecret').textContent = r.secret.match(/.{1,4}/g).join(' ');
+      $('#totpQr').textContent = '';
+      try { await loadQrLib(); new QRCode($('#totpQr'), { text: r.uri, width: 180, height: 180 }); }
+      catch (e) { $('#totpQr').hidden = true; }
+      $('#totpSetup').hidden = false;
+      $('#totpStart').hidden = true;
+      $('#totpCode').focus();
+    } catch (e) { toast(e.message, true); }
+  });
+  $('#totpEnableForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/totp/enable', { method: 'POST', body: { code: $('#totpCode').value } });
+      toast('Double authentification activée.');
+      $('#totpSetup').hidden = true; $('#totpStart').hidden = false; $('#totpCode').value = '';
+      loadSecurity(); loadAudit();
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#totpDisableForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!confirm('Désactiver la double authentification ?')) return;
+    try {
+      await api('/totp/disable', { method: 'POST', body: { code: $('#totpOffCode').value } });
+      toast('Double authentification désactivée.');
+      $('#totpOffCode').value = '';
+      loadSecurity(); loadAudit();
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#logoutAll').addEventListener('click', async () => {
+    if (!confirm('Fermer toutes les sessions, y compris celle-ci ?')) return;
+    try { await api('/logout-all', { method: 'POST', body: {} }); } catch (e) {}
+    location.href = '/admin/login';
+  });
+  $('#logoutBtn').addEventListener('click', async () => {
+    try { await api('/logout', { method: 'POST', body: {} }); } catch (e) {}
+    location.href = '/admin/login';
+  });
+
+  async function loadAudit() {
+    const rows = await api('/audit');
+    const body = $('#auditBody');
+    body.textContent = '';
+    $('#auditEmpty').hidden = rows.length > 0;
+    rows.forEach((r) => {
+      const det = Object.entries(r.details || {}).filter(([, v]) => v !== '' && v != null)
+        .map(([k, v]) => k + ': ' + (typeof v === 'object' ? JSON.stringify(v) : v)).join(' · ');
+      const cls = /echec|blocage|DELETE|disable/.test(r.action) ? 'bad' : r.action === 'login.ok' ? 'ok' : '';
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, dt(r.at)), h('td', { className: 'num' }, r.ip || '—'),
+        h('td', {}, h('span', { className: 'act ' + cls }, actionLabel(r.action))),
+        h('td', { className: 'details' }, det || '—')));
+    });
+  }
+  $('#auditRefresh').addEventListener('click', () => loadAudit().catch((e) => toast(e.message, true)));
+
   // ----- Réglages -----
   async function loadSettings() {
     const s = await api('/settings');
@@ -651,11 +825,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    ['orders', 'offers', 'reviews', 'promos', 'settings'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
+    ['orders', 'offers', 'reviews', 'promos', 'settings', 'security', 'audit'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadReviews(), loadPromos(), loadNotify(), loadSettings()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadAudit()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>

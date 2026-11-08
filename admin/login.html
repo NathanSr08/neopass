@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Connexion · NeonPass admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@800&family=Sora:wght@400;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root { --ink: #0a0918; --panel: #16142e; --line: rgba(160, 150, 255, .18); --text: #efecff; --muted: #a8a5cf; --pink: #ff4d94; --cyan: #2be6ff; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--ink); color: var(--text); font: 400 15px/1.5 'Sora', system-ui, sans-serif; }
+.box { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 28px; }
+h1 { font: 800 22px/1 'Unbounded', sans-serif; margin: 0 0 6px; letter-spacing: -.03em; }
+h1 span { background: linear-gradient(100deg, var(--pink), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+p { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+form { display: grid; gap: 14px; }
+label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+input { font: inherit; color: inherit; width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); }
+input#code { font: 700 22px/1 'JetBrains Mono', monospace; letter-spacing: .3em; text-align: center; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+button { font: 600 15px/1 'Sora', sans-serif; padding: 13px; border-radius: 999px; border: 0; cursor: pointer; background: linear-gradient(100deg, var(--pink), #ff7fb4); color: var(--ink); margin-top: 6px; }
+button[disabled] { opacity: .6; cursor: wait; }
+.err { min-height: 20px; color: #ff9cbc; font-size: 13px; margin: 0; }
+</style>
+</head>
+<body>
+<main class="box">
+  <h1><span>Neon</span>Pass</h1>
+  <p>Administration — connexion sécurisée</p>
+  <form id="f" novalidate>
+    <label for="user">Identifiant<input id="user" autocomplete="username" required></label>
+    <label for="password">Mot de passe<input id="password" type="password" autocomplete="current-password" required></label>
+    <label for="code" id="codeRow" hidden>Code de double authentification
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000">
+    </label>
+    <p class="err" id="err" role="alert"></p>
+    <button id="btn" type="submit">Se connecter</button>
+  </form>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  fetch('/api/admin/login-info').then((r) => r.json()).then((d) => { $('codeRow').hidden = !d.totp; }).catch(() => {});
+  $('user').focus();
+  $('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('btn').disabled = true;
+    $('err').textContent = '';
+    try {
+      const r = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: $('user').value, password: $('password').value, code: $('code').value })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Connexion impossible.');
+      location.href = '/admin';
+    } catch (err) {
+      $('err').textContent = err.message;
+      $('code').value = '';
+    } finally {
+      $('btn').disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

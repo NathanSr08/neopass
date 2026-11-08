@@ -14,7 +14,7 @@ Boutique en ligne d'abonnements annuels avec commande via WhatsApp et panneau d'
 - Codes promo (champ dans le composeur ou lien `/?promo=CODE`)
 - Commande enregistrée en base puis ouverture de WhatsApp avec un message pré-rempli (référence, offres, total)
 
-**Administration (`/admin`, protégée par identifiant / mot de passe)**
+**Administration (`/admin`, connexion sécurisée avec double authentification optionnelle)**
 - Commandes : liste, filtres, statut, saisie manuelle (client, téléphone, produits, paiement, commentaire interne)
 - Offres : création, modification, masquage, ordre d'affichage
 - Avis : modération (publication après validation)
@@ -86,6 +86,23 @@ Le fichier `.env` contient des secrets : il est exclu de Git (`.gitignore`), ne 
 **Discord** : Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l'URL → `DISCORD_WEBHOOK_URL`
 
 Puis `docker compose up -d app` et, dans l'admin, **Réglages → Envoyer un message de test**.
+
+## Sécurité de l'administration
+
+- Connexion sur `/admin/login` (session de 12 h, cookie `HttpOnly`, `Secure`, `SameSite=Strict`)
+- **5 échecs en 15 min** depuis une même IP → IP bloquée 15 min + alerte Telegram/Discord
+- Notification à **chaque connexion réussie** (IP et navigateur)
+- **Double authentification** (code à 6 chiffres, Google Authenticator / Authy…) : onglet *Sécurité* → *Activer*
+- **Journal** de toutes les connexions et modifications : onglet *Journal*
+- Liste des sessions ouvertes et bouton « Déconnecter toutes les sessions »
+
+Choisis un `ADMIN_PASSWORD` long (12 caractères minimum, `openssl rand -base64 18`) : l'admin affiche une alerte tant que le mot de passe est celui d'exemple ou trop court.
+
+**Téléphone perdu (2FA)** : désactive la double authentification directement en base, puis réactive-la depuis l'admin :
+
+```bash
+docker exec neonpass-db psql -U neonpass -d neonpass -c "DELETE FROM settings WHERE key LIKE 'admin_totp%';"
+```
 
 ## Mise à jour / redéploiement
 
@@ -179,7 +196,7 @@ Le cookie de session étant marqué `Secure`, les futures fonctionnalités de co
 ├── server.js            # API Express + service des pages
 ├── db/init.sql          # schéma PostgreSQL (appliqué à chaque démarrage)
 ├── public/              # boutique : index.html (HTML + CSS), app.js
-├── admin/index.html     # panneau d'administration (servi derrière l'authentification)
+├── admin/               # panneau d'administration : login.html, index.html (servi après connexion)
 ├── scripts/             # export-db.sh / import-db.sh
 ├── Dockerfile
 ├── docker-compose.yml   # app + PostgreSQL, labels Traefik
@@ -196,7 +213,8 @@ Le cookie de session étant marqué `Secure`, les futures fonctionnalités de co
 | GET / POST | `/api/offers/:id/reviews` | Avis publiés / déposer un avis (modéré) |
 | POST | `/api/promo/check` | Vérifier un code promo |
 | POST | `/api/orders` | Enregistrer une commande et obtenir le lien WhatsApp |
-| * | `/api/admin/...` | Administration (authentification HTTP Basic) |
+| POST | `/api/admin/login` | Connexion à l'administration (+ code 2FA si activée) |
+| * | `/api/admin/...` | Administration (session admin + en-tête `X-NP-Admin: 1` pour les écritures) |
 
 ## Dépannage
 

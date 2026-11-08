@@ -93,3 +93,22 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL DEFAULT
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'site';
+
+-- Sécurité de l'administration
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash  TEXT PRIMARY KEY,
+  ip          TEXT NOT NULL DEFAULT '',
+  user_agent  TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ NOT NULL
+);
+DELETE FROM admin_sessions WHERE expires_at < now();
+
+CREATE TABLE IF NOT EXISTS admin_audit (
+  id         BIGSERIAL PRIMARY KEY,
+  at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ip         TEXT NOT NULL DEFAULT '',
+  action     TEXT NOT NULL,
+  details    JSONB NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS admin_audit_at_idx ON admin_audit (at DESC);

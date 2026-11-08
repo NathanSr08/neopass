@@ -148,21 +148,139 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-function adminAuth(req, res, next) {
-  const header = req.headers.authorization || '';
-  if (header.startsWith('Basic ')) {
-    const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
-    const i = decoded.indexOf(':');
-    const user = i >= 0 ? decoded.slice(0, i) : decoded;
-    const pass = i >= 0 ? decoded.slice(i + 1) : '';
-    const okUser = safeEqual(user, ADMIN_USER);
-    const okPass = safeEqual(pass, ADMIN_PASSWORD);
-    if (okUser && okPass) return next();
+// ---------- Sécurité de l'administration ----------
+const ADMIN_COOKIE = 'np_admin';
+const ADMIN_SESSION_HOURS = 12;
+const DEFAULT_ADMIN_PASSWORDS = ['change-moi-8-caracteres-minimum'];
+const sha256hex = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+
+function readCookieValue(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) {
+      try { return decodeURIComponent(part.slice(i + 1).trim()); } catch (e) { return ''; }
+    }
   }
-  setTimeout(() => {
-    res.set('WWW-Authenticate', 'Basic realm="NeonPass admin", charset="UTF-8"');
-    res.status(401).send('Authentification requise');
-  }, 400);
+  return '';
+}
+function setAdminCookie(res, token, maxAgeSec) {
+  res.append('Set-Cookie', ADMIN_COOKIE + '=' + encodeURIComponent(token) +
+    '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=' + maxAgeSec);
+}
+
+async function audit(req, action, details) {
+  try {
+    await pool.query('INSERT INTO admin_audit (ip, action, details) VALUES ($1, $2, $3)', [
+      String(req.ip || ''), action, JSON.stringify(details || {})
+    ]);
+  } catch (e) {
+    console.error('[audit] ' + e.message);
+  }
+}
+
+// Anti-bruteforce : 5 échecs en 15 min par IP → blocage 15 min
+const LOGIN_MAX_FAILS = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const loginFails = new Map(); // ip -> { count, first, lockedUntil }
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, f] of loginFails) if (now - f.first > LOGIN_WINDOW_MS && now > f.lockedUntil) loginFails.delete(ip);
+}, 5 * 60 * 1000).unref();
+function lockRemainingMs(ip) {
+  const f = loginFails.get(ip);
+  return f && f.lockedUntil > Date.now() ? f.lockedUntil - Date.now() : 0;
+}
+function recordFail(ip) {
+  const now = Date.now();
+  let f = loginFails.get(ip);
+  if (!f || now - f.first > LOGIN_WINDOW_MS) f = { count: 0, first: now, lockedUntil: 0 };
+  f.count++;
+  const locked = f.count >= LOGIN_MAX_FAILS;
+  if (locked) f.lockedUntil = now + LOGIN_WINDOW_MS;
+  loginFails.set(ip, f);
+  return { count: f.count, locked };
+}
+
+// TOTP (RFC 6238) : codes à 6 chiffres compatibles Google Authenticator, Authy…
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buf) {
+  let bits = 0, value = 0, out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte; bits += 8;
+    while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+function base32Decode(str) {
+  let bits = 0, value = 0;
+  const out = [];
+  for (const c of String(str).toUpperCase().replace(/[^A-Z2-7]/g, '')) {
+    value = (value << 5) | B32.indexOf(c); bits += 5;
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return Buffer.from(out);
+}
+function totpAt(secret, counter) {
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const h = crypto.createHmac('sha1', base32Decode(secret)).update(msg).digest();
+  const o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1000000).padStart(6, '0');
+}
+// Renvoie le compteur accepté (fenêtre ±30 s) ou -1
+function totpCheck(secret, code) {
+  const c = String(code || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(c)) return -1;
+  const now = Math.floor(Date.now() / 30000);
+  for (const d of [0, -1, 1]) {
+    if (safeEqual(totpAt(secret, now + d), c)) return now + d;
+  }
+  return -1;
+}
+async function getSetting(key) {
+  const r = await pool.query('SELECT value FROM settings WHERE key = $1', [key]);
+  return r.rows[0] ? r.rows[0].value : null;
+}
+async function putSetting(key, value) {
+  if (value == null) return pool.query('DELETE FROM settings WHERE key = $1', [key]);
+  return pool.query(
+    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+    [key, String(value)]
+  );
+}
+// Empêche de réutiliser un même code (rejeu)
+async function consumeTotp(secret, code) {
+  const counter = totpCheck(secret, code);
+  if (counter < 0) return false;
+  const last = Number(await getSetting('admin_totp_last')) || 0;
+  if (counter <= last) return false;
+  await putSetting('admin_totp_last', counter);
+  return true;
+}
+
+async function adminSession(req) {
+  const token = readCookieValue(req, ADMIN_COOKIE);
+  if (!token) return null;
+  const r = await pool.query('SELECT token_hash FROM admin_sessions WHERE token_hash = $1 AND expires_at > now()', [sha256hex(token)]);
+  return r.rows[0] || null;
+}
+
+async function adminAuth(req, res, next) {
+  try {
+    const s = await adminSession(req);
+    if (s) {
+      // Anti-CSRF : les écritures doivent venir du panneau (en-tête impossible à poser depuis un autre site)
+      if (req.method !== 'GET' && req.get('X-NP-Admin') !== '1') {
+        return res.status(403).json({ error: 'Requête refusée.' });
+      }
+      return next();
+    }
+  } catch (e) {
+    return next(e);
+  }
+  if (req.originalUrl.startsWith('/api/')) return res.status(401).json({ error: 'Session expirée, reconnecte-toi.' });
+  res.redirect(302, '/admin/login');
 }
 
 function parseOffer(b) {
@@ -371,12 +489,141 @@ app.post(
 );
 
 // ----- Administration -----
-app.get('/admin', adminAuth, (req, res) => {
+const noStore = (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
+
+app.get('/admin/login', noStore, wrap(async (req, res) => {
+  if (await adminSession(req)) return res.redirect(302, '/admin');
+  res.sendFile(path.join(__dirname, 'admin', 'login.html'));
+}));
+
+app.get('/admin', noStore, adminAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'admin', 'index.html'));
 });
 
+app.get('/api/admin/login-info', noStore, wrap(async (req, res) => {
+  res.json({ totp: !!(await getSetting('admin_totp_secret')) });
+}));
+
+app.post(
+  '/api/admin/login',
+  noStore,
+  wrap(async (req, res) => {
+    const ip = String(req.ip || '');
+    const wait = lockRemainingMs(ip);
+    if (wait) throw new HttpError(429, 'Trop d\'essais. Réessaie dans ' + Math.ceil(wait / 60000) + ' min.');
+
+    const user = String(req.body.user || '').slice(0, 100);
+    const pass = String(req.body.password || '').slice(0, 200);
+    let ok = safeEqual(user, ADMIN_USER) & safeEqual(pass, ADMIN_PASSWORD);
+    let reason = ok ? '' : 'identifiants';
+    const secret = await getSetting('admin_totp_secret');
+    if (ok && secret) {
+      if (!(await consumeTotp(secret, req.body.code))) { ok = 0; reason = 'code 2FA'; }
+    }
+
+    if (!ok) {
+      const f = recordFail(ip);
+      await audit(req, 'login.echec', { user, raison: reason, essai: f.count });
+      if (f.locked) {
+        await audit(req, 'login.blocage', { minutes: LOGIN_WINDOW_MS / 60000 });
+        notifyLater('🚨 Admin : ' + f.count + ' échecs de connexion, IP ' + ip + ' bloquée 15 min.');
+      }
+      await new Promise((r) => setTimeout(r, 600));
+      throw new HttpError(401, f.locked
+        ? 'Trop d\'essais. Réessaie dans 15 min.'
+        : (reason === 'code 2FA' ? 'Code de double authentification incorrect.' : 'Identifiant ou mot de passe incorrect.') +
+          ' (' + (LOGIN_MAX_FAILS - f.count) + ' essai(s) restant(s))');
+    }
+
+    loginFails.delete(ip);
+    const token = crypto.randomBytes(32).toString('base64url');
+    await pool.query(
+      `INSERT INTO admin_sessions (token_hash, ip, user_agent, expires_at)
+       VALUES ($1, $2, $3, now() + interval '${ADMIN_SESSION_HOURS} hours')`,
+      [sha256hex(token), ip, String(req.get('user-agent') || '').slice(0, 300)]
+    );
+    setAdminCookie(res, token, ADMIN_SESSION_HOURS * 3600);
+    await audit(req, 'login.ok', { ua: String(req.get('user-agent') || '').slice(0, 150) });
+    notifyLater('🔐 Connexion à l\'admin NeonPass\nIP : ' + ip + '\n' + String(req.get('user-agent') || '').slice(0, 120));
+    res.json({ ok: true });
+  })
+);
+
 const admin = express.Router();
-admin.use(adminAuth);
+admin.use(noStore, adminAuth);
+
+// Journal automatique de toutes les modifications réussies
+const SECRET_KEYS = /pass|code|secret|token/i;
+admin.use((req, res, next) => {
+  if (req.method === 'GET') return next();
+  res.on('finish', () => {
+    if (res.statusCode >= 400) return;
+    const body = {};
+    for (const [k, v] of Object.entries(req.body || {})) {
+      body[k] = SECRET_KEYS.test(k) ? '•••' : typeof v === 'string' ? v.slice(0, 200) : v;
+    }
+    audit(req, req.method + ' ' + req.path, body);
+  });
+  next();
+});
+
+admin.post('/logout', wrap(async (req, res) => {
+  const token = readCookieValue(req, ADMIN_COOKIE);
+  if (token) await pool.query('DELETE FROM admin_sessions WHERE token_hash = $1', [sha256hex(token)]);
+  setAdminCookie(res, '', 0);
+  res.json({ ok: true });
+}));
+
+admin.post('/logout-all', wrap(async (req, res) => {
+  await pool.query('DELETE FROM admin_sessions');
+  setAdminCookie(res, '', 0);
+  res.json({ ok: true });
+}));
+
+admin.get('/security', wrap(async (req, res) => {
+  const sessions = await pool.query(
+    'SELECT ip, user_agent, created_at, expires_at FROM admin_sessions WHERE expires_at > now() ORDER BY created_at DESC'
+  );
+  res.json({
+    totp: !!(await getSetting('admin_totp_secret')),
+    defaultPassword: DEFAULT_ADMIN_PASSWORDS.includes(ADMIN_PASSWORD) || ADMIN_PASSWORD.length < 12,
+    sessions: sessions.rows
+  });
+}));
+
+admin.get('/audit', wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT id, at, ip, action, details FROM admin_audit ORDER BY at DESC LIMIT 300');
+  res.json(rows);
+}));
+
+// Activation de la 2FA : 1) générer un secret en attente, 2) confirmer avec un code
+admin.post('/totp/setup', wrap(async (req, res) => {
+  if (await getSetting('admin_totp_secret')) throw new HttpError(400, 'La double authentification est déjà active.');
+  const secret = base32Encode(crypto.randomBytes(20));
+  await putSetting('admin_totp_pending', secret);
+  const label = encodeURIComponent('NeonPass:' + ADMIN_USER);
+  res.json({ secret, uri: 'otpauth://totp/' + label + '?secret=' + secret + '&issuer=NeonPass&digits=6&period=30' });
+}));
+
+admin.post('/totp/enable', wrap(async (req, res) => {
+  const pending = await getSetting('admin_totp_pending');
+  if (!pending) throw new HttpError(400, 'Relance la configuration.');
+  if (totpCheck(pending, req.body.code) < 0) throw new HttpError(400, 'Code incorrect. Vérifie l\'heure de ton téléphone et réessaie.');
+  await putSetting('admin_totp_secret', pending);
+  await putSetting('admin_totp_pending', null);
+  await putSetting('admin_totp_last', null);
+  notifyLater('🔐 Double authentification ACTIVÉE sur l\'admin NeonPass.');
+  res.json({ ok: true });
+}));
+
+admin.post('/totp/disable', wrap(async (req, res) => {
+  const secret = await getSetting('admin_totp_secret');
+  if (!secret) throw new HttpError(400, 'La double authentification n\'est pas active.');
+  if (!(await consumeTotp(secret, req.body.code))) throw new HttpError(400, 'Code incorrect.');
+  await putSetting('admin_totp_secret', null);
+  notifyLater('⚠️ Double authentification DÉSACTIVÉE sur l\'admin NeonPass.');
+  res.json({ ok: true });
+}));
 
 admin.get(
   '/stats',
