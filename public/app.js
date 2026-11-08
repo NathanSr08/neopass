@@ -301,7 +301,16 @@
     if (!code) return toast('Saisis un code promo.', true);
     checkPromo(code, false);
   });
-  $('promoRemove').addEventListener('click', () => { $('promoInput').value = ''; setPromo(null); });
+  $('promoRemove').addEventListener('click', () => {
+    $('promoInput').value = '';
+    setPromo(null);
+    // Retire ?promo=… de l'URL pour qu'il ne revienne pas au rechargement
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.has('promo')) { u.searchParams.delete('promo'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
+    } catch (e) {}
+    toast('Code promo retiré.');
+  });
 
   // ---------- Initialisation ----------
   function setWaLinks() {

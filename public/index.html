@@ -339,13 +339,14 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
 .rv-note { margin: 0; color: var(--muted); font-size: 12px; }
 
 /* Code promo */
+[hidden] { display: none !important; }
 .promo { display: flex; gap: 8px; }
 .promo .name-input { flex: 1; min-width: 0; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: .04em; }
 .promo .name-input::placeholder { text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
-.promo .btn { flex: none; padding: 10px 16px; }
-.promo-ok { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(43, 230, 255, .45); background: rgba(43, 230, 255, .08); font: 500 13px/1.3 var(--font-mono); color: var(--cyan); }
-.promo-ok button { background: none; border: 0; color: var(--muted); cursor: pointer; font: 500 12px/1 var(--font-body); text-decoration: underline; padding: 0; }
-.promo-ok button:hover { color: var(--text); }
+.promo .btn { flex: none; padding: 0 18px; }
+.promo-ok { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(43, 230, 255, .45); background: rgba(43, 230, 255, .08); font: 500 13px/1.3 var(--font-mono); color: var(--cyan); }
+.promo-ok button { flex: none; background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); cursor: pointer; font: 500 12px/1 var(--font-body); padding: 7px 12px; transition: color .2s, border-color .2s; }
+.promo-ok button:hover { color: var(--text); border-color: var(--pink); }
 .promo-banner { display: inline-flex; align-items: center; gap: 8px; margin: -12px 0 22px; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(43, 230, 255, .45); background: rgba(43, 230, 255, .08); color: var(--cyan); font: 500 13px/1.3 var(--font-mono); }
 
 .muted { color: var(--muted); }
