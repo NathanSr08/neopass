@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NeonPass · Administration</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918; --ink-2: #110f26; --panel: #16142e; --line: rgba(160, 150, 255, .18);
+  --text: #efecff; --muted: #a8a5cf; --pink: #ff4d94; --cyan: #2be6ff; --ok: #5eead4; --warn: #fbbf24; --bad: #ff7a9c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ink); color: var(--text); font: 400 15px/1.5 'Sora', system-ui, sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 80px max(16px, env(safe-area-inset-left, 0px)); }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 24px; }
+h1 { font: 800 22px/1 'Unbounded', sans-serif; margin: 0; letter-spacing: -.03em; }
+h1 span { background: linear-gradient(100deg, var(--pink), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h2 { font: 600 16px/1.2 'Unbounded', sans-serif; margin: 0 0 16px; }
+a { color: var(--cyan); }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+.tab, .btn { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 9px 16px; cursor: pointer; color: var(--muted); transition: all .2s; }
+.tab:hover, .btn:hover { color: var(--text); border-color: rgba(160, 150, 255, .5); }
+.tab[aria-selected="true"] { background: var(--text); color: var(--ink); border-color: var(--text); }
+.btn.primary { background: linear-gradient(100deg, var(--pink), #ff7fb4); color: var(--ink); border-color: transparent; font-weight: 600; }
+.btn.danger:hover { color: var(--bad); border-color: var(--bad); }
+.btn.small { padding: 6px 12px; font-size: 13px; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; min-width: 0; }
+.stat b { display: block; font: 800 26px/1.1 'Unbounded', sans-serif; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+.panel { background: var(--ink-2); border: 1px solid var(--line); border-radius: 20px; padding: 20px; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 640px; }
+th { text-align: left; font: 500 11px/1 'JetBrains Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 0 12px 12px; }
+td { padding: 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+td.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill { display: inline-block; padding: 4px 9px; border-radius: 6px; font: 700 11px/1 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .06em; }
+.pill.on { background: rgba(94, 234, 212, .15); color: var(--ok); }
+.pill.off { background: rgba(255, 255, 255, .08); color: var(--muted); }
+.row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+select, input[type="text"], input[type="number"], textarea {
+  background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%;
+}
+select { width: auto; }
+select option { background: var(--panel); }
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.empty { color: var(--muted); padding: 20px 0; }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 20px; padding: 24px; width: min(560px, calc(100vw - 24px)); max-height: 92vh; overflow: auto; }
+dialog::backdrop { background: rgba(5, 4, 14, .7); }
+form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+form .full { grid-column: 1 / -1; }
+label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+label.check { display: flex; align-items: center; gap: 10px; color: var(--text); }
+label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.settings { display: grid; gap: 14px; max-width: 360px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--text); color: var(--ink); padding: 12px 18px; border-radius: 12px; font-weight: 600; transition: all .25s; max-width: 92vw; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { background: #ffd1e2; color: #5b0630; }
+@media (max-width: 560px) { form .grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>Neon</span>Pass · admin</h1>
+    <a href="/">Voir le site</a>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-panel="orders" aria-selected="true">Commandes</button>
+    <button class="tab" role="tab" data-panel="offers" aria-selected="false">Offres</button>
+    <button class="tab" role="tab" data-panel="settings" aria-selected="false">Réglages</button>
+  </div>
+
+  <section class="panel" id="panel-orders">
+    <div class="toolbar">
+      <h2 style="margin:0">Commandes</h2>
+      <label style="display:flex;align-items:center;gap:10px">Statut
+        <select id="orderFilter">
+          <option value="">Toutes</option>
+          <option value="new">Nouvelles</option>
+          <option value="confirmed">Confirmées</option>
+          <option value="cancelled">Annulées</option>
+        </select>
+      </label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Réf.</th><th>Date</th><th>Prénom</th><th>Offres</th><th>Total</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="ordersEmpty" hidden>Aucune commande pour le moment. Elles apparaissent ici dès qu'un bouton « Commander » est utilisé sur le site.</p>
+  </section>
+
+  <section class="panel" id="panel-offers" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Offres</h2>
+      <button class="btn primary" id="newOffer">Nouvelle offre</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ordre</th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>État</th><th></th></tr></thead>
+        <tbody id="offersBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-settings" hidden>
+    <h2>Remise du pack sur mesure</h2>
+    <form class="settings" id="settingsForm">
+      <label for="setPct">Remise en pourcentage (0 pour désactiver)
+        <input type="number" id="setPct" min="0" max="90" step="1" required>
+      </label>
+      <label for="setMin">Nombre de services à partir duquel la remise s'applique
+        <input type="number" id="setMin" min="2" max="10" step="1" required>
+      </label>
+      <div><button class="btn primary" type="submit">Enregistrer</button></div>
+    </form>
+  </section>
+</div>
+
+<dialog id="offerDlg">
+  <form id="offerForm" method="dialog">
+    <h2 id="dlgTitle">Offre</h2>
+    <div class="grid">
+      <label class="full" for="fName">Nom<input type="text" id="fName" maxlength="80" required></label>
+      <label for="fSlug">Slug (identifiant)<input type="text" id="fSlug" maxlength="60" placeholder="auto"></label>
+      <label for="fCategory">Catégorie
+        <select id="fCategory" style="width:100%">
+          <option value="packs">Packs</option><option value="streaming">Streaming</option>
+          <option value="vpn">VPN</option><option value="musique">Musique</option><option value="tv">TV</option>
+        </select>
+      </label>
+      <label for="fTag">Étiquette<input type="text" id="fTag" maxlength="30"></label>
+      <label for="fSort">Ordre d'affichage<input type="number" id="fSort" step="1" value="0"></label>
+      <label for="fPrice">Prix annuel (€)<input type="number" id="fPrice" min="0" step="0.01" required></label>
+      <label for="fWas">Valeur barrée démo (€)<input type="number" id="fWas" min="0" step="0.01"></label>
+      <label class="full" for="fDesc">Description<textarea id="fDesc" rows="2" maxlength="300"></textarea></label>
+      <label class="full" for="fFeat">Points forts (un par ligne, 8 maximum)<textarea id="fFeat" rows="4"></textarea></label>
+      <label for="fHue">Teinte néon (0 à 360)<input type="number" id="fHue" min="0" max="360" step="1" value="330"></label>
+      <div style="display:grid;gap:10px;align-content:end">
+        <label class="check" for="fPack"><input type="checkbox" id="fPack"> Offre de type pack</label>
+        <label class="check" for="fActive"><input type="checkbox" id="fActive" checked> Visible sur le site</label>
+      </div>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="dlgCancel">Annuler</button>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const STATUS_LABEL = { new: 'Nouvelle', confirmed: 'Confirmée', cancelled: 'Annulée' };
+  const CAT_LABEL = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV' };
+  const fmt = (n) => (Math.round(n * 100) / 100).toString().replace('.', ',') + ' €';
+
+  let toastTimer;
+  function toast(msg, err) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.toggle('err', !!err);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch('/api/admin' + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
+    });
+    if (r.status === 204) return null;
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Erreur ' + r.status);
+    return data;
+  }
+
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    Object.assign(el, props || {});
+    kids.flat().forEach((k) => el.append(k instanceof Node ? k : document.createTextNode(k)));
+    return el;
+  }
+
+  // ----- Statistiques -----
+  async function loadStats() {
+    const s = await api('/stats');
+    const tiles = [
+      [s.total, 'commandes au total'],
+      [s.new_count, 'nouvelles'],
+      [s.confirmed_count, 'confirmées'],
+      [fmt(s.confirmed_total), 'montant confirmé (démo)'],
+      [s.last7, 'sur 7 jours'],
+      [s.activeOffers, 'offres visibles']
+    ];
+    const box = $('#stats');
+    box.textContent = '';
+    tiles.forEach(([v, l]) => box.append(h('div', { className: 'stat' }, h('b', {}, String(v)), h('span', {}, l))));
+  }
+
+  // ----- Commandes -----
+  async function loadOrders() {
+    const status = $('#orderFilter').value;
+    const rows = await api('/orders' + (status ? '?status=' + status : ''));
+    const body = $('#ordersBody');
+    body.textContent = '';
+    $('#ordersEmpty').hidden = rows.length > 0;
+    rows.forEach((o) => {
+      const sel = h('select', { ariaLabel: 'Statut de la commande ' + o.id });
+      Object.keys(STATUS_LABEL).forEach((k) => {
+        const opt = h('option', { value: k }, STATUS_LABEL[k]);
+        if (k === o.status) opt.selected = true;
+        sel.append(opt);
+      });
+      sel.addEventListener('change', async () => {
+        try {
+          await api('/orders/' + o.id, { method: 'PATCH', body: { status: sel.value } });
+          toast('Commande n°' + o.id + ' mise à jour.');
+          loadStats();
+        } catch (e) { toast(e.message, true); loadOrders(); }
+      });
+      const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
+      del.addEventListener('click', async () => {
+        if (!confirm('Supprimer la commande n°' + o.id + ' ?')) return;
+        try { await api('/orders/' + o.id, { method: 'DELETE' }); loadOrders(); loadStats(); }
+        catch (e) { toast(e.message, true); }
+      });
+      const when = new Date(o.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, '#' + o.id),
+        h('td', { className: 'num' }, when),
+        h('td', {}, o.customer_name || '—'),
+        h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
+        h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : '')),
+        h('td', {}, sel),
+        h('td', {}, h('div', { className: 'row-actions' }, del))
+      ));
+    });
+  }
+
+  // ----- Offres -----
+  let offers = [];
+  async function loadOffers() {
+    offers = await api('/offers');
+    const body = $('#offersBody');
+    body.textContent = '';
+    offers.forEach((o) => {
+      const edit = h('button', { className: 'btn small', type: 'button' }, 'Modifier');
+      edit.addEventListener('click', () => openDialog(o));
+      const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
+      del.addEventListener('click', async () => {
+        if (!confirm('Supprimer l\'offre « ' + o.name + ' » ?')) return;
+        try { await api('/offers/' + o.id, { method: 'DELETE' }); loadOffers(); loadStats(); }
+        catch (e) { toast(e.message, true); }
+      });
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, String(o.sort)),
+        h('td', {}, o.name),
+        h('td', {}, CAT_LABEL[o.category] || o.category),
+        h('td', { className: 'num' }, fmt(o.price)),
+        h('td', {}, h('span', { className: 'pill ' + (o.active ? 'on' : 'off') }, o.active ? 'Visible' : 'Masquée')),
+        h('td', {}, h('div', { className: 'row-actions' }, edit, del))
+      ));
+    });
+  }
+
+  const dlg = $('#offerDlg');
+  let editingId = null;
+  function openDialog(o) {
+    editingId = o ? o.id : null;
+    $('#dlgTitle').textContent = o ? 'Modifier « ' + o.name + ' »' : 'Nouvelle offre';
+    $('#fName').value = o ? o.name : '';
+    $('#fSlug').value = o ? o.slug : '';
+    $('#fCategory').value = o ? o.category : 'streaming';
+    $('#fTag').value = o ? o.tag : '';
+    $('#fSort').value = o ? o.sort : (offers.length ? Math.max(...offers.map((x) => x.sort)) + 10 : 0);
+    $('#fPrice').value = o ? o.price : '';
+    $('#fWas').value = o && o.was != null ? o.was : '';
+    $('#fDesc').value = o ? o.description : '';
+    $('#fFeat').value = o ? (o.features || []).join('\n') : '';
+    $('#fHue').value = o ? o.hue : 330;
+    $('#fPack').checked = o ? o.isPack : false;
+    $('#fActive').checked = o ? o.active : true;
+    dlg.showModal();
+  }
+  $('#newOffer').addEventListener('click', () => openDialog(null));
+  $('#dlgCancel').addEventListener('click', () => dlg.close());
+
+  $('#offerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      name: $('#fName').value,
+      slug: $('#fSlug').value,
+      category: $('#fCategory').value,
+      tag: $('#fTag').value,
+      sort: $('#fSort').value,
+      price: $('#fPrice').value,
+      was: $('#fWas').value,
+      description: $('#fDesc').value,
+      features: $('#fFeat').value.split('\n'),
+      hue: $('#fHue').value,
+      isPack: $('#fPack').checked,
+      active: $('#fActive').checked
+    };
+    try {
+      if (editingId) await api('/offers/' + editingId, { method: 'PUT', body });
+      else await api('/offers', { method: 'POST', body });
+      dlg.close();
+      toast('Offre enregistrée.');
+      loadOffers();
+      loadStats();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  // ----- Réglages -----
+  async function loadSettings() {
+    const s = await api('/settings');
+    $('#setPct').value = s.discountPct;
+    $('#setMin').value = s.discountMin;
+  }
+  $('#settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/settings', { method: 'PUT', body: { discountPct: $('#setPct').value, discountMin: $('#setMin').value } });
+      toast('Réglages enregistrés.');
+    } catch (err) { toast(err.message, true); }
+  });
+
+  // ----- Onglets -----
+  document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
+    ['orders', 'offers', 'settings'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
+  }));
+  $('#orderFilter').addEventListener('change', loadOrders);
+
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadSettings()]).catch((e) => toast(e.message, true));
+})();
+</script>
+</body>
+</html>
