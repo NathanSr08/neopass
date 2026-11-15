@@ -734,6 +734,7 @@ header {
       }).join('');
     }
 
+    const durLabel = o.durationMonths ? (o.durationMonths >= 12 ? (o.durationMonths / 12) + ' an' + (o.durationMonths >= 24 ? 's' : '') : o.durationMonths + ' mois') : '';
     const waHelpMsg = encodeURIComponent(`Bonjour NeonPass, j'ai besoin d'aide pour ma commande #${o.id} (${o.customerName}).`);
     const waRenewMsg = encodeURIComponent(`Bonjour NeonPass, je souhaite renouveler mon abonnement #${o.id} (${o.customerName}).`);
     const waHelpUrl = wa ? `https://wa.me/${wa}?text=${waHelpMsg}` : '#';
@@ -746,7 +747,7 @@ header {
             <span class="pulse-dot"></span>
             ${statusLabel}
           </div>
-          <div class="order-meta">Commande #${o.id} · ${escapeHtml(o.customerName)}</div>
+          <div class="order-meta">Commande #${o.id} · ${escapeHtml(o.customerName)}${durLabel ? ' · Formule ' + durLabel : ''}</div>
         </div>
 
         ${countdownHtml}

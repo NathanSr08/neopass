@@ -616,7 +616,7 @@ app.get(
     const ordRes = await pool.query(
       `SELECT id, customer_name, customer_last_name, customer_phone, items, total, status, created_at,
               to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at,
-              expires_at AS raw_expires_at, access_token
+              expires_at AS raw_expires_at, access_token, COALESCE(duration_months, 12)::int AS duration_months
        FROM orders
        WHERE access_token = $1`,
       [token]
@@ -650,6 +650,7 @@ app.get(
         status: ord.status,
         createdAt: ord.created_at,
         expiresAt: ord.expires_at,
+        durationMonths: ord.duration_months || 12,
         daysRemaining,
         isExpired,
         items: ord.items
@@ -1039,6 +1040,7 @@ admin.get(
       `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
               o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
               to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
+              COALESCE(o.duration_months, 12)::int AS duration_months,
               COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
        FROM orders o
        LEFT JOIN (
@@ -1048,6 +1050,28 @@ admin.get(
       [status]
     );
     res.json(rows);
+  })
+);
+
+admin.get(
+  '/orders/:id',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const { rows } = await pool.query(
+      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
+              o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
+              to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
+              COALESCE(o.duration_months, 12)::int AS duration_months,
+              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
+       FROM orders o
+       LEFT JOIN (
+         SELECT order_id, count(*)::int AS cnt FROM accounts GROUP BY order_id
+       ) acc ON acc.order_id = o.id
+       WHERE o.id = $1`,
+      [id]
+    );
+    if (!rows.length) throw new HttpError(404, 'Commande introuvable.');
+    res.json(rows[0]);
   })
 );
 
@@ -1072,6 +1096,10 @@ function parseOrderInfo(b) {
     if (!STATUSES.includes(st)) throw new HttpError(400, 'Statut invalide.');
     out.status = st;
   }
+  if (b.durationMonths !== undefined) {
+    const dm = parseInt(b.durationMonths, 10);
+    if (dm >= 1 && dm <= 120) out.duration_months = dm;
+  }
   if (b.expiresAt !== undefined) {
     const d = str(b.expiresAt, 10);
     if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpError(400, "Date d'échéance invalide.");
@@ -1080,10 +1108,12 @@ function parseOrderInfo(b) {
   return out;
 }
 
-// À la confirmation, l'échéance est fixée à +12 mois si elle n'est pas déjà renseignée
-const setDefaultExpiry = (id) => pool.query(
-  `UPDATE orders SET expires_at = now() + interval '12 months'
-   WHERE id = $1 AND status = 'confirmed' AND expires_at IS NULL`, [id]);
+// À la confirmation, l'échéance est fixée selon la durée configurée (par défaut 12 mois)
+const setDefaultExpiry = (id, durationMonths = 12) => pool.query(
+  `UPDATE orders
+   SET duration_months = COALESCE(duration_months, $2),
+       expires_at = COALESCE(expires_at, now() + make_interval(months => COALESCE(duration_months, $2)))
+   WHERE id = $1 AND status = 'confirmed' AND expires_at IS NULL`, [id, Number(durationMonths) || 12]);
 
 admin.post(
   '/orders',
@@ -1113,16 +1143,59 @@ admin.post(
       total = round2(discount ? sum * (1 - settings.discountPct / 100) : sum);
     }
 
+    const durationMonths = info.duration_months || 12;
+    let expiresAt = info.expires_at || null;
+    if (!expiresAt) {
+      // Calcul automatique selon la durée choisie
+      const expDate = new Date();
+      expDate.setMonth(expDate.getMonth() + durationMonths);
+      expiresAt = expDate.toISOString();
+    }
+
     const token = crypto.randomBytes(16).toString('hex');
     const r = await pool.query(
       `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount,
-                           payment_method, notes, status, source, access_token)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', $10) RETURNING id, access_token`,
+                           payment_method, notes, status, source, access_token, duration_months, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', $10, $11, $12) RETURNING id, access_token`,
       [info.customer_name || '', info.customer_last_name || '', info.customer_phone || '', JSON.stringify(items),
-       total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed', token]
+       total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed', token,
+       durationMonths, expiresAt]
     );
-    await setDefaultExpiry(r.rows[0].id);
     res.status(201).json({ ok: true, id: r.rows[0].id, total, accessToken: token });
+  })
+);
+
+admin.post(
+  '/orders/:id/set-expiry',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const { durationMonths, expiresAt } = req.body;
+    let query, params;
+    if (expiresAt) {
+      const d = str(expiresAt, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpError(400, "Date invalide.");
+      query = `UPDATE orders
+               SET expires_at = $1::timestamptz,
+                   duration_months = COALESCE($2, duration_months)
+               WHERE id = $3
+               RETURNING id, customer_name, customer_last_name, customer_phone, items, total, status, access_token, duration_months,
+                         to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at`;
+      params = [d + ' 12:00 Europe/Paris', durationMonths ? Number(durationMonths) : null, id];
+    } else if (durationMonths) {
+      const dm = clampInt(durationMonths, 1, 120, 12);
+      query = `UPDATE orders
+               SET expires_at = now() + make_interval(months => $1),
+                   duration_months = $1
+               WHERE id = $2
+               RETURNING id, customer_name, customer_last_name, customer_phone, items, total, status, access_token, duration_months,
+                         to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at`;
+      params = [dm, id];
+    } else {
+      throw new HttpError(400, 'Indique une durée ou une date.');
+    }
+    const r = await pool.query(query, params);
+    if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
+    res.json({ ok: true, order: r.rows[0] });
   })
 );
 
@@ -1155,7 +1228,7 @@ admin.patch(
       [...cols.map((c) => info[c]), Number(req.params.id) || 0]
     );
     if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
-    await setDefaultExpiry(Number(req.params.id) || 0);
+    await setDefaultExpiry(Number(req.params.id) || 0, info.duration_months || 12);
     res.json({ ok: true });
   })
 );

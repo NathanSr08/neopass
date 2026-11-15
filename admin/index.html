@@ -509,65 +509,164 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </form>
 </dialog>
 
-<dialog id="orderDlg">
-  <form id="orderForm" method="dialog">
-    <h2 id="orderDlgTitle">Nouvelle commande</h2>
-    <div class="grid">
-      <label for="oFirst">Prénom<input type="text" id="oFirst" maxlength="60" autocomplete="off"></label>
-      <label for="oLast">Nom<input type="text" id="oLast" maxlength="60" autocomplete="off"></label>
-      <label for="oPhone">Téléphone<input type="text" id="oPhone" maxlength="30" inputmode="tel" placeholder="+33 6 12 34 56 78" autocomplete="off"></label>
-      <label for="oPay">Moyen de paiement
-        <select id="oPay" style="width:100%">
-          <option value="">Non renseigné</option>
-          <option value="revolut">Revolut</option>
-          <option value="usdt">Crypto · USDT</option>
-          <option value="btc">Crypto · BTC</option>
-          <option value="eth">Crypto · ETH</option>
-          <option value="especes">Espèces</option>
-          <option value="virement">Virement</option>
-          <option value="autre">Autre</option>
-        </select>
-      </label>
-      <div class="full" id="oItemsBox">
-        <label style="margin-bottom:6px">Produits achetés (quantité)</label>
-        <div class="pick" id="oPick"></div>
-      </div>
-      <div class="full" id="oItemsRead" hidden>
-        <label>Produits achetés</label>
-        <div id="oItemsList" style="margin-top:6px"></div>
-      </div>
-      <label for="oTotal">Total (€)<input type="number" id="oTotal" min="0" step="0.01" placeholder="calcul auto"></label>
-      <label for="oStatus">Statut
-        <select id="oStatus" style="width:100%">
-          <option value="confirmed">Confirmée</option>
-          <option value="new">Nouvelle</option>
-          <option value="cancelled">Annulée</option>
-        </select>
-      </label>
-      <label for="oExpires" id="oExpiresRow" hidden>Date d'échéance<input type="date" id="oExpires" style="background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;color-scheme:dark"></label>
-      <div class="full order-sum" id="oSum"></div>
-      <label class="full" for="oNotes">Commentaire interne (visible uniquement dans l'admin)<textarea id="oNotes" rows="4" maxlength="2000"></textarea></label>
-      <div class="full" id="oAccountsSection" style="border-top:1px solid var(--line);padding-top:16px;margin-top:6px" hidden>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-          <label style="margin:0;font-weight:600;color:var(--text);font-size:14px">🔐 Accès et identifiants attribués</label>
-          <button class="btn small primary" type="button" id="oAutoAssignBtn">⚡ Attribuer depuis le stock</button>
-        </div>
-        <div id="oAssignedList" style="display:grid;gap:8px;margin-bottom:12px"></div>
+<dialog id="orderDlg" style="width:min(800px, calc(100vw - 24px));padding:0;border-radius:20px;border:1px solid var(--line);background:var(--panel);max-height:92vh;overflow:hidden">
+  <!-- En-tête partagé avec Croix Fermer en haut à droite -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2 id="orderDlgHeaderTitle" style="margin:0;font-size:18px">Fiche Commande</h2>
+      <span id="orderDlgStatusPill" class="pill on"></span>
+      <span id="orderDlgMetaDate" style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono', monospace"></span>
+    </div>
+    <button type="button" class="btn small" id="orderDlgCloseCross" style="border:none;background:rgba(255,255,255,.08);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;color:var(--text);padding:0" title="Fermer la fiche">✕</button>
+  </div>
+
+  <div style="padding:22px;max-height:calc(92vh - 65px);overflow-y:auto">
+
+    <!-- ========== 1. MODE VISUALISATION (par défaut pour commande existante) ========== -->
+    <div id="orderViewSection">
+      <!-- Barre d'actions rapides -->
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:12px;padding:10px 14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn small" type="button" id="oCopyDeliveryBtn">📋 Copier message de livraison WhatsApp</button>
-          <a class="btn small" id="oSendDeliveryWa" href="#" target="_blank" rel="noopener" hidden>💬 Envoyer accès WhatsApp</a>
-          <button class="btn small" type="button" id="oCopyAccessLinkBtn">🔗 Copier lien Espace Client</button>
-          <a class="btn small" id="oOpenAccessLinkBtn" href="#" target="_blank" rel="noopener" hidden>👁️ Ouvrir Espace Client</a>
+          <button class="btn small primary" type="button" id="orderViewEditBtn">✏️ Modifier la commande</button>
+          <a class="btn small" id="orderViewWaBtn" href="#" target="_blank" rel="noopener" hidden>💬 WhatsApp client</a>
+          <button class="btn small" type="button" id="orderViewCopyDeliveryBtn">📋 Copier livraison WhatsApp</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn small" type="button" id="orderViewCopyAccessBtn" hidden>🔗 Copier Espace Client</button>
+          <a class="btn small" id="orderViewOpenAccessBtn" href="#" target="_blank" rel="noopener" hidden>👁️ Ouvrir Espace Client</a>
         </div>
       </div>
+
+      <!-- Grille d'informations (Client & Échéance) -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;margin-bottom:16px">
+        <!-- Carte Client & Total -->
+        <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px">
+          <small style="color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.05em;display:block;margin-bottom:8px">Client & Facturation</small>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div>
+              <button class="client-link" type="button" id="orderViewClientName" style="font-size:16px;font-weight:700;margin-bottom:2px"></button>
+              <div id="orderViewClientPhone" style="font-size:13px;color:var(--muted);font-family:'JetBrains Mono', monospace"></div>
+            </div>
+            <div style="text-align:right">
+              <div id="orderViewTotal" style="font-size:20px;font-weight:800;color:var(--neon);font-family:'Unbounded', sans-serif"></div>
+              <span id="orderViewPayPill" class="pill" style="font-size:10px;margin-top:4px"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Carte Durée & Échéance -->
+        <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <small style="color:var(--cyan);text-transform:uppercase;font-weight:700;letter-spacing:.05em">Abonnement & Échéance</small>
+            <span id="orderViewDaysLeftBadge" class="pill on" style="font-size:11px"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+            <span id="orderViewExpiresDate" style="font-size:15px;font-weight:700;color:#fff"></span>
+            <span id="orderViewDurationLabel" class="pill" style="background:rgba(0,242,254,.15);color:var(--cyan)">1 an</span>
+          </div>
+          <!-- Boutons rapides de prolongation / réglage de durée -->
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <small style="color:var(--muted);font-size:11px">Changer :</small>
+            <button class="btn small" type="button" id="orderQuick1m" style="padding:2px 8px;font-size:11px">1 mois</button>
+            <button class="btn small" type="button" id="orderQuick6m" style="padding:2px 8px;font-size:11px">6 mois</button>
+            <button class="btn small" type="button" id="orderQuick1y" style="padding:2px 8px;font-size:11px">1 an</button>
+            <button class="btn small" type="button" id="orderQuickCustom" style="padding:2px 8px;font-size:11px">📅 Date</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Produits achetés -->
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
+        <small style="color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.05em;display:block;margin-bottom:8px">Produits commandés</small>
+        <div id="orderViewItemsList" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
+      <!-- Section Accès et identifiants attribués (🔐 Stock & SAV) -->
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div>
+            <b style="color:var(--text);font-size:14px">🔐 Accès & Comptes attribués au client</b>
+            <span id="orderViewAccCount" class="pill" style="margin-left:8px;font-size:11px"></span>
+          </div>
+          <button class="btn small primary" type="button" id="orderViewAutoAssignBtn">⚡ Attribuer depuis le stock</button>
+        </div>
+        <div id="orderViewAssignedList" style="display:grid;gap:8px"></div>
+        <p id="orderViewAssignedEmpty" class="hint" style="margin:8px 0 0" hidden>Aucun identifiant attribué pour cette commande.</p>
+      </div>
+
+      <!-- Note interne admin -->
+      <div id="orderViewNotesBox" style="background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.25);border-radius:12px;padding:12px" hidden>
+        <small style="color:var(--warn);font-weight:700;display:block;margin-bottom:4px">🔒 Note interne (Admin)</small>
+        <div id="orderViewNotesText" style="font-size:13px;white-space:pre-wrap;color:var(--text)"></div>
+      </div>
     </div>
-    <div class="dlg-actions">
-      <button class="btn" type="button" id="dlgCopyWa" title="Copier un message récapitulatif pour WhatsApp">📋 Copier récap WhatsApp</button>
-      <a class="btn" id="dlgOpenWa" href="#" target="_blank" rel="noopener" hidden>💬 Ouvrir WhatsApp</a>
-      <button class="btn" type="button" id="orderCancel">Annuler</button>
-      <button class="btn primary" type="submit">Enregistrer</button>
-    </div>
-  </form>
+
+    <!-- ========== 2. MODE ÉDITION DU FORMULAIRE ========== -->
+    <form id="orderForm" method="dialog" style="margin:0" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <p class="hint" id="orderEditSubtitle" style="margin:0">Modifie les informations, les produits et la durée de l'abonnement.</p>
+        <button class="btn small" type="button" id="orderEditBackBtn">👁️ Retour à la fiche</button>
+      </div>
+
+      <div class="grid">
+        <label for="oFirst">Prénom<input type="text" id="oFirst" maxlength="60" autocomplete="off"></label>
+        <label for="oLast">Nom<input type="text" id="oLast" maxlength="60" autocomplete="off"></label>
+        <label for="oPhone">Téléphone<input type="text" id="oPhone" maxlength="30" inputmode="tel" placeholder="+33 6 12 34 56 78" autocomplete="off"></label>
+        <label for="oPay">Moyen de paiement
+          <select id="oPay" style="width:100%">
+            <option value="">Non renseigné</option>
+            <option value="revolut">Revolut</option>
+            <option value="usdt">Crypto · USDT</option>
+            <option value="btc">Crypto · BTC</option>
+            <option value="eth">Crypto · ETH</option>
+            <option value="especes">Espèces</option>
+            <option value="virement">Virement</option>
+            <option value="autre">Autre</option>
+          </select>
+        </label>
+
+        <!-- Sélecteur de Durée d'Abonnement & Échéance -->
+        <div class="full" style="background:rgba(0,242,254,.04);border:1px solid rgba(0,242,254,.25);border-radius:12px;padding:14px">
+          <label style="color:var(--cyan);font-weight:700;margin-bottom:8px">Durée de l'abonnement & Échéance</label>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="orderDurationPresets">
+            <button class="btn small" type="button" data-months="1">1 mois</button>
+            <button class="btn small" type="button" data-months="3">3 mois</button>
+            <button class="btn small" type="button" data-months="6">6 mois</button>
+            <button class="btn small primary" type="button" data-months="12">1 an (12 mois)</button>
+            <button class="btn small" type="button" data-months="custom">Personnalisé</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label style="flex:1;min-width:200px;margin:0">Date d'échéance
+              <input type="date" id="oExpires" style="background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;color-scheme:dark">
+            </label>
+            <div id="oDurationHint" style="font-size:12px;color:var(--muted);align-self:end;padding-bottom:10px"></div>
+          </div>
+        </div>
+
+        <div class="full" id="oItemsBox">
+          <label style="margin-bottom:6px">Produits achetés (quantité)</label>
+          <div class="pick" id="oPick"></div>
+        </div>
+
+        <label for="oTotal">Total (€)<input type="number" id="oTotal" min="0" step="0.01" placeholder="calcul auto"></label>
+        <label for="oStatus">Statut
+          <select id="oStatus" style="width:100%">
+            <option value="confirmed">Confirmée</option>
+            <option value="new">Nouvelle</option>
+            <option value="cancelled">Annulée</option>
+          </select>
+        </label>
+
+        <div class="full order-sum" id="oSum"></div>
+        <label class="full" for="oNotes">Commentaire interne (visible uniquement dans l'admin)<textarea id="oNotes" rows="3" maxlength="2000"></textarea></label>
+      </div>
+
+      <div class="dlg-actions" style="margin-top:18px;justify-content:space-between">
+        <button class="btn" type="button" id="orderEditCancelBtn">Annuler</button>
+        <button class="btn primary" type="submit">✅ Enregistrer la commande</button>
+      </div>
+    </form>
+  </div>
 </dialog>
 
 <dialog id="accountDlg">
@@ -1153,7 +1252,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         accessCell.textContent = '—';
       }
 
-      body.append(h('tr', {},
+      const tr = h('tr', { style: 'cursor:pointer' },
         h('td', { className: 'num' }, '#' + o.id),
         h('td', { className: 'num' }, new Date(o.created_at).toLocaleDateString('fr-FR')),
         h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
@@ -1161,7 +1260,13 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', {}, h('span', { className: 'pill ' + (o.status === 'confirmed' ? 'on' : o.status === 'cancelled' ? 'late' : 'wait') }, STATUS_LABEL[o.status] || o.status)),
         h('td', { className: 'num' }, o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '—'),
         accessCell
-      ));
+      );
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('a, button')) return;
+        clientDlg.close();
+        openOrderDialog(o);
+      });
+      body.append(tr);
     });
 
     clientDlg.showModal();
@@ -1231,7 +1336,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
             ? h('span', { className: 'pill on', title: o.assigned_accounts_count + ' compte(s) attribué(s)' }, '🔐 ' + o.assigned_accounts_count)
             : h('span', { className: 'pill wait', title: 'Aucun compte attribué' }, '⚠️ sans accès'))
         : '';
-      body.append(h('tr', {},
+      const tr = h('tr', { style: 'cursor:pointer' },
         h('td', { className: 'num' }, '#' + o.id, o.source === 'admin' ? h('span', { className: 'pill src', title: 'Saisie dans l\'admin' }, 'admin') : ''),
         h('td', { className: 'num' }, when),
         h('td', {}, clientEl,
@@ -1243,7 +1348,12 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', {}, PAY_LABEL[o.payment_method] || '—'),
         h('td', {}, sel, accBadge ? h('div', { style: 'margin-top:4px' }, accBadge) : ''),
         h('td', {}, h('div', { className: 'row-actions' }, recap, edit, del))
-      ));
+      );
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, select, a, input')) return;
+        openOrderDialog(o);
+      });
+      body.append(tr);
     });
   }
 
@@ -1577,16 +1687,107 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     return msg;
   }
 
-  async function refreshOrderAccounts(o, pKey) {
-    const accSection = $('#oAccountsSection');
-    if (!o) { accSection.hidden = true; return; }
-    accSection.hidden = false;
-    const list = await api('/orders/' + o.id + '/accounts').catch(() => []);
-    const box = $('#oAssignedList');
-    box.textContent = '';
-    if (!list.length) {
-      box.append(h('p', { className: 'hint', style: 'margin:0' }, 'Aucun identifiant attribué pour cette commande. Clique ci-dessous pour piocher dans le stock.'));
+  // ----- Durée d'abonnement et calculs d'échéance -----
+  let selectedDurationMonths = 12;
+
+  function formatDurationLabel(months) {
+    const m = Number(months) || 12;
+    if (m === 1) return '1 mois';
+    if (m < 12) return m + ' mois';
+    if (m === 12) return '1 an (12 mois)';
+    if (m % 12 === 0) return (m / 12) + ' an(s)';
+    return m + ' mois';
+  }
+
+  function addMonthsToDate(date, months) {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const targetDay = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + Number(months));
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(targetDay, lastDay));
+    return d.toISOString().slice(0, 10);
+  }
+
+  function setDurationPreset(months, updateInput = true) {
+    selectedDurationMonths = (months === 'custom') ? 'custom' : Number(months);
+    const buttons = document.querySelectorAll('#orderDurationPresets button');
+    buttons.forEach((btn) => {
+      if (btn.dataset.months === String(months)) {
+        btn.classList.add('primary');
+      } else {
+        btn.classList.remove('primary');
+      }
+    });
+    if (months !== 'custom' && updateInput) {
+      const baseDate = (editingOrder && editingOrder.created_at) ? new Date(editingOrder.created_at) : new Date();
+      $('#oExpires').value = addMonthsToDate(baseDate, months);
+    }
+    updateDurationHint();
+  }
+
+  function updateDurationHint() {
+    const expVal = $('#oExpires').value;
+    if (!expVal) {
+      $('#oDurationHint').textContent = 'Date libre / sans échéance automatique';
+      return;
+    }
+    const expDate = new Date(expVal + 'T12:00:00');
+    const now = new Date();
+    const diffDays = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    let text = '';
+    if (diffDays < 0) {
+      text = '⚠️ Expirée depuis ' + (-diffDays) + ' jour(s)';
+    } else if (diffDays === 0) {
+      text = '⚠️ Expire aujourd\'hui';
     } else {
+      text = '⏳ Reste ' + diffDays + ' j (~' + Math.round(diffDays / 30.4) + ' mois)';
+    }
+    $('#oDurationHint').textContent = text;
+  }
+
+  document.querySelectorAll('#orderDurationPresets button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setDurationPreset(btn.dataset.months, true);
+    });
+  });
+
+  $('#oExpires').addEventListener('change', () => {
+    setDurationPreset('custom', false);
+    updateDurationHint();
+  });
+  $('#oExpires').addEventListener('input', updateDurationHint);
+
+  function switchOrderDlgMode(mode) {
+    const isEdit = (mode === 'edit');
+    $('#orderViewSection').hidden = isEdit;
+    $('#orderForm').hidden = !isEdit;
+    if (isEdit) {
+      $('#orderDlgHeaderTitle').textContent = editingOrder ? 'Modifier la commande #' + editingOrder.id : 'Nouvelle commande';
+    } else if (editingOrder) {
+      $('#orderDlgHeaderTitle').textContent = 'Commande #' + editingOrder.id;
+    }
+  }
+
+  async function refreshOrderAccounts(o, pKey) {
+    const box = $('#orderViewAssignedList');
+    const countBadge = $('#orderViewAccCount');
+    const emptyMsg = $('#orderViewAssignedEmpty');
+    box.textContent = '';
+    if (!o || !o.id) {
+      countBadge.textContent = '0';
+      emptyMsg.hidden = false;
+      return;
+    }
+
+    const list = await api('/orders/' + o.id + '/accounts').catch(() => []);
+    countBadge.textContent = list.length + (list.length > 1 ? ' accès' : ' accès');
+
+    if (!list.length) {
+      emptyMsg.hidden = false;
+    } else {
+      emptyMsg.hidden = true;
       const orderItems = Array.isArray(o.items) ? o.items : [];
       const assignedRemaining = [...list];
 
@@ -1676,8 +1877,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       });
     }
 
-    // Auto-attribution depuis le stock (gère intelligemment les packs et services individuels)
-    $('#oAutoAssignBtn').onclick = async () => {
+    // Auto-attribution depuis le stock
+    $('#orderViewAutoAssignBtn').onclick = async () => {
       const orderItems = o.items || [];
       if (!orderItems.length) return toast('Aucun produit dans la commande.', true);
 
@@ -1687,7 +1888,6 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       orderItems.forEach((item) => {
         const fullOffer = offers.find((off) => off.id === item.id) || item;
         if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
-          // Si au moins un sous-service du pack manque
           const allAssigned = fullOffer.packItems.every((subId) => assignedOfferIds.includes(subId));
           if (!allAssigned) unassignedItems.push(item);
         } else {
@@ -1718,23 +1918,24 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     // Message de livraison WhatsApp
     const deliveryMsg = formatDeliveryMessage(o, list);
-    $('#oCopyDeliveryBtn').onclick = () => {
-      if (!list.length) return toast('Aucun identifiant attribué à envoyer.', true);
+    $('#orderViewCopyDeliveryBtn').onclick = () => {
+      if (!list.length) return toast('Aucun identifiant attribué à copier.', true);
       navigator.clipboard.writeText(deliveryMsg)
         .then(() => toast('Message de livraison copié !'))
         .catch(() => prompt('Message à copier :', deliveryMsg));
     };
-    const sendWa = $('#oSendDeliveryWa');
-    if (pKey && list.length) {
-      sendWa.hidden = false;
-      sendWa.href = 'https://wa.me/' + pKey + '?text=' + encodeURIComponent(deliveryMsg);
+
+    const waBtn = $('#orderViewWaBtn');
+    if (pKey) {
+      waBtn.hidden = false;
+      waBtn.href = 'https://wa.me/' + pKey + (list.length ? '?text=' + encodeURIComponent(deliveryMsg) : '');
     } else {
-      sendWa.hidden = true;
+      waBtn.hidden = true;
     }
 
     // Espace Abonné Client
-    const copyAccessBtn = $('#oCopyAccessLinkBtn');
-    const openAccessBtn = $('#oOpenAccessLinkBtn');
+    const copyAccessBtn = $('#orderViewCopyAccessBtn');
+    const openAccessBtn = $('#orderViewOpenAccessBtn');
     if (o.access_token) {
       const accessUrl = location.origin + '/acces/' + o.access_token;
       copyAccessBtn.hidden = false;
@@ -1751,22 +1952,145 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     }
   }
 
-  async function openOrderDialog(o, prefill = null) {
+  function openOrderView(o) {
+    if (!o) return;
+    editingOrder = o;
+    switchOrderDlgMode('view');
+
+    $('#orderDlgHeaderTitle').textContent = 'Commande #' + o.id + (o.source === 'admin' ? ' (Admin)' : '');
+    const statusPill = $('#orderDlgStatusPill');
+    statusPill.textContent = STATUS_LABEL[o.status] || o.status;
+    statusPill.className = 'pill ' + (o.status === 'confirmed' ? 'on' : o.status === 'cancelled' ? 'off' : 'wait');
+
+    const metaDate = $('#orderDlgMetaDate');
+    if (o.created_at) {
+      metaDate.textContent = 'Créée le ' + new Date(o.created_at).toLocaleDateString('fr-FR', {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    } else {
+      metaDate.textContent = '';
+    }
+
+    const clientName = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client sans nom';
+    const phone = o.customer_phone || '';
+    const pKey = waPhone(phone);
+    const clientLink = $('#orderViewClientName');
+    clientLink.textContent = clientName;
+    clientLink.onclick = () => {
+      orderDlg.close();
+      openClientDialog(phone || clientName);
+    };
+    $('#orderViewClientPhone').textContent = phone ? '📞 ' + phone : 'Aucun téléphone renseigné';
+    $('#orderViewTotal').textContent = fmt(o.total);
+    const payPill = $('#orderViewPayPill');
+    payPill.textContent = PAY_LABEL[o.payment_method] || 'Moyen non précisé';
+    payPill.className = 'pill ' + (o.payment_method ? 'on' : '');
+
+    const durationMonths = o.duration_months || 12;
+    $('#orderViewDurationLabel').textContent = formatDurationLabel(durationMonths);
+
+    const expBadge = $('#orderViewDaysLeftBadge');
+    const expDateEl = $('#orderViewExpiresDate');
+    if (o.expires_at) {
+      const expDate = new Date(o.expires_at + (o.expires_at.length === 10 ? 'T12:00:00' : ''));
+      expDateEl.textContent = 'Jusqu\'au ' + expDate.toLocaleDateString('fr-FR', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      });
+      const now = new Date();
+      const diffDays = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        expBadge.className = 'pill late';
+        expBadge.textContent = 'Expirée (' + (-diffDays) + ' j)';
+      } else if (diffDays <= 7) {
+        expBadge.className = 'pill soon';
+        expBadge.textContent = 'Expire dans ' + diffDays + ' j';
+      } else {
+        expBadge.className = 'pill on';
+        expBadge.textContent = diffDays + ' jours restants';
+      }
+    } else {
+      expDateEl.textContent = 'Aucune date d\'échéance';
+      expBadge.className = 'pill';
+      expBadge.textContent = 'Non définie';
+    }
+
+    async function applyExpiry(durationMonths, customDate = null) {
+      try {
+        const payload = customDate ? { expiresAt: customDate } : { durationMonths };
+        const res = await api('/orders/' + o.id + '/set-expiry', { method: 'POST', body: payload });
+        toast('Échéance mise à jour !');
+        if (res.order) {
+          Object.assign(o, res.order);
+          editingOrder = o;
+        }
+        openOrderView(o);
+        loadOrders();
+        loadRenewals();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    $('#orderQuick1m').onclick = () => applyExpiry(1);
+    $('#orderQuick6m').onclick = () => applyExpiry(6);
+    $('#orderQuick1y').onclick = () => applyExpiry(12);
+    $('#orderQuickCustom').onclick = () => {
+      const current = o.expires_at || new Date().toISOString().slice(0, 10);
+      const d = prompt('Nouvelle date d\'échéance (format AAAA-MM-JJ) :', current);
+      if (!d) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return toast('Format de date invalide (AAAA-MM-JJ requis).', true);
+      applyExpiry(null, d);
+    };
+
+    const itemsBox = $('#orderViewItemsList');
+    itemsBox.textContent = '';
+    const items = Array.isArray(o.items) ? o.items : [];
+    if (!items.length) {
+      itemsBox.append(h('div', { className: 'hint' }, 'Aucun produit renseigné.'));
+    } else {
+      items.forEach((item) => {
+        itemsBox.append(h('div', {
+          style: 'display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;font-size:13px'
+        },
+          h('span', { style: 'font-weight:600' }, '• ' + item.name),
+          h('span', { style: 'color:var(--neon);font-family:\'JetBrains Mono\', monospace' }, fmt(item.price))
+        ));
+      });
+    }
+
+    const notesBox = $('#orderViewNotesBox');
+    const notesText = $('#orderViewNotesText');
+    if (o.notes && o.notes.trim()) {
+      notesText.textContent = o.notes;
+      notesBox.hidden = false;
+    } else {
+      notesBox.hidden = true;
+    }
+
+    refreshOrderAccounts(o, pKey);
+  }
+
+  function openOrderEdit(o, prefill = null) {
     editingOrder = o || null;
-    try { discountCfg = await api('/settings'); } catch (e) {}
-    $('#orderDlgTitle').textContent = o ? 'Commande n°' + o.id : 'Nouvelle commande';
+    switchOrderDlgMode('edit');
+
+    $('#orderEditSubtitle').textContent = o
+      ? 'Modifie les informations, les produits et la durée de l\'abonnement.'
+      : 'Crée une nouvelle commande avec attribution immédiate d\'identifiants.';
+    $('#orderEditBackBtn').hidden = !o;
+
     $('#oFirst').value = o ? o.customer_name || '' : (prefill ? prefill.firstName || '' : '');
     $('#oLast').value = o ? o.customer_last_name || '' : (prefill ? prefill.lastName || '' : '');
     $('#oPhone').value = o ? o.customer_phone || '' : (prefill ? prefill.phone || '' : '');
     $('#oPay').value = o ? o.payment_method || '' : '';
     $('#oStatus').value = o ? o.status : 'confirmed';
-    $('#oNotes').value = o ? o.notes || '' : '';
     $('#oTotal').value = o ? o.total : '';
     $('#oTotal').disabled = false;
-    $('#oExpiresRow').hidden = !o;
+    $('#oNotes').value = o ? o.notes || '' : '';
     $('#oExpires').value = o && o.expires_at ? o.expires_at : '';
-    $('#oItemsBox').hidden = false;
-    $('#oItemsRead').hidden = true;
+
+    const dMonths = o ? (o.duration_months || 12) : 12;
+    setDurationPreset(dMonths, !o || !o.expires_at);
 
     const itemCounts = {};
     if (o && Array.isArray(o.items)) {
@@ -1784,63 +2108,73 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('span', {}, x.name + (x.active ? '' : ' (masquée)')), h('small', {}, fmt(x.price)), qty));
     });
 
-    const phone = o ? o.customer_phone : (prefill ? prefill.phone : '');
-    const pKey = waPhone(phone);
-    const openWa = $('#dlgOpenWa');
-    if (pKey) {
-      openWa.hidden = false;
-      openWa.href = 'https://wa.me/' + pKey;
-    } else {
-      openWa.hidden = true;
-    }
-
-    $('#dlgCopyWa').onclick = () => {
-      const curItems = pickedItems();
-      const mockOrder = {
-        id: o ? o.id : 'nouveau',
-        customer_name: $('#oFirst').value,
-        customer_last_name: $('#oLast').value,
-        customer_phone: $('#oPhone').value,
-        items: curItems.length ? curItems : (o ? o.items : []),
-        total: $('#oTotal').value !== '' ? Number($('#oTotal').value) : 0,
-        expires_at: $('#oExpires').value,
-        payment_method: $('#oPay').value,
-        promo_code: o ? o.promo_code : '',
-        promo_pct: o ? o.promo_pct : ''
-      };
-      copyOrderRecap(mockOrder);
-    };
-
-    refreshOrderAccounts(o, pKey);
     updateOrderSum();
+  }
+
+  async function openOrderDialog(o, prefill = null, startInEdit = false) {
+    try { discountCfg = await api('/settings'); } catch (e) {}
+    if (!o || startInEdit) {
+      openOrderEdit(o, prefill);
+    } else {
+      if (o.id && (!o.items || o.duration_months === undefined)) {
+        try {
+          const full = await api('/orders/' + o.id);
+          o = full;
+        } catch (e) {}
+      }
+      openOrderView(o);
+    }
     orderDlg.showModal();
   }
-  $('#newOrder').addEventListener('click', () => openOrderDialog(null));
-  $('#orderCancel').addEventListener('click', () => orderDlg.close());
+
+  $('#orderDlgCloseCross').addEventListener('click', () => orderDlg.close());
+  $('#orderViewEditBtn').addEventListener('click', () => openOrderEdit(editingOrder));
+  $('#orderEditBackBtn').addEventListener('click', () => {
+    if (editingOrder) openOrderView(editingOrder);
+    else orderDlg.close();
+  });
+  $('#orderEditCancelBtn').addEventListener('click', () => {
+    if (editingOrder) openOrderView(editingOrder);
+    else orderDlg.close();
+  });
+  $('#newOrder').addEventListener('click', () => openOrderDialog(null, null, true));
   $('#oTotal').addEventListener('input', updateOrderSum);
 
   $('#orderForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const info = {
-      firstName: $('#oFirst').value, lastName: $('#oLast').value, phone: $('#oPhone').value,
-      paymentMethod: $('#oPay').value, status: $('#oStatus').value, notes: $('#oNotes').value
+      firstName: $('#oFirst').value.trim(),
+      lastName: $('#oLast').value.trim(),
+      phone: $('#oPhone').value.trim(),
+      paymentMethod: $('#oPay').value,
+      status: $('#oStatus').value,
+      notes: $('#oNotes').value.trim()
     };
+    if ($('#oExpires').value) {
+      info.expiresAt = $('#oExpires').value;
+    }
+    if (selectedDurationMonths && selectedDurationMonths !== 'custom') {
+      info.durationMonths = selectedDurationMonths;
+    }
     try {
       const ids = pickedItems().map((x) => x.id);
+      let savedOrder;
       if (editingOrder) {
-        if ($('#oExpires').value !== (editingOrder.expires_at || '')) info.expiresAt = $('#oExpires').value;
         if (ids.length) info.offerIds = ids;
         if ($('#oTotal').value !== '') info.total = $('#oTotal').value;
         await api('/orders/' + editingOrder.id, { method: 'PATCH', body: info });
         toast('Commande n°' + editingOrder.id + ' mise à jour.');
+        savedOrder = await api('/orders/' + editingOrder.id);
       } else {
         const r = await api('/orders', { method: 'POST', body: { ...info, offerIds: ids, total: $('#oTotal').value } });
         toast('Commande n°' + r.id + ' créée (' + fmt(r.total) + ').');
+        savedOrder = await api('/orders/' + r.id);
       }
-      orderDlg.close();
       loadOrders();
       loadStats();
       loadRenewals();
+      editingOrder = savedOrder;
+      openOrderView(savedOrder);
     } catch (err) { toast(err.message, true); }
   });
 
@@ -1871,7 +2205,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         try { await api('/orders/' + r.id + '/reminder', { method: 'POST', body: {} }); toast('Marqué comme relancé.'); loadRenewals(); }
         catch (e) { toast(e.message, true); }
       });
-      body.append(h('tr', {},
+      const tr = h('tr', { style: 'cursor:pointer' },
         h('td', { className: 'num' }, new Date(r.expires_at).toLocaleDateString('fr-FR')),
         h('td', {}, h('span', { className: 'pill ' + pill[0] }, pill[1])),
         h('td', {}, [r.customer_name, r.customer_last_name].filter(Boolean).join(' ') || '—',
@@ -1880,7 +2214,12 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', { className: 'num' }, fmt(r.total)),
         h('td', { className: 'num' }, r.reminder_sent_at ? new Date(r.reminder_sent_at).toLocaleDateString('fr-FR') : '—'),
         h('td', {}, h('div', { className: 'row-actions' }, remind, mark))
-      ));
+      );
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, a, input, select')) return;
+        openOrderDialog({ id: r.id });
+      });
+      body.append(tr);
     });
   }
   $('#renewDays').addEventListener('change', () => loadRenewals().catch((e) => toast(e.message, true)));
