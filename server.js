@@ -140,7 +140,8 @@ async function getSettings() {
   const m = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return {
     discountPct: clampInt(m.discount_pct, 0, 90, 10),
-    discountMin: clampInt(m.discount_min, 2, 10, 3)
+    discountMin: clampInt(m.discount_min, 2, 10, 3),
+    stockAlertsEnabled: m.stock_alerts_enabled !== 'false'
   };
 }
 
@@ -1367,6 +1368,9 @@ admin.delete(
 async function checkLowStockAlert(offerId) {
   if (!offerId) return;
   try {
+    const { stockAlertsEnabled } = await getSettings();
+    if (!stockAlertsEnabled) return;
+
     const oRes = await pool.query('SELECT id, name, is_pack, low_stock_threshold FROM offers WHERE id = $1', [offerId]);
     if (!oRes.rowCount || oRes.rows[0].is_pack) return;
     const off = oRes.rows[0];
@@ -1490,21 +1494,24 @@ admin.get(
     });
 
     // Alertes stock bas pour les offres unitaires sous le seuil
+    const { stockAlertsEnabled } = await getSettings();
     const lowStockAlerts = [];
-    stock.rows.forEach((r) => {
-      if (!r.is_pack) {
-        const thresh = r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold);
-        const avail = Number(r.available_count || 0);
-        if (avail <= thresh) {
-          lowStockAlerts.push({
-            offerId: r.offer_id,
-            offerName: r.offer_name,
-            available: avail,
-            threshold: thresh
-          });
+    if (stockAlertsEnabled) {
+      stock.rows.forEach((r) => {
+        if (!r.is_pack) {
+          const thresh = r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold);
+          const avail = Number(r.available_count || 0);
+          if (avail <= thresh) {
+            lowStockAlerts.push({
+              offerId: r.offer_id,
+              offerName: r.offer_name,
+              available: avail,
+              threshold: thresh
+            });
+          }
         }
-      }
-    });
+      });
+    }
 
     const wRes = await pool.query('SELECT count(*)::int AS cnt FROM accounts WHERE warranty_claim = TRUE');
     const warrantyClaimsCount = wRes.rows[0].cnt;
@@ -1519,6 +1526,7 @@ admin.get(
       summary: stock.rows,
       suppliers: suppliersRes.rows.map((r) => r.supplier),
       alerts: lowStockAlerts,
+      stockAlertsEnabled,
       warrantyClaimsCount
     });
   })
@@ -2330,7 +2338,26 @@ admin.post(
 admin.get(
   '/settings',
   wrap(async (req, res) => {
-    res.json(await getSettings());
+    const settings = await getSettings();
+    const stockRes = await pool.query(`
+      SELECT o.id, o.name, o.category, o.low_stock_threshold,
+             count(*) FILTER (WHERE a.status = 'available')::int AS available_count
+      FROM offers o
+      LEFT JOIN accounts a ON a.offer_id = o.id
+      WHERE o.active AND NOT o.is_pack
+      GROUP BY o.id, o.name, o.category, o.low_stock_threshold, o.sort
+      ORDER BY o.sort ASC, o.id ASC
+    `);
+    res.json({
+      ...settings,
+      stockThresholds: stockRes.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        threshold: r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold),
+        available: Number(r.available_count || 0)
+      }))
+    });
   })
 );
 
@@ -2339,12 +2366,52 @@ admin.put(
   wrap(async (req, res) => {
     const pct = clampInt(req.body.discountPct, 0, 90, 10);
     const min = clampInt(req.body.discountMin, 2, 10, 3);
+    const stockAlertsEnabled = req.body.stockAlertsEnabled !== false && req.body.stockAlertsEnabled !== 'false';
+
     await pool.query(
-      `INSERT INTO settings (key, value) VALUES ('discount_pct', $1), ('discount_min', $2)
+      `INSERT INTO settings (key, value) VALUES
+         ('discount_pct', $1),
+         ('discount_min', $2),
+         ('stock_alerts_enabled', $3)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [String(pct), String(min)]
+      [String(pct), String(min), String(stockAlertsEnabled)]
     );
-    res.json({ discountPct: pct, discountMin: min });
+
+    if (req.body.thresholds && typeof req.body.thresholds === 'object') {
+      for (const [idStr, val] of Object.entries(req.body.thresholds)) {
+        const id = Number(idStr);
+        const thresh = Math.max(0, Math.min(999, parseInt(val, 10) || 0));
+        if (id) {
+          await pool.query('UPDATE offers SET low_stock_threshold = $1 WHERE id = $2', [thresh, id]);
+        }
+      }
+    }
+
+    res.json({ ok: true, discountPct: pct, discountMin: min, stockAlertsEnabled });
+  })
+);
+
+admin.put(
+  '/settings/stock-thresholds',
+  wrap(async (req, res) => {
+    const stockAlertsEnabled = req.body.stockAlertsEnabled !== false && req.body.stockAlertsEnabled !== 'false';
+    await pool.query(
+      `INSERT INTO settings (key, value) VALUES ('stock_alerts_enabled', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [String(stockAlertsEnabled)]
+    );
+
+    if (req.body.thresholds && typeof req.body.thresholds === 'object') {
+      for (const [idStr, val] of Object.entries(req.body.thresholds)) {
+        const id = Number(idStr);
+        const thresh = Math.max(0, Math.min(999, parseInt(val, 10) || 0));
+        if (id) {
+          await pool.query('UPDATE offers SET low_stock_threshold = $1 WHERE id = $2', [thresh, id]);
+        }
+      }
+    }
+
+    res.json({ ok: true, stockAlertsEnabled });
   })
 );
 

@@ -195,7 +195,6 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <input class="search-inp" type="search" id="accSearch" placeholder="🔍 Rechercher login, note, fournisseur, client...">
         <button class="btn primary" type="button" id="newAccount">➕ Nouveau compte</button>
-        <button class="btn" type="button" id="syncAirtableBtn" style="border-color:var(--cyan);color:var(--cyan)" title="Importer les stocks et clients depuis SubManager (Airtable)">🔄 Synchroniser SubManager</button>
         <label style="display:flex;align-items:center;gap:6px">Offre
           <select id="accOfferFilter">
             <option value="">Toutes les offres</option>
@@ -328,6 +327,32 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         </label>
         <div><button class="btn primary" type="submit">Enregistrer</button></div>
       </form>
+    </div>
+
+    <div class="sec-block">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <h3 style="margin:0">🚨 Alertes de Stock & Jauges Minimales</h3>
+            <span id="stockAlertsPill" class="pill on">Actives</span>
+          </div>
+          <p class="hint" style="margin:0">Active ou désactive les alertes automatiques et configure la jauge critique de réapprovisionnement pour chaque compte / service.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label class="check" style="cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);padding:8px 14px;border-radius:10px;border:1px solid var(--line);margin:0">
+            <input type="checkbox" id="stockAlertsToggle" checked>
+            <span id="stockAlertsToggleLabel">Alertes activées</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="stockThresholdsContainer" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <small style="color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Jauges du seuil minimal par compte</small>
+          <button class="btn small primary" type="button" id="saveStockSettingsBtn">💾 Enregistrer les réglages de stock</button>
+        </div>
+        <div id="stockThresholdsList" style="display:grid;gap:10px"></div>
+      </div>
     </div>
 
     <div class="sec-block">
@@ -2315,7 +2340,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     const data = await api('/accounts?' + q.toString());
     accountsList = data.accounts || [];
-    renderStockAlerts(data.alerts || []);
+    stockAlertsActive = data.stockAlertsEnabled !== false;
+    renderStockAlerts(stockAlertsActive ? (data.alerts || []) : []);
     renderStockTiles(data.summary || data.stock || []);
     renderAccounts(accountsList);
     renderSupplierFilter(data.suppliers || []);
@@ -2347,7 +2373,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     baseSummary.forEach((s) => {
       const avail = Number(s.available_count || 0);
       const thresh = s.low_stock_threshold == null ? 2 : Number(s.low_stock_threshold);
-      const isLow = avail <= thresh;
+      const isLow = stockAlertsActive && (avail <= thresh);
       const tile = h('div', {
         className: 'stat',
         style: isLow ? 'border-color:var(--bad);background:rgba(255,122,156,.06)' : ''
@@ -2499,26 +2525,28 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     accSearchTimer = setTimeout(() => loadAccounts().catch((e) => toast(e.message, true)), 250);
   });
 
-  $('#syncAirtableBtn').addEventListener('click', async () => {
-    if (!confirm('Lancer la synchronisation avec SubManager (Airtable) ?\n\nCela va importer tous les stocks fournisseurs, les clients et lier les ventes existantes sans supprimer vos données actuelles.')) return;
-    const btn = $('#syncAirtableBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳ Synchronisation...';
-    try {
-      const res = await api('/sync-airtable', { method: 'POST', body: {} });
-      toast(res.message || 'Synchronisation SubManager réussie !');
-      loadAccounts();
-      loadClients();
-      loadOrders();
-      loadSales();
-      loadStats();
-    } catch (err) {
-      toast('Échec de synchronisation : ' + err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '🔄 Synchroniser SubManager';
-    }
-  });
+  const syncAirtableBtn = $('#syncAirtableBtn');
+  if (syncAirtableBtn) {
+    syncAirtableBtn.addEventListener('click', async () => {
+      if (!confirm('Lancer la synchronisation avec SubManager (Airtable) ?\n\nCela va importer tous les stocks fournisseurs, les clients et lier les ventes existantes sans supprimer vos données actuelles.')) return;
+      syncAirtableBtn.disabled = true;
+      syncAirtableBtn.textContent = '⏳ Synchronisation...';
+      try {
+        const res = await api('/sync-airtable', { method: 'POST', body: {} });
+        toast(res.message || 'Synchronisation SubManager réussie !');
+        loadAccounts();
+        loadClients();
+        loadOrders();
+        loadSales();
+        loadStats();
+      } catch (err) {
+        toast('Échec de synchronisation : ' + err.message, true);
+      } finally {
+        syncAirtableBtn.disabled = false;
+        syncAirtableBtn.textContent = '🔄 Synchroniser SubManager';
+      }
+    });
+  }
 
   // ----- Clients & Annuaire -----
   const clientEditDlg = $('#clientEditDlg');
@@ -2856,17 +2884,152 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   }
   $('#auditRefresh').addEventListener('click', () => loadAudit().catch((e) => toast(e.message, true)));
 
-  // ----- Réglages -----
+  // ----- Réglages & Alertes de Stock -----
+  let currentStockThresholds = [];
+  let stockAlertsActive = true;
+
   async function loadSettings() {
     const s = await api('/settings');
     $('#setPct').value = s.discountPct;
     $('#setMin').value = s.discountMin;
+
+    stockAlertsActive = s.stockAlertsEnabled !== false;
+    const toggle = $('#stockAlertsToggle');
+    if (toggle) {
+      toggle.checked = stockAlertsActive;
+      updateStockAlertsUI();
+    }
+
+    currentStockThresholds = s.stockThresholds || [];
+    renderStockThresholdsList(currentStockThresholds);
   }
+
+  function updateStockAlertsUI() {
+    const toggle = $('#stockAlertsToggle');
+    const pill = $('#stockAlertsPill');
+    const label = $('#stockAlertsToggleLabel');
+    const container = $('#stockThresholdsList');
+    if (!toggle) return;
+    const isAct = toggle.checked;
+    stockAlertsActive = isAct;
+    if (pill) {
+      pill.className = 'pill ' + (isAct ? 'on' : 'off');
+      pill.textContent = isAct ? 'Actives' : 'Désactivées';
+    }
+    if (label) {
+      label.textContent = isAct ? 'Alertes activées' : 'Alertes désactivées (Silencieux)';
+    }
+    if (container) {
+      container.style.opacity = isAct ? '1' : '0.55';
+    }
+  }
+
+  function renderStockThresholdsList(list) {
+    const box = $('#stockThresholdsList');
+    if (!box) return;
+    box.textContent = '';
+    if (!list || !list.length) {
+      box.append(h('p', { className: 'hint', style: 'margin:0' }, 'Aucun service ou compte unitaire disponible.'));
+      return;
+    }
+
+    list.forEach((item) => {
+      const thresh = item.threshold == null ? 2 : Number(item.threshold);
+      const avail = Number(item.available || 0);
+
+      const statusBadge = h('span', {
+        className: 'pill ' + (avail <= thresh ? 'late' : 'on'),
+        style: 'font-size:11px'
+      }, avail <= thresh ? '⚠️ Critique (≤ ' + thresh + ')' : '✅ OK');
+
+      const slider = h('input', {
+        type: 'range',
+        min: '0',
+        max: '15',
+        step: '1',
+        value: String(Math.min(15, thresh)),
+        style: 'flex:1;accent-color:var(--pink);cursor:pointer'
+      });
+
+      const numInput = h('input', {
+        type: 'number',
+        min: '0',
+        max: '999',
+        step: '1',
+        value: String(thresh),
+        style: 'width:64px;padding:6px;text-align:center;font-weight:700'
+      });
+
+      const updateRow = (newVal) => {
+        const val = Math.max(0, parseInt(newVal, 10) || 0);
+        slider.value = String(Math.min(15, val));
+        numInput.value = String(val);
+        item.threshold = val;
+        const isCrit = avail <= val;
+        statusBadge.className = 'pill ' + (isCrit ? 'late' : 'on');
+        statusBadge.textContent = isCrit ? '⚠️ Critique (≤ ' + val + ')' : '✅ OK';
+      };
+
+      slider.oninput = () => updateRow(slider.value);
+      numInput.oninput = () => updateRow(numInput.value);
+
+      const row = h('div', {
+        style: 'background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap'
+      },
+        h('div', { style: 'min-width:180px' },
+          h('div', { style: 'font-weight:700;color:var(--text);font-size:14px' }, item.name),
+          h('div', { style: 'font-size:12px;color:var(--muted);margin-top:2px' },
+            'Stock disponible actuel : ',
+            h('b', { style: 'color:' + (avail > thresh ? 'var(--ok)' : (avail === 0 ? 'var(--bad)' : 'var(--warn)')) }, avail + ' compte(s)')
+          )
+        ),
+        h('div', { style: 'display:flex;align-items:center;gap:10px;flex:1;min-width:240px;max-width:440px' },
+          h('span', { style: 'font-size:12px;color:var(--muted);white-space:nowrap' }, 'Jauge critique :'),
+          slider,
+          numInput,
+          h('span', { style: 'font-size:12px;color:var(--muted)' }, 'comptes')
+        ),
+        h('div', {}, statusBadge)
+      );
+
+      box.append(row);
+    });
+  }
+
+  const stockAlertsToggle = $('#stockAlertsToggle');
+  if (stockAlertsToggle) {
+    stockAlertsToggle.onchange = updateStockAlertsUI;
+  }
+
+  const saveStockSettingsBtn = $('#saveStockSettingsBtn');
+  if (saveStockSettingsBtn) {
+    saveStockSettingsBtn.onclick = async () => {
+      const thresholds = {};
+      currentStockThresholds.forEach((item) => {
+        thresholds[item.id] = item.threshold;
+      });
+      try {
+        await api('/settings/stock-thresholds', {
+          method: 'PUT',
+          body: {
+            stockAlertsEnabled: $('#stockAlertsToggle').checked,
+            thresholds
+          }
+        });
+        toast('Paramètres d\'alertes et jauges de stock enregistrés !');
+        loadAccounts();
+        loadOffers();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+  }
+
   $('#settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
       await api('/settings', { method: 'PUT', body: { discountPct: $('#setPct').value, discountMin: $('#setMin').value } });
-      toast('Réglages enregistrés.');
+      toast('Réglages de remise enregistrés.');
     } catch (err) { toast(err.message, true); }
   });
 
