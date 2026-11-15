@@ -181,6 +181,13 @@
         background: #2be6ff;
       }
 
+      /* Root / Lock scroll when drawer open */
+      html.nav-drawer-open,
+      body.nav-drawer-open {
+        overflow: hidden !important;
+        touch-action: none;
+      }
+
       /* Mobile Navigation Drawer */
       .nav-drawer {
         position: fixed;
@@ -188,130 +195,249 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(10, 9, 24, 0.98);
+        width: 100%;
+        max-width: 100%;
+        height: calc(100dvh - 60px);
+        max-height: calc(100dvh - 60px);
+        background: rgba(9, 8, 20, 0.985);
         backdrop-filter: blur(28px);
         -webkit-backdrop-filter: blur(28px);
-        z-index: 101;
+        z-index: 99999;
         display: flex;
         flex-direction: column;
-        padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
         opacity: 0;
         pointer-events: none;
-        transform: translateY(-10px);
-        transition: opacity .25s ease, transform .25s cubic-bezier(0.16, 1, 0.3, 1);
+        visibility: hidden;
+        transition: opacity .22s cubic-bezier(0.16, 1, 0.3, 1), visibility .22s cubic-bezier(0.16, 1, 0.3, 1);
         overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        box-sizing: border-box;
+      }
+      .nav-drawer,
+      .nav-drawer *,
+      .nav-drawer *::before,
+      .nav-drawer *::after {
+        box-sizing: border-box !important;
       }
       .nav-drawer.is-open {
         opacity: 1;
         pointer-events: auto;
-        transform: translateY(0);
+        visibility: visible;
       }
+
+      .nav-drawer-inner {
+        width: 100%;
+        max-width: 580px;
+        margin: 0 auto;
+        padding: 16px max(18px, env(safe-area-inset-right, 18px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 18px));
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        box-sizing: border-box;
+      }
+
+      .nav-drawer-header-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid rgba(160, 150, 255, 0.08);
+        box-sizing: border-box;
+      }
+      .drawer-section-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #8f8ba8;
+      }
+      .drawer-version-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10.5px;
+        color: rgba(160, 150, 255, 0.5);
+      }
+
       .nav-drawer-links {
-        display: grid;
-        gap: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
         margin-bottom: 24px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .nav-drawer-item {
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 10px;
+        border-radius: 10px;
         text-decoration: none;
         color: #efecff;
-        transition: all .2s ease;
+        border-bottom: 1px solid rgba(160, 150, 255, 0.07);
+        transition: background .15s ease, border-color .15s ease;
+        -webkit-tap-highlight-color: transparent;
+        box-sizing: border-box;
+        width: 100%;
       }
-      .nav-drawer-item:hover, .nav-drawer-item:active {
-        background: rgba(43, 230, 255, 0.08);
-        border-color: rgba(43, 230, 255, 0.3);
-        transform: translateX(4px);
+      .nav-drawer-item:last-child {
+        border-bottom: none;
+      }
+      .nav-drawer-item:hover,
+      .nav-drawer-item:active {
+        background: rgba(255, 255, 255, 0.04);
         text-decoration: none;
       }
-      .nav-drawer-item .drawer-icon {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: rgba(160, 150, 255, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
+      .nav-drawer-item:hover .drawer-chevron,
+      .nav-drawer-item:active .drawer-chevron {
         color: #2be6ff;
+        transform: translateX(2px);
       }
-      .nav-drawer-item.highlight-news .drawer-icon {
-        background: rgba(255, 77, 148, 0.18);
-        color: #ff4d94;
-      }
-      .nav-drawer-item svg {
-        width: 20px;
-        height: 20px;
-        fill: currentColor;
-      }
-      .nav-drawer-item .drawer-text {
+
+      .drawer-text {
         flex: 1;
         min-width: 0;
       }
-      .nav-drawer-item strong {
-        display: block;
-        font-family: 'Unbounded', system-ui, sans-serif;
-        font-size: 13px;
-        color: #fff;
+      .drawer-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
         margin-bottom: 2px;
       }
-      .nav-drawer-item small {
-        display: block;
-        font-size: 11px;
-        color: #a8a5cf;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      .drawer-title {
+        font-family: 'Unbounded', system-ui, sans-serif;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: -0.01em;
+        line-height: 1.3;
       }
-      .drawer-badge {
+      .drawer-desc {
+        display: block;
+        font-family: 'Sora', system-ui, sans-serif;
+        font-size: 11.5px;
+        color: #8f8ba8;
+        line-height: 1.4;
+        margin-top: 2px;
+      }
+
+      .drawer-pill-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
+        font-size: 9.5px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        background: rgba(255, 77, 148, 0.2);
-        border: 1px solid #ff4d94;
-        color: #ff9cc4;
+        letter-spacing: 0.05em;
         padding: 2px 7px;
         border-radius: 999px;
+        white-space: nowrap;
       }
-      .drawer-status-dot {
-        width: 8px;
-        height: 8px;
+      .drawer-pill-badge.badge-contest {
+        background: rgba(255, 77, 148, 0.12);
+        border: 1px solid rgba(255, 77, 148, 0.4);
+        color: #ff7fb4;
+      }
+      .drawer-pill-badge.badge-status {
+        background: rgba(32, 227, 178, 0.1);
+        border: 1px solid rgba(32, 227, 178, 0.35);
+        color: #20e3b2;
+      }
+      .drawer-dot-pulse {
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: #20e3b2;
-        box-shadow: 0 0 8px #20e3b2;
+        box-shadow: 0 0 6px #20e3b2;
+        display: inline-block;
       }
+
+      .drawer-chevron {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: #6b668f;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+        transition: color .15s ease, transform .15s ease;
+      }
+
       .nav-drawer-footer {
         margin-top: auto;
         padding-top: 18px;
         border-top: 1px solid rgba(160, 150, 255, 0.12);
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 14px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .drawer-wa-btn {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 10px;
+        gap: 9px;
         width: 100%;
-        padding: 13px;
-        border-radius: 999px;
-        background: linear-gradient(100deg, #ff4d94, #ff7fb4);
+        padding: 13px 18px;
+        border-radius: 12px;
+        background: linear-gradient(100deg, #ff4d94, #2be6ff);
         color: #0a0918;
         font-family: 'Sora', system-ui, sans-serif;
         font-weight: 700;
-        font-size: 14px;
+        font-size: 13.5px;
         text-decoration: none;
-        box-shadow: 0 4px 20px rgba(255, 77, 148, 0.4);
+        box-shadow: 0 4px 18px rgba(255, 77, 148, 0.35);
+        transition: transform .15s ease, box-shadow .15s ease;
+        box-sizing: border-box;
       }
-      .drawer-wa-btn svg { width: 18px; height: 18px; fill: currentColor; }
+      .drawer-wa-btn:active {
+        transform: scale(0.98);
+      }
+      .drawer-wa-btn svg {
+        width: 17px;
+        height: 17px;
+        fill: currentColor;
+        flex-shrink: 0;
+      }
+
+      .drawer-footer-sub {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 11.5px;
+        font-family: 'Sora', system-ui, sans-serif;
+        color: #8f8ba8;
+        flex-wrap: wrap;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .drawer-insta-link {
+        color: #ff9cc4;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .drawer-insta-link:hover {
+        text-decoration: underline;
+      }
+      .drawer-sep {
+        color: rgba(160, 150, 255, 0.3);
+      }
+      .drawer-legal-link {
+        color: #8f8ba8;
+        text-decoration: none;
+      }
+      .drawer-legal-link:hover {
+        color: #efecff;
+      }
 
       /* Mobile App Bottom Bar (Standalone Mode) */
       .pwa-bottom-bar {
@@ -399,8 +525,8 @@
         fill: currentColor;
       }
 
-      /* Responsive Breakpoint: <= 920px (Mobile & Tablet) */
-      @media (max-width: 920px) {
+      /* Responsive Breakpoint: <= 960px (Mobile & Tablet) */
+      @media (max-width: 960px) {
         .nav-links {
           display: none !important;
         }
@@ -693,94 +819,96 @@
       drawer.setAttribute('aria-hidden', 'true');
 
       drawer.innerHTML = `
-        <div class="nav-drawer-links">
-          <a href="/#offres" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Offres & Formules</strong>
-              <small>Streaming, VPN, TV et packs annuels</small>
-            </div>
-          </a>
-          <a href="/#composer" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Composer mon Pack</strong>
-              <small>Créez votre formule personnalisée</small>
-            </div>
-          </a>
-          <a href="/news" class="nav-drawer-item highlight-news">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Nouveautés & Concours</strong>
-              <small>Concours Instagram en cours · Google Pro · DAZN</small>
-            </div>
-            <span class="drawer-badge">Live</span>
-          </a>
-          <a href="/suivi" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Retrouver mes Accès</strong>
-              <small>Espace abonné & suivi de commande</small>
-            </div>
-          </a>
-          <a href="/status" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Statut Réseau en Direct</strong>
-              <small>Disponibilité 99.98% des serveurs</small>
-            </div>
-            <span class="drawer-status-dot"></span>
-          </a>
-          <a href="/garantie" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Charte de Garantie & SAV</strong>
-              <small>Assistance 7j/7 et remplacement immédiat</small>
-            </div>
-          </a>
-          <a href="/#faq" class="nav-drawer-item">
-            <span class="drawer-icon">
-              <svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
-            </span>
-            <div class="drawer-text">
-              <strong>Foire aux Questions</strong>
-              <small>Tout comprendre sur le service</small>
-            </div>
-          </a>
-        </div>
-        <div class="nav-drawer-footer">
-          <a class="drawer-wa-btn" id="drawerWaBtn" href="#" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.7 11.7 0 0 0 4.5 4c1.7.7 2.4.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
-            <span>Commander sur WhatsApp</span>
-          </a>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;font-size:12px">
-            <a href="https://instagram.com/neonpass_officiel" target="_blank" rel="noopener" style="color:#ff9cc4;text-decoration:none">
-              Instagram @neonpass_officiel
+        <div class="nav-drawer-inner">
+          <div class="nav-drawer-header-meta">
+            <span class="drawer-section-label">Navigation</span>
+            <span class="drawer-version-tag">NeonPass v2.4</span>
+          </div>
+
+          <div class="nav-drawer-links">
+            <a href="/#offres" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Offres & Formules</span>
+                <span class="drawer-desc">Abonnements streaming, VPN et TV</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
             </a>
-            <a href="/cgv" style="color:#a8a5cf;text-decoration:none">CGV & Légal</a>
+
+            <a href="/#composer" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Composer mon Pack</span>
+                <span class="drawer-desc">Formule personnalisée sur-mesure</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/news" class="nav-drawer-item">
+              <div class="drawer-text">
+                <div class="drawer-title-row">
+                  <span class="drawer-title">Nouveautés & Concours</span>
+                  <span class="drawer-pill-badge badge-contest">Concours Instagram</span>
+                </div>
+                <span class="drawer-desc">DAZN, Google One AI Pro et tirage au sort</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/suivi" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Retrouver mes Accès</span>
+                <span class="drawer-desc">Espace abonné sécurisé & suivi de commande</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/status" class="nav-drawer-item">
+              <div class="drawer-text">
+                <div class="drawer-title-row">
+                  <span class="drawer-title">Statut Réseau</span>
+                  <span class="drawer-pill-badge badge-status">
+                    <span class="drawer-dot-pulse"></span>
+                    99.98% En ligne
+                  </span>
+                </div>
+                <span class="drawer-desc">Disponibilité en temps réel des serveurs</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/garantie" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Charte de Garantie & SAV</span>
+                <span class="drawer-desc">Assistance 7j/7 et remplacement immédiat</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/#faq" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Foire aux Questions</span>
+                <span class="drawer-desc">Tout comprendre sur le service et les garanties</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+          </div>
+
+          <div class="nav-drawer-footer">
+            <a class="drawer-wa-btn" id="drawerWaBtn" href="#" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.7 11.7 0 0 0 4.5 4c1.7.7 2.4.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
+              <span>Commander sur WhatsApp</span>
+            </a>
+            <div class="drawer-footer-sub">
+              <a href="https://instagram.com/neonpass_officiel" target="_blank" rel="noopener" class="drawer-insta-link">
+                Instagram @neonpass_officiel
+              </a>
+              <span class="drawer-sep">·</span>
+              <a href="/cgv" class="drawer-legal-link">CGV & Légal</a>
+            </div>
           </div>
         </div>
       `;
 
-      // Insert right after the nav element
-      const navHeader = document.querySelector('.nav') || document.querySelector('header');
-      if (navHeader && navHeader.parentNode) {
-        navHeader.parentNode.insertBefore(drawer, navHeader.nextSibling);
-      } else {
-        document.body.appendChild(drawer);
-      }
+      document.body.appendChild(drawer);
     }
 
     // Toggle logic
@@ -789,7 +917,21 @@
       drawer.classList.toggle('is-open', open);
       burger.setAttribute('aria-expanded', String(open));
       drawer.setAttribute('aria-hidden', String(!open));
-      document.body.style.overflow = open ? 'hidden' : '';
+      if (open) {
+        const navHeader = document.querySelector('.nav') || document.querySelector('header');
+        if (navHeader) {
+          const rect = navHeader.getBoundingClientRect();
+          const topVal = Math.max(0, Math.round(rect.bottom));
+          drawer.style.top = topVal + 'px';
+          drawer.style.height = 'calc(100dvh - ' + topVal + 'px)';
+          drawer.style.maxHeight = 'calc(100dvh - ' + topVal + 'px)';
+        }
+        document.documentElement.classList.add('nav-drawer-open');
+        document.body.classList.add('nav-drawer-open');
+      } else {
+        document.documentElement.classList.remove('nav-drawer-open');
+        document.body.classList.remove('nav-drawer-open');
+      }
     }
 
     burger.onclick = (e) => {
@@ -801,9 +943,29 @@
       a.addEventListener('click', () => setDrawerState(false));
     });
 
+    drawer.addEventListener('click', (e) => {
+      if (e.target === drawer) {
+        setDrawerState(false);
+      }
+    });
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && drawer.classList.contains('is-open')) {
         setDrawerState(false);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 960 && drawer.classList.contains('is-open')) {
+        setDrawerState(false);
+      } else if (drawer.classList.contains('is-open')) {
+        const navHeader = document.querySelector('.nav') || document.querySelector('header');
+        if (navHeader) {
+          const topVal = Math.max(0, Math.round(navHeader.getBoundingClientRect().bottom));
+          drawer.style.top = topVal + 'px';
+          drawer.style.height = 'calc(100dvh - ' + topVal + 'px)';
+          drawer.style.maxHeight = 'calc(100dvh - ' + topVal + 'px)';
+        }
       }
     });
 
