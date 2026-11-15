@@ -2,3 +2,4 @@
 node_modules/
 backups/
 docker-compose.override.yml
+*.bak*

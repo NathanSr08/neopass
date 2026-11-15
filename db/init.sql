@@ -58,7 +58,19 @@ SELECT * FROM (VALUES
    '["Qualité audio haute fidélité", "Listes personnalisées", "Écoute hors ligne"]'::jsonb, 275, FALSE, TRUE, 50),
   ('tvplus', 'TVPlus', 'tv', 'TV', 50, 200,
    'Chaînes en direct et replay sur tous tes écrans.',
-   '["Chaînes en direct", "Replay 7 jours", "Compatible mobile et TV"]'::jsonb, 40, FALSE, TRUE, 60)
+   '["Chaînes en direct", "Replay 7 jours", "Compatible mobile et TV"]'::jsonb, 40, FALSE, TRUE, 60),
+  ('canva-pro', 'Canva Pro', 'logiciels', 'Création', 30, 110,
+   'Crée facilement des visuels professionnels avec les outils premium de Canva.',
+   '["Modèles et contenus premium", "Suppression d’arrière-plan", "Redimensionnement magique", "Outils de création avec IA"]'::jsonb, 285, FALSE, TRUE, 70),
+  ('capcut-pro', 'CapCut Pro', 'logiciels', 'Montage vidéo', 30, 109.99,
+   'Réalise des montages vidéo avancés avec les outils premium de CapCut.',
+   '["Effets et transitions premium", "Sous-titres automatiques", "Outils IA de montage", "Modèles et ressources premium"]'::jsonb, 195, FALSE, TRUE, 80),
+  ('hbo-max', 'HBO Max', 'tv', 'Streaming', 35, 69.90,
+   'Retrouve les grandes séries HBO, des films et des documentaires.',
+   '["Séries HBO Original", "Films et nouveautés", "Documentaires", "Visionnage à la demande"]'::jsonb, 225, FALSE, TRUE, 90),
+  ('paramount-plus-fr', 'Paramount+ France', 'tv', 'Streaming', 35, 79.90,
+   'Découvre les films, séries et productions originales de Paramount+.',
+   '["Films et séries exclusifs", "Productions Paramount", "Séries originales", "Catalogue de divertissement"]'::jsonb, 210, FALSE, TRUE, 100)
 ) AS v(slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort)
 WHERE NOT EXISTS (SELECT 1 FROM offers);
 
@@ -118,3 +130,55 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
 UPDATE orders SET expires_at = created_at + interval '12 months' WHERE status = 'confirmed' AND expires_at IS NULL;
 CREATE INDEX IF NOT EXISTS orders_expires_idx ON orders (expires_at) WHERE status = 'confirmed';
+
+-- Table clients
+CREATE TABLE IF NOT EXISTS clients (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  phone       TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  airtable_id TEXT DEFAULT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS clients_airtable_id_idx ON clients (airtable_id);
+
+-- Coffre-fort de comptes & licences (stock et attribution aux commandes)
+CREATE TABLE IF NOT EXISTS accounts (
+  id           SERIAL PRIMARY KEY,
+  offer_id     INTEGER NOT NULL REFERENCES offers(id) ON DELETE CASCADE,
+  service_name TEXT NOT NULL DEFAULT '',
+  login        TEXT NOT NULL,
+  password     TEXT NOT NULL DEFAULT '',
+  slot_profile TEXT NOT NULL DEFAULT '',
+  notes        TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'assigned', 'archived')),
+  supplier     TEXT NOT NULL DEFAULT '',
+  supplier_url TEXT NOT NULL DEFAULT '',
+  cost         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  private_notes TEXT NOT NULL DEFAULT '',
+  airtable_id  TEXT DEFAULT NULL,
+  order_id     INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+  assigned_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS supplier TEXT NOT NULL DEFAULT '';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS supplier_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cost NUMERIC(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS private_notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS airtable_id TEXT DEFAULT NULL;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS warranty_claim BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS defect_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS defect_at TIMESTAMPTZ;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS replaced_by_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_airtable_id_idx ON accounts (airtable_id);
+CREATE INDEX IF NOT EXISTS accounts_offer_idx ON accounts (offer_id, status);
+CREATE INDEX IF NOT EXISTS accounts_order_idx ON accounts (order_id);
+
+-- Support des packs multi-services et découplage stock/packs
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS pack_items JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS access_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_access_token_idx ON orders (access_token);
+INSERT INTO offers (slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items)
+VALUES ('disney-plus', 'Disney+', 'streaming', 'Populaire', 25.00, 35.00, 'Films et séries Disney, Pixar, Marvel, Star Wars et Star.', '["Films et séries illimités", "4K Ultra HD", "Profil personnel", "Garantie 1 an"]'::jsonb, 210, FALSE, TRUE, 25, '[]'::jsonb)
+ON CONFLICT (slug) DO NOTHING;

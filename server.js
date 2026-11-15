@@ -11,7 +11,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const WA_NUMBER = String(process.env.WA_NUMBER || '').replace(/\D/g, '');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const CATEGORIES = ['packs', 'streaming', 'vpn', 'musique', 'tv'];
+const CATEGORIES = ['packs', 'streaming', 'vpn', 'musique', 'tv', 'logiciels'];
 const STATUSES = ['new', 'confirmed', 'cancelled'];
 const PAYMENT_METHODS = ['', 'revolut', 'usdt', 'btc', 'eth', 'especes', 'virement', 'autre'];
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -122,6 +122,8 @@ function toOffer(r) {
     features: r.features,
     hue: r.hue,
     isPack: r.is_pack,
+    packItems: Array.isArray(r.pack_items) ? r.pack_items : [],
+    lowStockThreshold: r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold),
     active: r.active,
     sort: r.sort,
     rating: r.rating_avg == null ? null : Math.round(Number(r.rating_avg) * 10) / 10,
@@ -259,6 +261,113 @@ async function consumeTotp(secret, code) {
   return true;
 }
 
+// ----- Codes de secours 2FA : 10 codes à usage unique, stockés hachés (sha256) -----
+const BACKUP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function normalizeBackupCode(code) {
+  return String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function generateBackupCodes(n = 10) {
+  const codes = [];
+  while (codes.length < n) {
+    let c = '';
+    for (let i = 0; i < 10; i++) c += BACKUP_ALPHABET[crypto.randomInt(BACKUP_ALPHABET.length)];
+    if (!codes.includes(c)) codes.push(c);
+  }
+  return codes;
+}
+async function getBackupHashes() {
+  try {
+    const a = JSON.parse((await getSetting('admin_backup_codes')) || '[]');
+    return Array.isArray(a) ? a : [];
+  } catch (e) {
+    return [];
+  }
+}
+// Remplace les codes existants ; renvoie les codes en clair (affichés une seule fois)
+async function storeBackupCodes() {
+  const codes = generateBackupCodes();
+  await putSetting('admin_backup_codes', JSON.stringify(codes.map((c) => sha256hex(c))));
+  return codes.map((c) => c.slice(0, 5) + '-' + c.slice(5));
+}
+async function consumeBackupCode(code) {
+  const c = normalizeBackupCode(code);
+  if (c.length !== 10) return false;
+  const hashes = await getBackupHashes();
+  const i = hashes.indexOf(sha256hex(c));
+  if (i < 0) return false;
+  hashes.splice(i, 1);
+  await putSetting('admin_backup_codes', JSON.stringify(hashes));
+  return true;
+}
+// Renvoie 'totp', 'backup' ou false
+async function verifySecondFactor(secret, code) {
+  const raw = String(code || '').trim();
+  if (/^\d{6}$/.test(raw.replace(/\s/g, ''))) return (await consumeTotp(secret, raw)) ? 'totp' : false;
+  return (await consumeBackupCode(raw)) ? 'backup' : false;
+}
+
+// ----- Liste blanche d'IP pour l'admin (IPv4, IPv4 CIDR, IPv6 exacte) -----
+function normalizeIp(ip) {
+  let s = String(ip || '').trim().toLowerCase();
+  if (s.startsWith('::ffff:') && s.includes('.')) s = s.slice(7);
+  return s;
+}
+function ipv4ToInt(s) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+  if (!m) return null;
+  let n = 0;
+  for (let i = 1; i <= 4; i++) {
+    const p = Number(m[i]);
+    if (p > 255) return null;
+    n = n * 256 + p;
+  }
+  return n;
+}
+function parseAllowEntry(raw) {
+  const s = normalizeIp(raw);
+  const cidr = /^([0-9.]+)\/(\d{1,2})$/.exec(s);
+  if (cidr) {
+    const base = ipv4ToInt(cidr[1]);
+    const bits = Number(cidr[2]);
+    if (base === null || bits > 32) return null;
+    return { base, bits };
+  }
+  const single = ipv4ToInt(s);
+  if (single !== null) return { base: single, bits: 32 };
+  if (s.length <= 45 && s.includes(':') && /^[0-9a-f:]+$/.test(s)) return { v6: s };
+  return null;
+}
+function ipMatches(entry, ip) {
+  if (entry.v6) return entry.v6 === ip;
+  const n = ipv4ToInt(ip);
+  if (n === null) return false;
+  const size = 2 ** (32 - entry.bits);
+  return Math.floor(n / size) === Math.floor(entry.base / size);
+}
+async function getIpAllowlist() {
+  try {
+    const a = JSON.parse((await getSetting('admin_ip_allowlist')) || '[]');
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [];
+  } catch (e) {
+    return [];
+  }
+}
+// ADMIN_IP_ALLOW_OFF=1 dans .env ignore la liste (secours en cas de blocage)
+async function ipGuard(req, res, next) {
+  try {
+    if (process.env.ADMIN_IP_ALLOW_OFF === '1') return next();
+    const list = await getIpAllowlist();
+    if (!list.length) return next();
+    const ip = normalizeIp(req.ip);
+    if (list.map(parseAllowEntry).some((e) => e && ipMatches(e, ip))) return next();
+    console.warn('[admin] accès refusé par la liste blanche : ' + ip);
+    if (req.originalUrl.startsWith('/api/')) return res.status(403).json({ error: 'Accès refusé depuis cette adresse IP.' });
+    res.status(403).type('text').send('Accès refusé.');
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function adminSession(req) {
   const token = readCookieValue(req, ADMIN_COOKIE);
   if (!token) return null;
@@ -312,6 +421,10 @@ function parseOffer(b) {
     features,
     hue: clampInt(b.hue, 0, 360, 330),
     isPack: !!b.isPack,
+    packItems: Array.isArray(b.packItems)
+      ? b.packItems.map(Number).filter((n) => Number.isInteger(n) && n > 0)
+      : [],
+    lowStockThreshold: clampInt(b.lowStockThreshold, 0, 100, 2),
     active: b.active === undefined ? true : !!b.active,
     sort: clampInt(b.sort, -9999, 9999, 0)
   };
@@ -353,7 +466,7 @@ app.get(
   '/api/offers',
   wrap(async (req, res) => {
     const { rows } = await pool.query(`SELECT o.*, ra.rating_avg, ra.review_count FROM offers o ${REVIEW_AGG}
-                                       WHERE o.active ORDER BY o.sort, o.id`);
+                                       WHERE o.active ORDER BY COALESCE(ra.review_count, 0) DESC, o.sort, o.id`);
     res.json(rows.map(toOffer));
   })
 );
@@ -426,7 +539,9 @@ app.post(
     const sum = rows.reduce((s, r) => s + Number(r.price), 0);
     const discount = rows.length >= settings.discountMin && settings.discountPct > 0;
     const items = rows.map((r) => ({ id: r.id, name: r.name, price: Number(r.price) }));
-    const name = str(req.body.name, 60);
+    const name = str(req.body.name || req.body.firstName, 60);
+    const lastName = str(req.body.lastName, 60);
+    const phone = str(req.body.phone, 30);
     const affiliation = str(req.body.affiliation, 60);
     const promoCode = normCode(req.body.promoCode);
 
@@ -447,9 +562,9 @@ app.post(
       if (promo) t = t * (1 - promo.pct / 100);
       total = round2(t);
       const ins = await client.query(
-        `INSERT INTO orders (customer_name, items, total, discount, promo_code, promo_pct)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [name, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null]
+        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -467,6 +582,7 @@ app.post(
       (discount ? ' (remise ' + settings.discountPct + ' % incluse)' : '') +
       (promo ? ' (code ' + promo.code + ' −' + promo.pct + ' % inclus)' : '') + '.' +
       (name ? ' Prénom : ' + name + '.' : '') +
+      (phone ? ' Tél : ' + phone + '.' : '') +
       (affiliation ? ' Affiliation : ' + affiliation + '.' : '');
 
     notifyLater(
@@ -475,7 +591,8 @@ app.post(
       'Total : ' + money(total) + '/an' +
       (discount ? ' · remise pack −' + settings.discountPct + ' %' : '') +
       (promo ? ' · code ' + promo.code + ' −' + promo.pct + ' %' : '') +
-      (name ? '\nPrénom : ' + name : '') +
+      (name ? '\nClient : ' + [name, lastName].filter(Boolean).join(' ') : '') +
+      (phone ? '\nTél : ' + phone : '') +
       (affiliation ? '\nAffiliation : ' + affiliation : '') +
       '\n' + SITE_URL + '/admin'
     );
@@ -488,8 +605,80 @@ app.post(
   })
 );
 
+// ----- Espace Client / Fiche d'accès sécurisée par lien privé -----
+app.get(
+  '/api/acces/:token',
+  wrap(async (req, res) => {
+    const token = str(req.params.token, 64);
+    if (!token) throw new HttpError(400, 'Lien invalide.');
+
+    const ordRes = await pool.query(
+      `SELECT id, customer_name, customer_last_name, customer_phone, items, total, status, created_at,
+              to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at,
+              expires_at AS raw_expires_at, access_token
+       FROM orders
+       WHERE access_token = $1`,
+      [token]
+    );
+    if (!ordRes.rowCount) throw new HttpError(404, 'Fiche d\'accès introuvable ou lien expiré.');
+    const ord = ordRes.rows[0];
+
+    const accRes = await pool.query(
+      `SELECT a.id, a.offer_id, a.service_name, a.login, a.password, a.slot_profile, a.notes,
+              o.name AS offer_name, o.hue, o.is_pack, o.pack_items
+       FROM accounts a
+       JOIN offers o ON o.id = a.offer_id
+       WHERE a.order_id = $1 AND a.status = 'assigned'
+       ORDER BY a.id ASC`,
+      [ord.id]
+    );
+
+    let daysRemaining = null;
+    let isExpired = false;
+    if (ord.raw_expires_at) {
+      const now = new Date();
+      const diffMs = new Date(ord.raw_expires_at).getTime() - now.getTime();
+      daysRemaining = Math.ceil(diffMs / (24 * 3600 * 1000));
+      isExpired = daysRemaining < 0;
+    }
+
+    res.json({
+      order: {
+        id: ord.id,
+        customerName: [ord.customer_name, ord.customer_last_name].filter(Boolean).join(' ') || 'Client',
+        status: ord.status,
+        createdAt: ord.created_at,
+        expiresAt: ord.expires_at,
+        daysRemaining,
+        isExpired,
+        items: ord.items
+      },
+      accounts: accRes.rows.map((a) => ({
+        id: a.id,
+        offerId: a.offer_id,
+        serviceName: a.offer_name || a.service_name,
+        login: a.login,
+        password: a.password,
+        slotProfile: a.slot_profile,
+        notes: a.notes,
+        hue: a.hue || 200,
+        isPack: a.is_pack,
+        packItems: a.pack_items || []
+      })),
+      waNumber: WA_NUMBER
+    });
+  })
+);
+
+app.get('/acces/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'access.html'));
+});
+
 // ----- Administration -----
 const noStore = (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
+
+// Liste blanche d'IP : s'applique à la page de connexion, à l'admin et à son API
+app.use(['/admin', '/api/admin'], ipGuard);
 
 app.get('/admin/login', noStore, wrap(async (req, res) => {
   if (await adminSession(req)) return res.redirect(302, '/admin');
@@ -517,8 +706,11 @@ app.post(
     let ok = safeEqual(user, ADMIN_USER) & safeEqual(pass, ADMIN_PASSWORD);
     let reason = ok ? '' : 'identifiants';
     const secret = await getSetting('admin_totp_secret');
+    let usedBackup = false;
     if (ok && secret) {
-      if (!(await consumeTotp(secret, req.body.code))) { ok = 0; reason = 'code 2FA'; }
+      const factor = await verifySecondFactor(secret, req.body.code);
+      if (!factor) { ok = 0; reason = 'code 2FA'; }
+      else usedBackup = factor === 'backup';
     }
 
     if (!ok) {
@@ -543,7 +735,11 @@ app.post(
       [sha256hex(token), ip, String(req.get('user-agent') || '').slice(0, 300)]
     );
     setAdminCookie(res, token, ADMIN_SESSION_HOURS * 3600);
-    await audit(req, 'login.ok', { ua: String(req.get('user-agent') || '').slice(0, 150) });
+    await audit(req, 'login.ok', { ua: String(req.get('user-agent') || '').slice(0, 150), codeSecours: usedBackup });
+    if (usedBackup) {
+      const left = (await getBackupHashes()).length;
+      notifyLater('⚠️ Connexion à l\'admin NeonPass avec un code de secours. Codes restants : ' + left + '.');
+    }
     notifyLater('🔐 Connexion à l\'admin NeonPass\nIP : ' + ip + '\n' + String(req.get('user-agent') || '').slice(0, 120));
     res.json({ ok: true });
   })
@@ -587,7 +783,11 @@ admin.get('/security', wrap(async (req, res) => {
   res.json({
     totp: !!(await getSetting('admin_totp_secret')),
     defaultPassword: DEFAULT_ADMIN_PASSWORDS.includes(ADMIN_PASSWORD) || ADMIN_PASSWORD.length < 12,
-    sessions: sessions.rows
+    sessions: sessions.rows,
+    backupCodesLeft: (await getBackupHashes()).length,
+    ipAllowlist: await getIpAllowlist(),
+    ipAllowlistOff: process.env.ADMIN_IP_ALLOW_OFF === '1',
+    currentIp: normalizeIp(req.ip)
   });
 }));
 
@@ -612,17 +812,205 @@ admin.post('/totp/enable', wrap(async (req, res) => {
   await putSetting('admin_totp_secret', pending);
   await putSetting('admin_totp_pending', null);
   await putSetting('admin_totp_last', null);
+  const backupCodes = await storeBackupCodes();
   notifyLater('🔐 Double authentification ACTIVÉE sur l\'admin NeonPass.');
-  res.json({ ok: true });
+  res.json({ ok: true, backupCodes });
 }));
 
 admin.post('/totp/disable', wrap(async (req, res) => {
   const secret = await getSetting('admin_totp_secret');
   if (!secret) throw new HttpError(400, 'La double authentification n\'est pas active.');
-  if (!(await consumeTotp(secret, req.body.code))) throw new HttpError(400, 'Code incorrect.');
+  if (!(await verifySecondFactor(secret, req.body.code))) throw new HttpError(400, 'Code incorrect.');
   await putSetting('admin_totp_secret', null);
+  await putSetting('admin_backup_codes', null);
   notifyLater('⚠️ Double authentification DÉSACTIVÉE sur l\'admin NeonPass.');
   res.json({ ok: true });
+}));
+
+// Régénération des codes de secours (exige un code actuel de l'application)
+admin.post('/totp/backup-codes', wrap(async (req, res) => {
+  const secret = await getSetting('admin_totp_secret');
+  if (!secret) throw new HttpError(400, 'La double authentification n\'est pas active.');
+  if (!(await consumeTotp(secret, req.body.code))) throw new HttpError(400, 'Code incorrect.');
+  const backupCodes = await storeBackupCodes();
+  notifyLater('🔑 Codes de secours 2FA régénérés sur l\'admin NeonPass.');
+  res.json({ backupCodes });
+}));
+
+// Liste blanche d'IP : l'IP actuelle doit y figurer pour ne pas se bloquer soi-même
+admin.put('/ip-allowlist', wrap(async (req, res) => {
+  const input = Array.isArray(req.body.list) ? req.body.list : String(req.body.list || '').split(/[\s,;]+/);
+  const list = [];
+  for (const raw of input) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    if (!parseAllowEntry(s)) throw new HttpError(400, 'Adresse invalide : ' + s.slice(0, 50));
+    const norm = normalizeIp(s);
+    if (!list.includes(norm)) list.push(norm);
+  }
+  if (list.length > 50) throw new HttpError(400, '50 adresses maximum.');
+  const me = normalizeIp(req.ip);
+  if (list.length && !list.map(parseAllowEntry).some((e) => ipMatches(e, me))) {
+    throw new HttpError(400, 'Ton adresse actuelle (' + me + ') doit figurer dans la liste, sinon tu serais bloqué.');
+  }
+  await putSetting('admin_ip_allowlist', list.length ? JSON.stringify(list) : null);
+  res.json({ list, currentIp: me });
+}));
+
+// ----- Exports CSV (séparateur « ; » et BOM UTF-8 pour Excel en français) -----
+function csvCell(v) {
+  let s = v == null ? '' : String(v);
+  // Neutralise les formules (=, +, -, @) sauf les valeurs purement numériques ou téléphoniques
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?[0-9][0-9 ().,-]*$/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function sendCsv(res, filename, header, rows) {
+  const lines = [header, ...rows].map((r) => r.map(csvCell).join(';'));
+  res.set({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="' + filename + '"'
+  });
+  res.send('\uFEFF' + lines.join('\r\n') + '\r\n');
+}
+function csvMoney(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x.toFixed(2).replace('.', ',') : '';
+}
+const STATUS_LABELS = { new: 'Nouvelle', confirmed: 'Confirmée', cancelled: 'Annulée' };
+
+admin.get('/export/orders.csv', wrap(async (req, res) => {
+  const status = STATUSES.includes(req.query.status) ? req.query.status : null;
+  const { rows } = await pool.query(
+    `SELECT id, customer_name, customer_last_name, customer_phone, items, total::float AS total, discount,
+            promo_code, promo_pct, payment_method, notes, source, status,
+            to_char(created_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD HH24:MI') AS created,
+            to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at
+     FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 20000`,
+    [status]
+  );
+  const header = ['Réf.', 'Date', 'Prénom', 'Nom', 'Téléphone', 'Offres', 'Total (€)', 'Remise (€)', 'Code promo',
+    'Promo (%)', 'Paiement', 'Source', 'Statut', 'Échéance', 'Notes'];
+  const data = rows.map((o) => [
+    o.id,
+    o.created,
+    o.customer_name,
+    o.customer_last_name,
+    o.customer_phone,
+    (Array.isArray(o.items) ? o.items : []).map((it) => (it && it.name ? String(it.name) : '')).filter(Boolean).join(' + '),
+    csvMoney(o.total),
+    csvMoney(o.discount),
+    o.promo_code,
+    o.promo_pct,
+    o.payment_method,
+    o.source,
+    STATUS_LABELS[o.status] || o.status,
+    o.expires_at,
+    o.notes
+  ]);
+  await audit(req, 'export.orders', { lignes: rows.length, statut: status || 'toutes' });
+  sendCsv(res, 'commandes-' + new Date().toISOString().slice(0, 10) + '.csv', header, data);
+}));
+
+admin.get('/export/audit.csv', wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT to_char(at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD HH24:MI:SS') AS at_paris, ip, action, details
+     FROM admin_audit ORDER BY at DESC LIMIT 20000`
+  );
+  const data = rows.map((r) => [r.at_paris, r.ip, r.action, JSON.stringify(r.details || {})]);
+  await audit(req, 'export.audit', { lignes: rows.length });
+  sendCsv(res, 'journal-' + new Date().toISOString().slice(0, 10) + '.csv', ['Date', 'IP', 'Action', 'Détails'], data);
+}));
+
+// État du système : processus Node, connexion à la base et volumes de données
+admin.get('/system', wrap(async (req, res) => {
+  const t0 = process.hrtime.bigint();
+  await pool.query('SELECT 1');
+  const dbMs = Number(process.hrtime.bigint() - t0) / 1e6;
+  const info = await pool.query(
+    `SELECT current_setting('server_version') AS version,
+            pg_database_size(current_database())::float AS size,
+            (SELECT count(*) FROM orders)::int AS orders,
+            (SELECT count(*) FROM admin_sessions WHERE expires_at > now())::int AS sessions,
+            (SELECT count(*) FROM admin_audit)::int AS audit`
+  );
+  const mem = process.memoryUsage();
+  res.json({
+    node: process.version,
+    uptime: Math.round(process.uptime()),
+    rss: mem.rss,
+    heapUsed: mem.heapUsed,
+    dbMs: Math.round(dbMs * 10) / 10,
+    pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
+    pg: info.rows[0],
+    serverTime: new Date().toISOString()
+  });
+}));
+
+// Tableau de bord des ventes
+admin.get('/sales', wrap(async (req, res) => {
+  const months = await pool.query(`
+    WITH months AS (
+      SELECT generate_series(
+        date_trunc('month', now() AT TIME ZONE 'Europe/Paris') - interval '11 months',
+        date_trunc('month', now() AT TIME ZONE 'Europe/Paris'),
+        interval '1 month') AS m
+    )
+    SELECT to_char(months.m, 'YYYY-MM') AS month,
+           count(o.id)::int AS orders,
+           COALESCE(sum(o.total), 0)::float AS revenue
+    FROM months
+    LEFT JOIN orders o ON o.status = 'confirmed'
+      AND date_trunc('month', o.created_at AT TIME ZONE 'Europe/Paris') = months.m
+    GROUP BY months.m
+    ORDER BY months.m`);
+  const offers = await pool.query(`
+    SELECT it->>'name' AS name,
+           count(*)::int AS qty,
+           COALESCE(sum(CASE WHEN (it->>'price') ~ '^[0-9]+([.][0-9]+)?$' THEN (it->>'price')::numeric ELSE 0 END), 0)::float AS amount
+    FROM orders o,
+         jsonb_array_elements(CASE WHEN jsonb_typeof(o.items) = 'array' THEN o.items ELSE '[]'::jsonb END) AS it
+    WHERE o.status = 'confirmed'
+    GROUP BY it->>'name'
+    ORDER BY amount DESC, qty DESC
+    LIMIT 15`);
+  const kpis = await pool.query(`
+    SELECT
+      count(*)::int AS total_orders,
+      count(*) FILTER (WHERE status = 'confirmed')::int AS confirmed_count,
+      count(*) FILTER (WHERE status = 'new')::int AS pending_count,
+      COALESCE(sum(total) FILTER (WHERE status = 'confirmed'), 0)::float AS confirmed_revenue,
+      COALESCE(sum(total) FILTER (WHERE status = 'new'), 0)::float AS pending_revenue,
+      CASE WHEN count(*) FILTER (WHERE status = 'confirmed') > 0
+        THEN round(COALESCE(sum(total) FILTER (WHERE status = 'confirmed'), 0) / count(*) FILTER (WHERE status = 'confirmed'), 2)::float
+        ELSE 0 END AS avg_basket,
+      COALESCE(sum(total) FILTER (WHERE status = 'confirmed' AND date_trunc('month', created_at AT TIME ZONE 'Europe/Paris') = date_trunc('month', now() AT TIME ZONE 'Europe/Paris')), 0)::float AS month_revenue,
+      count(*) FILTER (WHERE status = 'confirmed' AND date_trunc('month', created_at AT TIME ZONE 'Europe/Paris') = date_trunc('month', now() AT TIME ZONE 'Europe/Paris'))::int AS month_orders,
+      CASE WHEN count(*) > 0
+        THEN round((count(*) FILTER (WHERE status = 'confirmed')::numeric / count(*)::numeric) * 100, 1)::float
+        ELSE 0 END AS conv_rate
+    FROM orders`);
+
+  const costQuery = await pool.query(`
+    SELECT
+      COALESCE(sum(cost), 0)::float AS total_expenses,
+      COALESCE(sum(cost) FILTER (WHERE status = 'assigned'), 0)::float AS assigned_cost,
+      count(*)::int AS total_stock,
+      count(*) FILTER (WHERE status = 'available')::int AS available_stock
+    FROM accounts
+  `);
+  const costs = costQuery.rows[0];
+  const totalRevenue = kpis.rows[0].confirmed_revenue;
+  const netMargin = Math.round((totalRevenue - costs.total_expenses) * 100) / 100;
+  const marginPct = totalRevenue > 0 ? Math.round(((netMargin / totalRevenue) * 100) * 10) / 10 : 0;
+  const enrichedKpis = {
+    ...kpis.rows[0],
+    total_expenses: costs.total_expenses,
+    net_margin: netMargin,
+    margin_pct: marginPct,
+    total_stock: costs.total_stock,
+    available_stock: costs.available_stock
+  };
+  res.json({ months: months.rows, offers: offers.rows, kpis: enrichedKpis });
 }));
 
 admin.get(
@@ -647,10 +1035,15 @@ admin.get(
   wrap(async (req, res) => {
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
-      `SELECT id, customer_name, customer_last_name, customer_phone, items, total::float AS total, discount,
-              promo_code, promo_pct, payment_method, notes, source, status, created_at,
-              to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, reminder_sent_at
-       FROM orders WHERE ($1::text IS NULL OR status = $1) ORDER BY created_at DESC LIMIT 500`,
+      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
+              o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
+              to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
+              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
+       FROM orders o
+       LEFT JOIN (
+         SELECT order_id, count(*)::int AS cnt FROM accounts GROUP BY order_id
+       ) acc ON acc.order_id = o.id
+       WHERE ($1::text IS NULL OR o.status = $1) ORDER BY o.created_at DESC LIMIT 500`,
       [status]
     );
     res.json(rows);
@@ -719,15 +1112,16 @@ admin.post(
       total = round2(discount ? sum * (1 - settings.discountPct / 100) : sum);
     }
 
+    const token = crypto.randomBytes(16).toString('hex');
     const r = await pool.query(
       `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount,
-                           payment_method, notes, status, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin') RETURNING id`,
+                           payment_method, notes, status, source, access_token)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', $10) RETURNING id, access_token`,
       [info.customer_name || '', info.customer_last_name || '', info.customer_phone || '', JSON.stringify(items),
-       total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed']
+       total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed', token]
     );
     await setDefaultExpiry(r.rows[0].id);
-    res.status(201).json({ ok: true, id: r.rows[0].id, total });
+    res.status(201).json({ ok: true, id: r.rows[0].id, total, accessToken: token });
   })
 );
 
@@ -735,6 +1129,23 @@ admin.patch(
   '/orders/:id',
   wrap(async (req, res) => {
     const info = parseOrderInfo(req.body);
+    if (Array.isArray(req.body.offerIds) && req.body.offerIds.length > 0) {
+      const raw = req.body.offerIds;
+      const ids = raw.map(Number).filter(Number.isInteger).slice(0, 20);
+      if (ids.length) {
+        const { rows } = await pool.query('SELECT id, name, price FROM offers WHERE id = ANY($1)', [ids]);
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        const items = ids.filter((id) => byId.has(id)).map((id) => ({ id, name: byId.get(id).name, price: Number(byId.get(id).price) }));
+        if (items.length) {
+          info.items = JSON.stringify(items);
+        }
+      }
+    }
+    if (req.body.total !== '' && req.body.total != null) {
+      const total = Number(req.body.total);
+      if (!(total >= 0 && total <= 99999)) throw new HttpError(400, 'Total invalide.');
+      info.total = round2(total);
+    }
     const cols = Object.keys(info);
     if (!cols.length) throw new HttpError(400, 'Rien à modifier.');
     const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
@@ -814,9 +1225,9 @@ admin.get(
   })
 );
 
-const OFFER_COLS = 'slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort';
+const OFFER_COLS = 'slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items, low_stock_threshold';
 function offerValues(o) {
-  return [o.slug, o.name, o.category, o.tag, o.price, o.was, o.description, JSON.stringify(o.features), o.hue, o.isPack, o.active, o.sort];
+  return [o.slug, o.name, o.category, o.tag, o.price, o.was, o.description, JSON.stringify(o.features), o.hue, o.isPack, o.active, o.sort, JSON.stringify(o.packItems || []), o.lowStockThreshold || 2];
 }
 function dupGuard(e) {
   if (e && e.code === '23505') throw new HttpError(409, 'Ce slug existe déjà, choisis-en un autre.');
@@ -829,7 +1240,7 @@ admin.post(
     const o = parseOffer(req.body);
     try {
       const r = await pool.query(
-        `INSERT INTO offers (${OFFER_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        `INSERT INTO offers (${OFFER_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
         offerValues(o)
       );
       res.status(201).json(toOffer(r.rows[0]));
@@ -846,7 +1257,7 @@ admin.put(
     try {
       const r = await pool.query(
         `UPDATE offers SET slug=$1, name=$2, category=$3, tag=$4, price=$5, was_price=$6, description=$7,
-                features=$8, hue=$9, is_pack=$10, active=$11, sort=$12 WHERE id=$13 RETURNING *`,
+                features=$8, hue=$9, is_pack=$10, active=$11, sort=$12, pack_items=$13, low_stock_threshold=$14 WHERE id=$15 RETURNING *`,
         [...offerValues(o), Number(req.params.id)]
       );
       if (!r.rowCount) throw new HttpError(404, 'Offre introuvable.');
@@ -950,6 +1361,797 @@ admin.delete(
   wrap(async (req, res) => {
     await pool.query('DELETE FROM promo_codes WHERE code = $1', [normCode(req.params.code)]);
     res.status(204).end();
+  })
+);
+
+async function checkLowStockAlert(offerId) {
+  if (!offerId) return;
+  try {
+    const oRes = await pool.query('SELECT id, name, is_pack, low_stock_threshold FROM offers WHERE id = $1', [offerId]);
+    if (!oRes.rowCount || oRes.rows[0].is_pack) return;
+    const off = oRes.rows[0];
+    const thresh = off.low_stock_threshold != null ? Number(off.low_stock_threshold) : 2;
+
+    const cntRes = await pool.query(
+      "SELECT count(*)::int AS cnt FROM accounts WHERE offer_id = $1 AND status = 'available'",
+      [off.id]
+    );
+    const avail = cntRes.rows[0].cnt;
+    if (avail <= thresh) {
+      const supRes = await pool.query(
+        "SELECT supplier, supplier_url, cost FROM accounts WHERE offer_id = $1 AND supplier != '' ORDER BY id DESC LIMIT 1",
+        [off.id]
+      );
+      const sup = supRes.rows[0] || {};
+      let msg = `⚠️ ALERTE STOCK BAS : ${off.name}\n` +
+                `Il ne reste que ${avail} compte(s) disponible(s) en stock (seuil critique configuré : ${thresh}) !`;
+      if (sup.supplier) msg += `\nFournisseur habituel : ${sup.supplier} (coût : ${sup.cost || 0} €)`;
+      if (sup.supplier_url) msg += `\nLien réapprovisionnement direct : ${sup.supplier_url}`;
+      notifyLater(msg);
+    }
+  } catch (e) {
+    console.error('[stock-alert] error:', e.message);
+  }
+}
+
+// ----- Coffre-fort de comptes & licences (Stock et attribution) -----
+admin.get(
+  '/accounts',
+  wrap(async (req, res) => {
+    const offerId = Number(req.query.offerId) || null;
+    const status = ['available', 'assigned', 'archived'].includes(req.query.status) ? req.query.status : null;
+    const supplier = str(req.query.supplier, 120);
+    const q = str(req.query.search, 80).toLowerCase();
+    const sort = req.query.sort || 'default';
+    const warrantyOnly = req.query.warranty === 'true';
+
+    let filterOfferIds = null;
+    if (offerId) {
+      const oRes = await pool.query('SELECT is_pack, pack_items FROM offers WHERE id = $1', [offerId]);
+      if (oRes.rowCount && oRes.rows[0].is_pack && Array.isArray(oRes.rows[0].pack_items) && oRes.rows[0].pack_items.length) {
+        filterOfferIds = oRes.rows[0].pack_items;
+      } else {
+        filterOfferIds = [offerId];
+      }
+    }
+
+    let sql = `
+      SELECT a.*, o.name AS offer_name, o.is_pack,
+             ord.customer_name, ord.customer_last_name, ord.customer_phone
+      FROM accounts a
+      JOIN offers o ON o.id = a.offer_id
+      LEFT JOIN orders ord ON ord.id = a.order_id
+      WHERE ($1::int[] IS NULL OR a.offer_id = ANY($1))
+        AND ($2::text IS NULL OR a.status = $2)
+        AND ($3::text IS NULL OR a.supplier = $3)
+    `;
+    const params = [filterOfferIds, status, supplier || null];
+    if (warrantyOnly) {
+      sql += ` AND a.warranty_claim = TRUE`;
+    }
+    if (q) {
+      sql += ` AND (lower(a.login) LIKE $4 OR lower(a.slot_profile) LIKE $4 OR lower(a.notes) LIKE $4 OR lower(COALESCE(a.private_notes, '')) LIKE $4 OR lower(a.supplier) LIKE $4 OR lower(o.name) LIKE $4 OR lower(COALESCE(ord.customer_name, '')) LIKE $4 OR lower(COALESCE(ord.customer_phone, '')) LIKE $4 OR lower(COALESCE(a.defect_reason, '')) LIKE $4)`;
+      params.push('%' + q + '%');
+    }
+
+    if (sort === 'recent') {
+      sql += ` ORDER BY a.created_at DESC LIMIT 500`;
+    } else if (sort === 'oldest') {
+      sql += ` ORDER BY a.created_at ASC LIMIT 500`;
+    } else if (sort === 'cost_desc') {
+      sql += ` ORDER BY a.cost DESC, a.created_at DESC LIMIT 500`;
+    } else if (sort === 'cost_asc') {
+      sql += ` ORDER BY a.cost ASC, a.created_at DESC LIMIT 500`;
+    } else if (sort === 'name_asc') {
+      sql += ` ORDER BY o.name ASC, a.created_at DESC LIMIT 500`;
+    } else {
+      sql += ` ORDER BY CASE a.status WHEN 'available' THEN 1 WHEN 'assigned' THEN 2 ELSE 3 END, a.created_at DESC LIMIT 500`;
+    }
+
+    const { rows } = await pool.query(sql, params);
+
+    const stock = await pool.query(`
+      SELECT o.id AS offer_id, o.name AS offer_name, o.is_pack, o.pack_items, o.low_stock_threshold,
+             count(*) FILTER (WHERE a.status = 'available')::int AS available_count,
+             count(*) FILTER (WHERE a.status = 'assigned')::int AS assigned_count,
+             count(a.id)::int AS total_count,
+             COALESCE(sum(a.cost), 0)::float AS total_cost
+      FROM offers o
+      LEFT JOIN accounts a ON a.offer_id = o.id
+      WHERE o.active
+      GROUP BY o.id, o.name, o.sort, o.is_pack, o.pack_items, o.low_stock_threshold
+      ORDER BY o.sort, o.id
+    `);
+
+    // Map counts per base service
+    const availMap = {};
+    const nameMap = {};
+    stock.rows.forEach((r) => {
+      availMap[r.offer_id] = Number(r.available_count || 0);
+      nameMap[r.offer_id] = r.offer_name;
+    });
+
+    // Compute pack virtual deliverable stock from base component stocks
+    stock.rows.forEach((r) => {
+      if (r.is_pack) {
+        const subIds = Array.isArray(r.pack_items) ? r.pack_items : [];
+        if (subIds.length) {
+          r.pack_deliverable_count = Math.min(...subIds.map((id) => availMap[id] || 0));
+          r.pack_components = subIds.map((id) => ({
+            id,
+            name: nameMap[id] || ('Service #' + id),
+            available: availMap[id] || 0
+          }));
+        } else {
+          r.pack_deliverable_count = 0;
+          r.pack_components = [];
+        }
+      }
+    });
+
+    // Alertes stock bas pour les offres unitaires sous le seuil
+    const lowStockAlerts = [];
+    stock.rows.forEach((r) => {
+      if (!r.is_pack) {
+        const thresh = r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold);
+        const avail = Number(r.available_count || 0);
+        if (avail <= thresh) {
+          lowStockAlerts.push({
+            offerId: r.offer_id,
+            offerName: r.offer_name,
+            available: avail,
+            threshold: thresh
+          });
+        }
+      }
+    });
+
+    const wRes = await pool.query('SELECT count(*)::int AS cnt FROM accounts WHERE warranty_claim = TRUE');
+    const warrantyClaimsCount = wRes.rows[0].cnt;
+
+    const suppliersRes = await pool.query(`
+      SELECT DISTINCT supplier FROM accounts WHERE supplier != '' ORDER BY supplier
+    `);
+
+    res.json({
+      accounts: rows,
+      stock: stock.rows,
+      summary: stock.rows,
+      suppliers: suppliersRes.rows.map((r) => r.supplier),
+      alerts: lowStockAlerts,
+      warrantyClaimsCount
+    });
+  })
+);
+
+admin.post(
+  '/accounts',
+  wrap(async (req, res) => {
+    const offerId = Number(req.body.offerId);
+    const login = str(req.body.login, 120);
+    const password = str(req.body.password, 120);
+    const slotProfile = str(req.body.slotProfile, 80);
+    const notes = str(req.body.notes, 1000);
+    const privateNotes = str(req.body.privateNotes, 2000);
+    const supplier = str(req.body.supplier, 120);
+    const supplierUrl = str(req.body.supplierUrl, 255);
+    const cost = Math.max(0, parseFloat(req.body.cost) || 0);
+
+    if (!offerId) throw new HttpError(400, 'Choisis une offre.');
+    if (!login) throw new HttpError(400, "L'identifiant / login est requis.");
+
+    const o = await pool.query('SELECT name FROM offers WHERE id = $1', [offerId]);
+    if (!o.rowCount) throw new HttpError(404, 'Offre introuvable.');
+
+    const r = await pool.query(
+      `INSERT INTO accounts (offer_id, service_name, login, password, slot_profile, notes, private_notes, supplier, supplier_url, cost, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'available') RETURNING *`,
+      [offerId, o.rows[0].name, login, password, slotProfile, notes, privateNotes, supplier, supplierUrl, cost]
+    );
+    res.status(201).json(r.rows[0]);
+  })
+);
+
+admin.patch(
+  '/accounts/:id',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const out = {};
+    if (req.body.offerId !== undefined) {
+      out.offer_id = Number(req.body.offerId);
+      const o = await pool.query('SELECT name FROM offers WHERE id = $1', [out.offer_id]);
+      if (o.rowCount) out.service_name = o.rows[0].name;
+    }
+    if (req.body.login !== undefined) out.login = str(req.body.login, 120);
+    if (req.body.password !== undefined) out.password = str(req.body.password, 120);
+    if (req.body.slotProfile !== undefined) out.slot_profile = str(req.body.slotProfile, 80);
+    if (req.body.notes !== undefined) out.notes = str(req.body.notes, 1000);
+    if (req.body.privateNotes !== undefined) out.private_notes = str(req.body.privateNotes, 2000);
+    if (req.body.supplier !== undefined) out.supplier = str(req.body.supplier, 120);
+    if (req.body.supplierUrl !== undefined) out.supplier_url = str(req.body.supplierUrl, 255);
+    if (req.body.cost !== undefined) out.cost = Math.max(0, parseFloat(req.body.cost) || 0);
+    if (req.body.orderId === null) {
+      out.order_id = null;
+      out.assigned_at = null;
+      out.status = 'available';
+    }
+    if (req.body.status !== undefined && ['available', 'assigned', 'archived'].includes(req.body.status)) {
+      out.status = req.body.status;
+      if (out.status === 'available') {
+        out.order_id = null;
+        out.assigned_at = null;
+      }
+    }
+    const cols = Object.keys(out);
+    if (!cols.length) throw new HttpError(400, 'Rien à modifier.');
+    const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
+    const r = await pool.query(
+      'UPDATE accounts SET ' + sets + ' WHERE id = $' + (cols.length + 1) + ' RETURNING *',
+      [...cols.map((c) => out[c]), id]
+    );
+    if (!r.rowCount) throw new HttpError(404, 'Compte introuvable.');
+    res.json(r.rows[0]);
+  })
+);
+
+admin.delete(
+  '/accounts/:id',
+  wrap(async (req, res) => {
+    await pool.query('DELETE FROM accounts WHERE id = $1', [Number(req.params.id) || 0]);
+    res.status(204).end();
+  })
+);
+
+admin.get(
+  '/orders/:id/accounts',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const { rows } = await pool.query(
+      `SELECT a.*, o.name AS offer_name
+       FROM accounts a
+       JOIN offers o ON o.id = a.offer_id
+       WHERE a.order_id = $1
+       ORDER BY a.assigned_at ASC, a.id ASC`,
+      [orderId]
+    );
+    res.json(rows);
+  })
+);
+
+admin.post(
+  '/orders/:id/assign-account',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const ord = await pool.query('SELECT id, status, customer_name, customer_phone FROM orders WHERE id = $1', [orderId]);
+    if (!ord.rowCount) throw new HttpError(404, 'Commande introuvable.');
+
+    if (req.body.accountId) {
+      const accId = Number(req.body.accountId);
+      const r = await pool.query('SELECT * FROM accounts WHERE id = $1 AND status = $2', [accId, 'available']);
+      if (!r.rowCount) throw new HttpError(400, 'Ce compte n\'est pas disponible.');
+      const account = r.rows[0];
+      const upd = await pool.query(
+        `UPDATE accounts SET status = 'assigned', order_id = $1, assigned_at = now() WHERE id = $2 RETURNING *`,
+        [orderId, account.id]
+      );
+      checkLowStockAlert(account.offer_id);
+      return res.json({ ok: true, account: upd.rows[0], accounts: [upd.rows[0]] });
+    }
+
+    if (req.body.offerId) {
+      const offerId = Number(req.body.offerId);
+      const offRes = await pool.query('SELECT id, name, is_pack, pack_items FROM offers WHERE id = $1', [offerId]);
+      if (!offRes.rowCount) throw new HttpError(404, 'Offre introuvable.');
+      const targetOffer = offRes.rows[0];
+
+      if (targetOffer.is_pack) {
+        const subIds = Array.isArray(targetOffer.pack_items) ? targetOffer.pack_items : [];
+        if (!subIds.length) {
+          throw new HttpError(400, 'Ce pack ne contient aucun service configuré.');
+        }
+
+        const accountsToAssign = [];
+        for (const subId of subIds) {
+          const subOff = await pool.query('SELECT id, name FROM offers WHERE id = $1', [subId]);
+          const subName = subOff.rowCount ? subOff.rows[0].name : 'Service #' + subId;
+          const r = await pool.query(
+            'SELECT * FROM accounts WHERE offer_id = $1 AND status = $2 ORDER BY id ASC LIMIT 1',
+            [subId, 'available']
+          );
+          if (!r.rowCount) {
+            throw new HttpError(400, 'Stock insuffisant pour ' + subName + ' dans le ' + targetOffer.name + '.');
+          }
+          accountsToAssign.push(r.rows[0]);
+        }
+
+        const assigned = [];
+        for (const acc of accountsToAssign) {
+          const upd = await pool.query(
+            `UPDATE accounts SET status = 'assigned', order_id = $1, assigned_at = now() WHERE id = $2 RETURNING *`,
+            [orderId, acc.id]
+          );
+          assigned.push(upd.rows[0]);
+        }
+        for (const subId of subIds) {
+          checkLowStockAlert(subId);
+        }
+        return res.json({ ok: true, isPack: true, accounts: assigned, account: assigned[0] });
+      } else {
+        const r = await pool.query(
+          'SELECT * FROM accounts WHERE offer_id = $1 AND status = $2 ORDER BY id ASC LIMIT 1',
+          [offerId, 'available']
+        );
+        if (!r.rowCount) throw new HttpError(400, 'Aucun compte disponible en stock pour cette offre.');
+        const account = r.rows[0];
+        const upd = await pool.query(
+          `UPDATE accounts SET status = 'assigned', order_id = $1, assigned_at = now() WHERE id = $2 RETURNING *`,
+          [orderId, account.id]
+        );
+        checkLowStockAlert(offerId);
+        return res.json({ ok: true, account: upd.rows[0], accounts: [upd.rows[0]] });
+      }
+    }
+
+    throw new HttpError(400, 'Indique un accountId ou un offerId.');
+  })
+);
+
+admin.post(
+  '/orders/:id/replace-account/:accountId',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const accountId = Number(req.params.accountId) || 0;
+    const reason = str(req.body.reason, 255) || 'Signalement client / Non fonctionnel';
+
+    const ordRes = await pool.query(
+      'SELECT id, customer_name, customer_last_name, customer_phone, access_token FROM orders WHERE id = $1',
+      [orderId]
+    );
+    if (!ordRes.rowCount) throw new HttpError(404, 'Commande introuvable.');
+    const ord = ordRes.rows[0];
+
+    const oldRes = await pool.query(
+      'SELECT * FROM accounts WHERE id = $1 AND order_id = $2',
+      [accountId, orderId]
+    );
+    if (!oldRes.rowCount) throw new HttpError(404, 'Ce compte n\'est pas associé à cette commande.');
+    const oldAcc = oldRes.rows[0];
+
+    const repRes = await pool.query(
+      'SELECT * FROM accounts WHERE offer_id = $1 AND status = $2 ORDER BY id ASC LIMIT 1',
+      [oldAcc.offer_id, 'available']
+    );
+    if (!repRes.rowCount) {
+      throw new HttpError(400, `Stock épuisé pour ${oldAcc.service_name || 'ce service'}. Impossible de remplacer immédiatement.`);
+    }
+    const newAcc = repRes.rows[0];
+
+    await pool.query(
+      `UPDATE accounts
+       SET status = 'archived', warranty_claim = TRUE, defect_reason = $1, defect_at = now(), replaced_by_account_id = $2, order_id = NULL
+       WHERE id = $3`,
+      [reason, newAcc.id, oldAcc.id]
+    );
+
+    const updNew = await pool.query(
+      `UPDATE accounts SET status = 'assigned', order_id = $1, assigned_at = now() WHERE id = $2 RETURNING *`,
+      [orderId, newAcc.id]
+    );
+
+    checkLowStockAlert(oldAcc.offer_id);
+
+    const clientPhone = waPhone(ord.customer_phone);
+    const clientName = [ord.customer_name, ord.customer_last_name].filter(Boolean).join(' ') || 'Client';
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const accessUrl = ord.access_token ? `${baseUrl}/acces/${ord.access_token}` : '';
+    let msg = `Bonjour ${clientName},\n\nSuite à votre signalement, nous avons procédé au remplacement immédiat de votre accès pour *${oldAcc.service_name}* sous garantie NeonPass.\n\n` +
+      `🔑 *Nouvel Identifiant :* ${newAcc.login}\n` +
+      `🔒 *Nouveau Mot de passe :* ${newAcc.password}\n`;
+    if (newAcc.slot_profile) msg += `👤 *Profil / Écran :* ${newAcc.slot_profile}\n`;
+    if (newAcc.notes) msg += `📌 *Consignes :* ${newAcc.notes}\n`;
+    if (accessUrl) msg += `\n🔗 *Votre fiche d'accès sécurisée :* ${accessUrl}\n`;
+    msg += `\nToutes nos excuses pour ce contretemps. Si vous avez la moindre question, nous restons à votre entière disposition !`;
+
+    const whatsappUrl = clientPhone ? 'https://wa.me/' + clientPhone + '?text=' + encodeURIComponent(msg) : null;
+
+    res.json({
+      ok: true,
+      oldAccountId: oldAcc.id,
+      newAccount: updNew.rows[0],
+      replacementMessage: msg,
+      whatsappUrl
+    });
+  })
+);
+
+admin.post(
+  '/accounts/:id/close-warranty',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const r = await pool.query('UPDATE accounts SET warranty_claim = FALSE WHERE id = $1 RETURNING id', [id]);
+    if (!r.rowCount) throw new HttpError(404, 'Compte introuvable.');
+    res.json({ ok: true });
+  })
+);
+
+admin.post(
+  '/orders/:id/unassign-account/:accountId',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const accountId = Number(req.params.accountId) || 0;
+    const r = await pool.query(
+      `UPDATE accounts SET status = 'available', order_id = NULL, assigned_at = NULL
+       WHERE id = $1 AND order_id = $2 RETURNING id`,
+      [accountId, orderId]
+    );
+    if (!r.rowCount) throw new HttpError(404, 'Ce compte n\'est pas lié à cette commande.');
+    res.json({ ok: true });
+  })
+);
+
+// ----- Clients (Annuaire & Historique unifié) -----
+admin.get(
+  '/clients',
+  wrap(async (req, res) => {
+    const q = str(req.query.search, 80).toLowerCase();
+    let sql = `
+      WITH unified_clients AS (
+        SELECT
+          c.id AS client_id,
+          c.name,
+          c.phone,
+          c.notes,
+          c.airtable_id,
+          c.created_at,
+          COALESCE(NULLIF(regexp_replace(c.phone, '[^0-9]', '', 'g'), ''), lower(c.name)) AS match_key
+        FROM clients c
+        UNION
+        SELECT
+          NULL AS client_id,
+          trim(concat(o.customer_name, ' ', o.customer_last_name)) AS name,
+          o.customer_phone AS phone,
+          '' AS notes,
+          NULL AS airtable_id,
+          min(o.created_at) AS created_at,
+          COALESCE(NULLIF(regexp_replace(o.customer_phone, '[^0-9]', '', 'g'), ''), lower(concat(o.customer_name, ' ', o.customer_last_name))) AS match_key
+        FROM orders o
+        WHERE o.customer_name != '' OR o.customer_phone != ''
+        GROUP BY match_key, o.customer_name, o.customer_last_name, o.customer_phone
+      ),
+      dedup AS (
+        SELECT
+          max(client_id) AS id,
+          max(name) AS name,
+          max(phone) AS phone,
+          max(notes) AS notes,
+          max(airtable_id) AS airtable_id,
+          min(created_at) AS created_at,
+          match_key
+        FROM unified_clients
+        WHERE match_key IS NOT NULL AND match_key != ''
+        GROUP BY match_key
+      )
+      SELECT
+        d.*,
+        count(o.id)::int AS orders_count,
+        COALESCE(sum(o.total) FILTER (WHERE o.status = 'confirmed'), 0)::float AS total_spent,
+        max(o.created_at) AS last_order_at
+      FROM dedup d
+      LEFT JOIN orders o ON
+        (NULLIF(d.phone, '') IS NOT NULL AND o.customer_phone = d.phone)
+        OR (lower(d.name) = lower(trim(concat(o.customer_name, ' ', o.customer_last_name))))
+    `;
+    const params = [];
+    if (q) {
+      sql += ` WHERE (lower(d.name) LIKE $1 OR lower(d.phone) LIKE $1 OR lower(d.notes) LIKE $1)`;
+      params.push('%' + q + '%');
+    }
+    sql += ` GROUP BY d.id, d.name, d.phone, d.notes, d.airtable_id, d.created_at, d.match_key
+             ORDER BY total_spent DESC, last_order_at DESC NULLS LAST LIMIT 300`;
+
+    const { rows } = await pool.query(sql, params);
+    res.json({ clients: rows });
+  })
+);
+
+admin.post(
+  '/clients',
+  wrap(async (req, res) => {
+    const name = str(req.body.name, 100);
+    const phone = str(req.body.phone, 40);
+    const notes = str(req.body.notes, 500);
+    if (!name && !phone) throw new HttpError(400, 'Nom ou numéro de téléphone requis.');
+    const r = await pool.query(
+      `INSERT INTO clients (name, phone, notes) VALUES ($1, $2, $3) RETURNING *`,
+      [name, phone, notes]
+    );
+    res.status(201).json(r.rows[0]);
+  })
+);
+
+admin.patch(
+  '/clients/:id',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const out = {};
+    if (req.body.name !== undefined) out.name = str(req.body.name, 100);
+    if (req.body.phone !== undefined) out.phone = str(req.body.phone, 40);
+    if (req.body.notes !== undefined) out.notes = str(req.body.notes, 500);
+    const cols = Object.keys(out);
+    if (!cols.length) throw new HttpError(400, 'Rien à modifier.');
+    const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
+    const r = await pool.query(
+      'UPDATE clients SET ' + sets + ' WHERE id = $' + (cols.length + 1) + ' RETURNING *',
+      [...cols.map((c) => out[c]), id]
+    );
+    if (!r.rowCount) throw new HttpError(404, 'Client introuvable.');
+    res.json(r.rows[0]);
+  })
+);
+
+admin.delete(
+  '/clients/:id',
+  wrap(async (req, res) => {
+    const id = Number(req.params.id) || 0;
+    await pool.query('DELETE FROM clients WHERE id = $1', [id]);
+    res.status(204).end();
+  })
+);
+
+admin.get(
+  '/clients/:key',
+  wrap(async (req, res) => {
+    const rawKey = req.params.key.trim();
+    const cleanPhone = rawKey.replace(/[^0-9]/g, '');
+
+    // 1. Profil client
+    let client = null;
+    if (cleanPhone) {
+      const cr = await pool.query(
+        `SELECT * FROM clients WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 LIMIT 1`,
+        [cleanPhone]
+      );
+      if (cr.rowCount) client = cr.rows[0];
+    }
+    if (!client) {
+      const cr = await pool.query(
+        `SELECT * FROM clients WHERE lower(name) = lower($1) OR id = $2::int LIMIT 1`,
+        [rawKey, Number.isInteger(Number(rawKey)) ? Number(rawKey) : 0]
+      );
+      if (cr.rowCount) client = cr.rows[0];
+    }
+
+    // 2. Commandes du client
+    const ordersRes = await pool.query(
+      `SELECT * FROM orders
+       WHERE (NULLIF($1, '') IS NOT NULL AND regexp_replace(customer_phone, '[^0-9]', '', 'g') = $1)
+          OR (NULLIF($2, '') IS NOT NULL AND lower(trim(concat(customer_name, ' ', customer_last_name))) = lower($2))
+       ORDER BY created_at DESC`,
+      [cleanPhone, client ? client.name : rawKey]
+    );
+    const orders = ordersRes.rows;
+    const orderIds = orders.map((o) => o.id);
+
+    // 3. Accès / comptes attribués
+    let accounts = [];
+    if (orderIds.length) {
+      const accRes = await pool.query(
+        `SELECT a.*, o.name AS offer_name
+         FROM accounts a
+         JOIN offers o ON o.id = a.offer_id
+         WHERE a.order_id = ANY($1)
+         ORDER BY a.assigned_at DESC NULLS LAST, a.id DESC`,
+        [orderIds]
+      );
+      accounts = accRes.rows;
+    }
+
+    const firstOrder = orders[0] || {};
+    const defaultName = [firstOrder.customer_name, firstOrder.customer_last_name].filter(Boolean).join(' ') || rawKey;
+    const defaultPhone = firstOrder.customer_phone || (cleanPhone ? '+' + cleanPhone : '');
+
+    res.json({
+      client: client || {
+        id: null,
+        name: defaultName,
+        phone: defaultPhone,
+        notes: ''
+      },
+      orders,
+      accounts
+    });
+  })
+);
+
+// ----- Import & Synchronisation Airtable (SubManager) -----
+admin.post(
+  '/sync-airtable',
+  wrap(async (req, res) => {
+    const baseId = str(req.body.baseId, 60) || process.env.AIRTABLE_BASE_ID || '';
+    const token = str(req.body.token, 200) || process.env.AIRTABLE_TOKEN || '';
+    if (!baseId || !token) {
+      throw new HttpError(400, "Identifiants Airtable manquants (AIRTABLE_BASE_ID / AIRTABLE_TOKEN non configurés).");
+    }
+
+    async function fetchAirtable(table) {
+      let records = [];
+      let offset = null;
+      do {
+        const u = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}` + (offset ? `?offset=${offset}` : '');
+        const r = await fetch(u, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new HttpError(r.status, `Erreur Airtable (${table}) : ` + (err.error?.message || r.statusText));
+        }
+        const data = await r.json();
+        if (data.records) records.push(...data.records);
+        offset = data.offset;
+      } while (offset);
+      return records;
+    }
+
+    const [achats, clientsAirtable, produitsAirtable, ventesAirtable] = await Promise.all([
+      fetchAirtable('Achats / Fournisseurs'),
+      fetchAirtable('Clients'),
+      fetchAirtable('Services / Produits').catch(() => []),
+      fetchAirtable('Ventes').catch(() => [])
+    ]);
+
+    // Map Airtable product recordId -> Name
+    const airtableProdMap = {};
+    produitsAirtable.forEach((p) => {
+      airtableProdMap[p.id] = p.fields['Nom du Service'] || p.fields['Nom'] || 'Service';
+    });
+
+    // 1. Sync / match existing offers in DB
+    const existingOffersRes = await pool.query('SELECT id, name, slug, is_pack FROM offers');
+    const existingOffers = existingOffersRes.rows;
+
+    function findOrCreateOffer(serviceName) {
+      const clean = (serviceName || '').trim().toLowerCase();
+      const match = existingOffers.find((o) => {
+        if (o.is_pack) return false; // Ne jamais associer du stock fournisseur à un pack commercial
+        const oName = o.name.toLowerCase();
+        return oName === clean || oName.includes(clean) || clean.includes(oName);
+      });
+      return match || null;
+    }
+
+    // For any Airtable product without match, create an offer in offers
+    for (const [prodId, prodName] of Object.entries(airtableProdMap)) {
+      if (prodName && !prodName.startsWith('rec') && !findOrCreateOffer(prodName)) {
+        const slug = prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'service-' + Date.now();
+        const ins = await pool.query(
+          `INSERT INTO offers (slug, name, category, tag, price, description, features, hue, is_pack, active, sort)
+           VALUES ($1, $2, 'streaming', 'Import', 35, 'Importé depuis SubManager', '[]'::jsonb, 200, FALSE, TRUE, 150)
+           RETURNING id, name, slug, is_pack`,
+          [slug, prodName]
+        );
+        existingOffers.push(ins.rows[0]);
+      }
+    }
+
+    const defaultOffer = existingOffers.find((o) => !o.is_pack) || existingOffers[0];
+
+    function parseCreds(notes) {
+      if (!notes) return { login: 'Compte', password: '' };
+      const strVal = String(notes).trim();
+      const firstLine = strVal.split('\n')[0].trim();
+      const part = firstLine.split('|')[0].trim();
+      if (part.includes(':') && !part.startsWith('http')) {
+        const idx = part.indexOf(':');
+        const login = part.slice(0, idx).trim();
+        const pass = part.slice(idx + 1).split(/\s+/)[0].trim();
+        return { login: login || 'Compte', password: pass };
+      }
+      return { login: part || strVal.slice(0, 100) || 'Compte', password: '' };
+    }
+
+    // 2. Import / Sync Achats into accounts
+    let importedStocks = 0;
+    for (const a of achats) {
+      const f = a.fields;
+      const rawProd = f['Produit acheté'] || f['Produit'] || '';
+      const prodName = Array.isArray(rawProd) ? (airtableProdMap[rawProd[0]] || 'Service') : (rawProd || 'Service');
+      const offer = findOrCreateOffer(prodName) || defaultOffer;
+
+      const rawNotes = f['Notes / Identifiants fournisseur'] || f['Notes'] || '';
+      const creds = parseCreds(rawNotes);
+      const supplier = str(f['Fournisseur / Plateforme'] || f['Fournisseur'] || '', 120);
+      const supplierUrl = str(f['Lien du site (URL)'] || f['URL'] || '', 255);
+      const cost = Math.max(0, parseFloat(f["Prix d'Achat Unitaire (€)"] || f["Prix d'Achat"] || '0') || 0);
+      const rawStatus = String(f['Statut du Stock'] || f['Statut'] || '').toLowerCase();
+      const status = rawStatus.includes('disponible') ? 'available' : 'assigned';
+
+      await pool.query(
+        `INSERT INTO accounts (offer_id, service_name, login, password, notes, supplier, supplier_url, cost, status, airtable_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (airtable_id) DO UPDATE SET
+           offer_id = EXCLUDED.offer_id,
+           service_name = EXCLUDED.service_name,
+           login = EXCLUDED.login,
+           password = CASE WHEN EXCLUDED.password != '' THEN EXCLUDED.password ELSE accounts.password END,
+           notes = EXCLUDED.notes,
+           supplier = EXCLUDED.supplier,
+           supplier_url = EXCLUDED.supplier_url,
+           cost = EXCLUDED.cost,
+           status = EXCLUDED.status`,
+        [offer.id, offer.name, creds.login, creds.password, rawNotes, supplier, supplierUrl, cost, status, a.id]
+      );
+      importedStocks++;
+    }
+
+    // 3. Import / Sync Clients into clients
+    let importedClients = 0;
+    const clientMapByAirtableId = {};
+    for (const c of clientsAirtable) {
+      const f = c.fields;
+      const name = str(f['Nom & Prénom'] || f['Nom Client'] || f['Nom'] || 'Client', 100);
+      const rawPhone = String(f['Numéro WhatsApp / Téléphone'] || f['Téléphone'] || f['WhatsApp'] || '').trim();
+      const phone = str(rawPhone.replace(/[\u202A\u202C\s]/g, ''), 40);
+
+      const ins = await pool.query(
+        `INSERT INTO clients (name, phone, airtable_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (airtable_id) DO UPDATE SET
+           name = EXCLUDED.name,
+           phone = EXCLUDED.phone
+         RETURNING id, name, phone`,
+        [name, phone, c.id]
+      );
+      clientMapByAirtableId[c.id] = ins.rows[0];
+      importedClients++;
+    }
+
+    // 4. Link Ventes to accounts and orders
+    let linkedSales = 0;
+    for (const v of ventesAirtable) {
+      const f = v.fields;
+      const linkedPurchases = f['Achats / Fournisseurs'];
+      const linkedClients = f['Clients'];
+      if (!Array.isArray(linkedPurchases) || !linkedPurchases.length) continue;
+      const purchaseAirtableId = linkedPurchases[0];
+
+      const accRes = await pool.query('SELECT id, offer_id, service_name FROM accounts WHERE airtable_id = $1', [purchaseAirtableId]);
+      if (!accRes.rowCount) continue;
+      const acc = accRes.rows[0];
+
+      let clientInfo = { name: 'Client SubManager', phone: '' };
+      if (Array.isArray(linkedClients) && linkedClients.length && clientMapByAirtableId[linkedClients[0]]) {
+        clientInfo = clientMapByAirtableId[linkedClients[0]];
+      }
+
+      const saleDate = f['Date & Heure de vente'] ? new Date(f['Date & Heure de vente']) : new Date();
+      const expiresAt = new Date(saleDate.getTime() + 365 * 24 * 3600 * 1000);
+
+      const checkOrd = await pool.query('SELECT id FROM accounts WHERE id = $1 AND order_id IS NOT NULL', [acc.id]);
+      if (!checkOrd.rowCount) {
+        const ordRes = await pool.query(
+          `INSERT INTO orders (customer_name, customer_phone, items, total, status, source, created_at, expires_at)
+           VALUES ($1, $2, $3, $4, 'confirmed', 'airtable', $5, $6)
+           RETURNING id`,
+          [clientInfo.name, clientInfo.phone, JSON.stringify([{ id: acc.offer_id, name: acc.service_name, price: 35 }]), 35, saleDate, expiresAt]
+        );
+        const newOrderId = ordRes.rows[0].id;
+        await pool.query('UPDATE accounts SET order_id = $1, status = $2, assigned_at = $3 WHERE id = $4', [
+          newOrderId,
+          'assigned',
+          saleDate,
+          acc.id
+        ]);
+        linkedSales++;
+      }
+    }
+
+    await audit(req, 'sync.airtable', { importedStocks, importedClients, linkedSales });
+
+    res.json({
+      ok: true,
+      importedStocks,
+      importedClients,
+      linkedSales,
+      message: `${importedStocks} stocks, ${importedClients} clients et ${linkedSales} ventes synchronisés depuis SubManager !`
+    });
   })
 );
 

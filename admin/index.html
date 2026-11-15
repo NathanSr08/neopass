@@ -103,6 +103,15 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--text); color: var(--ink); padding: 12px 18px; border-radius: 12px; font-weight: 600; transition: all .25s; max-width: 92vw; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.err { background: #ffd1e2; color: #5b0630; }
+.bars { display: flex; align-items: stretch; gap: 6px; margin: 8px 0 4px; }
+.bar-col { flex: 1; min-width: 0; height: 180px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.bar { width: 100%; min-height: 2px; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, var(--cyan), var(--pink)); }
+.bar-label { font: 500 11px/1 'JetBrains Mono', monospace; color: var(--muted); white-space: nowrap; }
+.client-link { color: var(--text); font-weight: 600; text-decoration: underline dotted var(--muted); cursor: pointer; background: none; border: none; padding: 0; font: inherit; text-align: left; }
+.client-link:hover { color: var(--cyan); text-decoration-color: var(--cyan); }
+.search-inp { background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; color: var(--text); font-size: 13px; min-width: 220px; transition: border-color .2s; }
+.search-inp:focus { border-color: var(--cyan); outline: none; }
 @media (max-width: 560px) { form .grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -121,10 +130,13 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" data-panel="orders" aria-selected="true">Commandes</button>
     <button class="tab" role="tab" data-panel="renewals" aria-selected="false" id="renewalsTab">Échéances</button>
+    <button class="tab" role="tab" data-panel="accounts" aria-selected="false" id="accountsTab">Stock & Comptes</button>
+    <button class="tab" role="tab" data-panel="clients" aria-selected="false" id="clientsTab">Clients</button>
     <button class="tab" role="tab" data-panel="offers" aria-selected="false">Offres</button>
     <button class="tab" role="tab" data-panel="reviews" aria-selected="false" id="reviewsTab">Avis</button>
     <button class="tab" role="tab" data-panel="promos" aria-selected="false">Codes promo</button>
-    <button class="tab" role="tab" data-panel="settings" aria-selected="false">Réglages</button>
+    <button class="tab" role="tab" data-panel="sales" aria-selected="false">Ventes</button>
+    <button class="tab" role="tab" data-panel="settings" aria-selected="false">Paramètres</button>
     <button class="tab" role="tab" data-panel="security" aria-selected="false">Sécurité</button>
     <button class="tab" role="tab" data-panel="audit" aria-selected="false">Journal</button>
   </div>
@@ -132,16 +144,18 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   <section class="panel" id="panel-orders">
     <div class="toolbar">
       <h2 style="margin:0">Commandes</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
-      <button class="btn primary" type="button" id="newOrder">Nouvelle commande</button>
-      <label style="display:flex;align-items:center;gap:10px">Statut
-        <select id="orderFilter">
-          <option value="">Toutes</option>
-          <option value="new">Nouvelles</option>
-          <option value="confirmed">Confirmées</option>
-          <option value="cancelled">Annulées</option>
-        </select>
-      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <input class="search-inp" type="search" id="orderSearch" placeholder="🔍 Rechercher client, tél, #réf, offre...">
+        <button class="btn primary" type="button" id="newOrder">Nouvelle commande</button>
+        <button class="btn" type="button" id="ordersExport">Exporter en CSV</button>
+        <label style="display:flex;align-items:center;gap:8px">Statut
+          <select id="orderFilter">
+            <option value="">Toutes</option>
+            <option value="new">Nouvelles</option>
+            <option value="confirmed">Confirmées</option>
+            <option value="cancelled">Annulées</option>
+          </select>
+        </label>
       </div>
     </div>
     <div class="scroll">
@@ -175,6 +189,73 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <p class="empty" id="renewEmpty" hidden>Aucune échéance sur cette période.</p>
   </section>
 
+  <section class="panel" id="panel-accounts" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Stock & Comptes</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <input class="search-inp" type="search" id="accSearch" placeholder="🔍 Rechercher login, note, fournisseur, client...">
+        <button class="btn primary" type="button" id="newAccount">➕ Nouveau compte</button>
+        <button class="btn" type="button" id="syncAirtableBtn" style="border-color:var(--cyan);color:var(--cyan)" title="Importer les stocks et clients depuis SubManager (Airtable)">🔄 Synchroniser SubManager</button>
+        <label style="display:flex;align-items:center;gap:6px">Offre
+          <select id="accOfferFilter">
+            <option value="">Toutes les offres</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px">Fournisseur
+          <select id="accSupplierFilter">
+            <option value="">Tous les fournisseurs</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px">État
+          <select id="accStatusFilter">
+            <option value="">Tous les états</option>
+            <option value="available">Disponibles</option>
+            <option value="assigned">Assignés</option>
+            <option value="archived">Archivés</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px">Tri
+          <select id="accSort">
+            <option value="default">Disponibles en premier</option>
+            <option value="recent">Plus récents d'abord</option>
+            <option value="oldest">Plus anciens d'abord</option>
+            <option value="cost_desc">Coût le plus élevé</option>
+            <option value="cost_asc">Coût le plus bas</option>
+            <option value="name_asc">Nom de l'offre (A-Z)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div id="accAlertBanner" style="background:rgba(255,122,156,.12);border:1px solid rgba(255,122,156,.4);border-radius:12px;padding:12px 16px;margin-bottom:14px" hidden></div>
+    <div id="accQuickChips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
+    <div class="stats" id="accStockTiles" style="margin-bottom:16px"></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Offre</th><th>Fournisseur & Coût</th><th>Identifiant / Login</th><th>Mot de passe</th><th>Profil / Slot</th><th>État & Commande</th><th>Consignes</th><th></th></tr></thead>
+        <tbody id="accountsBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="accountsEmpty" hidden>Aucun compte dans cette vue.</p>
+  </section>
+
+  <section class="panel" id="panel-clients" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Clients & Annuaire</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <input class="search-inp" type="search" id="clientSearch" placeholder="🔍 Rechercher nom, téléphone...">
+        <button class="btn primary" type="button" id="newClientBtn">➕ Nouveau client</button>
+      </div>
+    </div>
+    <div class="stats" id="clientTiles" style="margin-bottom:16px"></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Client</th><th>Téléphone</th><th>WhatsApp Direct</th><th>Commandes</th><th>Total dépensé</th><th>Dernière activité</th><th></th></tr></thead>
+        <tbody id="clientsBody"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="clientsEmpty" hidden>Aucun client trouvé.</p>
+  </section>
+
   <section class="panel" id="panel-offers" hidden>
     <div class="toolbar">
       <h2 style="margin:0">Offres</h2>
@@ -191,13 +272,16 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   <section class="panel" id="panel-reviews" hidden>
     <div class="toolbar">
       <h2 style="margin:0">Avis clients</h2>
-      <label style="display:flex;align-items:center;gap:10px">Afficher
-        <select id="reviewFilter">
-          <option value="pending">En attente</option>
-          <option value="approved">Publiés</option>
-          <option value="">Tous</option>
-        </select>
-      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <input class="search-inp" type="search" id="reviewSearch" placeholder="🔍 Rechercher auteur, offre, avis...">
+        <label style="display:flex;align-items:center;gap:8px">Afficher
+          <select id="reviewFilter">
+            <option value="pending">En attente</option>
+            <option value="approved">Publiés</option>
+            <option value="">Tous</option>
+          </select>
+        </label>
+      </div>
     </div>
     <div class="scroll">
       <table>
@@ -228,21 +312,39 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </section>
 
   <section class="panel" id="panel-settings" hidden>
-    <h2>Notifications</h2>
-    <p class="hint">Reçois un message à chaque nouvelle commande et à chaque avis à valider. Configure <span class="code">TELEGRAM_BOT_TOKEN</span> + <span class="code">TELEGRAM_CHAT_ID</span> et/ou <span class="code">DISCORD_WEBHOOK_URL</span> dans le fichier .env, puis redémarre le conteneur.</p>
-    <div class="channels" id="channels"></div>
-    <div style="margin-bottom:32px"><button class="btn" type="button" id="notifyTest">Envoyer un message de test</button></div>
+    <div class="toolbar">
+      <h2 style="margin:0">Paramètres et état du système</h2>
+    </div>
 
-    <h2>Remise du pack sur mesure</h2>
-    <form class="settings" id="settingsForm">
-      <label for="setPct">Remise en pourcentage (0 pour désactiver)
-        <input type="number" id="setPct" min="0" max="90" step="1" required>
-      </label>
-      <label for="setMin">Nombre de services à partir duquel la remise s'applique
-        <input type="number" id="setMin" min="2" max="10" step="1" required>
-      </label>
-      <div><button class="btn primary" type="submit">Enregistrer</button></div>
-    </form>
+    <div class="sec-block">
+      <h3>Remise du pack sur mesure</h3>
+      <p class="hint">Remise automatique appliquée sur le composeur sur mesure du site.</p>
+      <form class="settings" id="settingsForm">
+        <label for="setPct">Remise en pourcentage (0 pour désactiver)
+          <input type="number" id="setPct" min="0" max="90" step="1" required>
+        </label>
+        <label for="setMin">Nombre de services à partir duquel la remise s'applique
+          <input type="number" id="setMin" min="2" max="10" step="1" required>
+        </label>
+        <div><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+    </div>
+
+    <div class="sec-block">
+      <h3>Notifications Telegram / Discord</h3>
+      <p class="hint">Reçois un message à chaque nouvelle commande et à chaque avis à valider. Configure <code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code> et/ou <code>DISCORD_WEBHOOK_URL</code> dans le fichier <code>.env</code>.</p>
+      <div class="channels" id="channels"></div>
+      <div><button class="btn" type="button" id="notifyTest">Envoyer un message de test</button></div>
+    </div>
+
+    <div class="sec-block">
+      <div class="toolbar" style="margin-bottom:12px">
+        <h3 style="margin:0">État et santé du système</h3>
+        <button class="btn small" type="button" id="systemRefresh">Actualiser</button>
+      </div>
+      <div class="stats" id="systemTiles"></div>
+      <p class="hint" id="systemInfo" style="margin-top:12px"></p>
+    </div>
   </section>
   <section class="panel" id="panel-security" hidden>
     <div class="sec-block">
@@ -269,6 +371,29 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         </form>
       </div>
     </div>
+    <div class="sec-block" id="backupBlock" hidden>
+      <h3>Codes de secours</h3>
+      <p class="hint" id="backupInfo"></p>
+      <form class="inline" id="backupForm">
+        <input class="code-input" id="backupCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Code actuel de l'application">
+        <button class="btn" type="submit">Régénérer les codes</button>
+      </form>
+      <div id="backupShow" hidden style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:14px"></div>
+    </div>
+    <div class="sec-block">
+      <h3>Liste blanche d'IP</h3>
+      <p class="hint" id="ipInfo"></p>
+      <p class="hint" id="ipOffNote" style="color:var(--warn)" hidden>La variable ADMIN_IP_ALLOW_OFF=1 est active dans .env : la liste est ignorée.</p>
+      <form id="ipForm">
+        <label>Adresses autorisées, une par ligne (IPv4, plage CIDR comme 203.0.113.0/24, ou IPv6)
+          <textarea id="ipList" rows="4" spellcheck="false" placeholder="203.0.113.10"></textarea>
+        </label>
+        <div class="dlg-actions" style="margin-top:12px">
+          <button class="btn small" type="button" id="ipAddMe">Ajouter mon IP</button>
+          <button class="btn primary small" type="submit">Enregistrer</button>
+        </div>
+      </form>
+    </div>
     <div class="sec-block">
       <h3>Sessions ouvertes</h3>
       <div class="scroll">
@@ -285,10 +410,31 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     </div>
   </section>
 
+  <section class="panel" id="panel-sales" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Tableau de bord des ventes</h2>
+      <button class="btn small" type="button" id="salesRefresh">Actualiser</button>
+    </div>
+    <div class="stats" id="salesTiles"></div>
+    <h2 style="margin-top:24px">Chiffre d'affaires confirmé, 12 derniers mois</h2>
+    <div class="bars" id="salesChart"></div>
+    <h2 style="margin-top:28px">Offres les plus vendues (commandes confirmées)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Offre</th><th>Quantité vendue</th><th>Chiffre d'affaires</th></tr></thead>
+        <tbody id="salesOffers"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="salesEmpty" hidden>Aucune vente confirmée pour le moment.</p>
+  </section>
+
   <section class="panel" id="panel-audit" hidden>
     <div class="toolbar">
       <h2 style="margin:0">Journal des actions</h2>
-      <button class="btn small" type="button" id="auditRefresh">Actualiser</button>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn small" type="button" id="auditExport">Exporter en CSV</button>
+        <button class="btn small" type="button" id="auditRefresh">Actualiser</button>
+      </div>
     </div>
     <div class="scroll">
       <table>
@@ -310,19 +456,25 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <label for="fCategory">Catégorie
         <select id="fCategory" style="width:100%">
           <option value="packs">Packs</option><option value="streaming">Streaming</option>
-          <option value="vpn">VPN</option><option value="musique">Musique</option><option value="tv">TV</option>
+          <option value="vpn">VPN</option><option value="musique">Musique</option><option value="tv">TV</option><option value="logiciels">Logiciels</option>
         </select>
       </label>
       <label for="fTag">Étiquette<input type="text" id="fTag" maxlength="30"></label>
       <label for="fSort">Ordre d'affichage<input type="number" id="fSort" step="1" value="0"></label>
       <label for="fPrice">Prix annuel (€)<input type="number" id="fPrice" min="0" step="0.01" required></label>
       <label for="fWas">Valeur barrée démo (€)<input type="number" id="fWas" min="0" step="0.01"></label>
+      <label for="fLowStock">Seuil alerte stock bas<input type="number" id="fLowStock" min="0" max="999" step="1" value="2" placeholder="2"></label>
       <label class="full" for="fDesc">Description<textarea id="fDesc" rows="2" maxlength="300"></textarea></label>
       <label class="full" for="fFeat">Points forts (un par ligne, 8 maximum)<textarea id="fFeat" rows="4"></textarea></label>
       <label for="fHue">Teinte néon (0 à 360)<input type="number" id="fHue" min="0" max="360" step="1" value="330"></label>
       <div style="display:grid;gap:10px;align-content:end">
         <label class="check" for="fPack"><input type="checkbox" id="fPack"> Offre de type pack</label>
         <label class="check" for="fActive"><input type="checkbox" id="fActive" checked> Visible sur le site</label>
+      </div>
+      <div class="full" id="fPackBox" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:6px" hidden>
+        <label style="margin:0 0 6px 0;font-weight:600;color:var(--cyan)">Services inclus dans ce pack :</label>
+        <p class="hint" style="margin:0 0 10px 0;font-size:12px">Coche les services individuels qui composent ce pack. En stock, chaque service est géré séparément, et lors de la livraison client les identifiants seront présentés ensemble sous le pack.</p>
+        <div id="fPackServicesList" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));gap:8px"></div>
       </div>
     </div>
     <div class="dlg-actions">
@@ -370,12 +522,199 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <label for="oExpires" id="oExpiresRow" hidden>Date d'échéance<input type="date" id="oExpires" style="background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:8px 11px;width:100%;color-scheme:dark"></label>
       <div class="full order-sum" id="oSum"></div>
       <label class="full" for="oNotes">Commentaire interne (visible uniquement dans l'admin)<textarea id="oNotes" rows="4" maxlength="2000"></textarea></label>
+      <div class="full" id="oAccountsSection" style="border-top:1px solid var(--line);padding-top:16px;margin-top:6px" hidden>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <label style="margin:0;font-weight:600;color:var(--text);font-size:14px">🔐 Accès et identifiants attribués</label>
+          <button class="btn small primary" type="button" id="oAutoAssignBtn">⚡ Attribuer depuis le stock</button>
+        </div>
+        <div id="oAssignedList" style="display:grid;gap:8px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn small" type="button" id="oCopyDeliveryBtn">📋 Copier message de livraison WhatsApp</button>
+          <a class="btn small" id="oSendDeliveryWa" href="#" target="_blank" rel="noopener" hidden>💬 Envoyer accès WhatsApp</a>
+          <button class="btn small" type="button" id="oCopyAccessLinkBtn">🔗 Copier lien Espace Client</button>
+          <a class="btn small" id="oOpenAccessLinkBtn" href="#" target="_blank" rel="noopener" hidden>👁️ Ouvrir Espace Client</a>
+        </div>
+      </div>
     </div>
     <div class="dlg-actions">
+      <button class="btn" type="button" id="dlgCopyWa" title="Copier un message récapitulatif pour WhatsApp">📋 Copier récap WhatsApp</button>
+      <a class="btn" id="dlgOpenWa" href="#" target="_blank" rel="noopener" hidden>💬 Ouvrir WhatsApp</a>
       <button class="btn" type="button" id="orderCancel">Annuler</button>
       <button class="btn primary" type="submit">Enregistrer</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="accountDlg">
+  <form id="accountForm" method="dialog">
+    <h2 id="accDlgTitle">Ajouter un compte au stock</h2>
+    <div class="grid">
+      <label class="full" for="aOffer">Offre concernée
+        <select id="aOffer" style="width:100%" required></select>
+      </label>
+      <label for="aSupplier">Fournisseur / Plateforme<input type="text" id="aSupplier" maxlength="120" placeholder="ex: upgrader.cc, G2A, Spotify direct"></label>
+      <label for="aCost">Coût d'achat (€)<input type="number" id="aCost" step="0.01" min="0" placeholder="ex: 0.09 ou 5.50"></label>
+      <label class="full" for="aSupplierUrl">Lien du site d'achat (URL)<input type="url" id="aSupplierUrl" maxlength="255" placeholder="https://..."></label>
+      <label class="full" for="aLogin">Identifiant / Email / Clé<input type="text" id="aLogin" maxlength="120" placeholder="ex: client@gmail.com ou clé d'activation" required></label>
+      <label class="full" for="aPass">Mot de passe<input type="text" id="aPass" maxlength="120" placeholder="ex: Pass1234!"></label>
+      <label class="full" for="aSlot">Profil / Écran / Serveur (facultatif)<input type="text" id="aSlot" maxlength="80" placeholder="ex: Profil 2 (PIN 1234) ou Serveur FR"></label>
+      <label class="full" for="aNotes">Consignes client (facultatif)<textarea id="aNotes" rows="2" maxlength="1000" placeholder="ex: Utiliser profil 2, ne pas modifier la langue..."></textarea></label>
+      <label class="full" for="aPrivateNotes" style="border:1px solid rgba(255,200,0,.3);background:rgba(255,200,0,.04);border-radius:10px;padding:10px">
+        <span style="color:var(--warn);font-weight:700;display:block;margin-bottom:4px">🔒 Note privée (Admin uniquement)</span>
+        <span class="hint" style="display:block;margin-bottom:6px;font-size:12px">Visible uniquement dans l'administration. Ne sera jamais communiquée au client ni dans les messages WhatsApp.</span>
+        <textarea id="aPrivateNotes" rows="2" maxlength="2000" placeholder="ex: Garantie fournisseur 6 mois, acheté avec CB secondaire, invoice #1234, renouvellement..."></textarea>
+      </label>
+      <label for="aStatus">État
+        <select id="aStatus" style="width:100%">
+          <option value="available">Disponible</option>
+          <option value="assigned">Assigné</option>
+          <option value="archived">Archivé</option>
+        </select>
+      </label>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="accDlgCancel">Annuler</button>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="clientEditDlg">
+  <form id="clientEditForm" method="dialog">
+    <h2 id="clientEditDlgTitle">Nouveau client</h2>
+    <div class="grid">
+      <label class="full" for="cName">Nom & Prénom<input type="text" id="cName" maxlength="100" placeholder="ex: Jean Dupont" required></label>
+      <label class="full" for="cPhone">Numéro WhatsApp / Téléphone<input type="tel" id="cPhone" maxlength="40" placeholder="ex: +33 6 12 34 56 78"></label>
+      <label class="full" for="cNotes">Notes client<textarea id="cNotes" rows="3" maxlength="500" placeholder="Remarques, préférences..."></textarea></label>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="clientEditCancel">Annuler</button>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="accountViewDlg" style="width:min(640px, calc(100vw - 24px))">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h2 id="viewAccTitle" style="margin:0">Fiche Compte</h2>
+        <span id="viewAccStatusPill" class="pill"></span>
+      </div>
+      <p class="hint" id="viewAccOffer" style="margin:0;font-size:14px;color:var(--cyan);font-weight:600"></p>
+    </div>
+    <button class="btn small" type="button" id="viewAccClose">Fermer</button>
+  </div>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px">
+      <small style="color:var(--muted);display:block;margin-bottom:4px">Fournisseur / Plateforme</small>
+      <div style="display:flex;align-items:center;gap:8px">
+        <b id="viewAccSupplier">—</b>
+        <a id="viewAccSupplierUrl" href="#" target="_blank" rel="noopener" class="pill" style="font-size:11px;text-decoration:none" hidden>🔗 Ouvrir site</a>
+      </div>
+    </div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px">
+      <small style="color:var(--muted);display:block;margin-bottom:4px">Coût d'achat unitaire</small>
+      <b id="viewAccCost" style="font-size:16px;color:var(--neon)">—</b>
+    </div>
+    <div class="full" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <small style="color:var(--muted)">Identifiant / Login / Clé</small>
+        <button class="btn small" type="button" id="viewAccCopyLogin">📋 Copier</button>
+      </div>
+      <div id="viewAccLogin" class="code" style="font-size:14px;user-select:all;word-break:break-all"></div>
+    </div>
+    <div class="full" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px" id="viewAccPassBox">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <small style="color:var(--muted)">Mot de passe</small>
+        <div style="display:flex;gap:6px">
+          <button class="btn small" type="button" id="viewAccTogglePass">👁️ Afficher</button>
+          <button class="btn small" type="button" id="viewAccCopyPass">📋 Copier</button>
+        </div>
+      </div>
+      <div id="viewAccPass" class="code" style="font-size:14px;user-select:all">••••••••</div>
+    </div>
+    <div class="full" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px" id="viewAccSlotBox">
+      <small style="color:var(--muted);display:block;margin-bottom:4px">Profil / Slot / Serveur</small>
+      <div id="viewAccSlot" style="font-weight:600">—</div>
+    </div>
+    <div class="full" id="viewAccClientBox" style="background:rgba(0,242,254,.04);border:1px solid rgba(0,242,254,.2);border-radius:12px;padding:12px" hidden>
+      <small style="color:var(--cyan);display:block;margin-bottom:4px;font-weight:700">Attribué au client</small>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <button class="client-link" type="button" id="viewAccClientLink" style="font-size:15px;font-weight:700"></button>
+          <div id="viewAccClientPhone" style="color:var(--muted);font-size:12px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <a class="btn small primary" id="viewAccClientWa" href="#" target="_blank" rel="noopener" hidden>💬 WhatsApp</a>
+          <button class="btn small" type="button" id="viewAccOrderBtn">Cmd #</button>
+        </div>
+      </div>
+    </div>
+    <div class="full" id="viewAccSavBox" style="background:rgba(255,122,156,.1);border:1px solid rgba(255,122,156,.4);border-radius:12px;padding:12px" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <b style="color:var(--bad);font-size:13px">🚨 Réclamation Fournisseur / SAV en cours</b>
+        <button class="btn small" type="button" id="viewAccCloseSavBtn" style="border-color:var(--ok);color:var(--ok)">✅ Clôturer réclamation</button>
+      </div>
+      <div id="viewAccSavReason" style="font-size:13px;color:#fff;margin-bottom:4px"></div>
+      <div id="viewAccSavMeta" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+    <div class="full" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px" id="viewAccNotesBox">
+      <small style="color:var(--muted);display:block;margin-bottom:4px">Consignes de connexion</small>
+      <div id="viewAccNotes" style="font-size:12px;white-space:pre-wrap;color:var(--muted);max-height:160px;overflow:auto"></div>
+    </div>
+    <div class="full" style="background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.3);border-radius:12px;padding:12px" id="viewAccPrivateNotesBox">
+      <small style="color:var(--warn);display:block;margin-bottom:4px;font-weight:700">🔒 Note privée (Admin uniquement)</small>
+      <div id="viewAccPrivateNotes" style="font-size:13px;white-space:pre-wrap;color:var(--text);max-height:160px;overflow:auto"></div>
+    </div>
+  </div>
+
+  <div class="dlg-actions" style="margin-top:16px;flex-wrap:wrap;justify-content:space-between">
+    <div style="display:flex;gap:8px">
+      <button class="btn small danger" type="button" id="viewAccDelete">🗑️ Supprimer</button>
+      <button class="btn small" type="button" id="viewAccUnassign" hidden>Désassigner</button>
+      <button class="btn small" type="button" id="viewAccReplaceSav" style="border-color:var(--warn);color:var(--warn)" hidden>🔄 Remplacement SAV (1-clic)</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn small" type="button" id="viewAccCopyAll">📋 Copier identifiants</button>
+      <button class="btn small primary" type="button" id="viewAccEdit">✏️ Modifier</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="clientDlg" style="width:min(720px, calc(100vw - 24px))">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+    <div>
+      <h2 id="clientDlgName" style="margin:0 0 4px">Fiche Client</h2>
+      <p class="hint" id="clientDlgPhone" style="margin:0"></p>
+      <p class="hint" id="clientDlgNotes" style="margin:4px 0 0;color:var(--warn)" hidden></p>
+    </div>
+    <button class="btn small" type="button" id="clientDlgClose">Fermer</button>
+  </div>
+  <div class="stats" id="clientStats" style="margin-bottom:16px"></div>
+  <div style="margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap">
+    <a class="btn primary small" id="clientWaLink" href="#" target="_blank" rel="noopener" hidden>💬 Ouvrir sur WhatsApp</a>
+    <button class="btn small" type="button" id="clientCopyInfo">📋 Copier récap client</button>
+    <button class="btn small" type="button" id="clientEditBtn">✏️ Modifier profil</button>
+    <button class="btn small" type="button" id="clientNewOrder">➕ Nouvelle commande pour ce client</button>
+  </div>
+
+  <!-- Section Accès et comptes attribués -->
+  <div id="clientAccountsSection" style="margin-bottom:20px">
+    <h3 style="font:600 13px 'Unbounded', sans-serif;margin:16px 0 10px;color:var(--cyan);text-transform:uppercase;letter-spacing:.05em">Accès & Comptes attribués au client</h3>
+    <div id="clientAccountsList" style="display:grid;gap:10px"></div>
+    <p class="hint" id="clientAccountsEmpty" hidden style="margin:0">Aucun identifiant actuellement attribué à ce client.</p>
+  </div>
+
+  <!-- Section Historique des commandes -->
+  <h3 style="font:600 13px 'Unbounded', sans-serif;margin:16px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Historique des commandes</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Réf.</th><th>Date</th><th>Offres</th><th>Total</th><th>Statut</th><th>Échéance</th><th>Espace Client</th></tr></thead>
+      <tbody id="clientOrdersBody"></tbody>
+    </table>
+  </div>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -386,7 +725,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   const $ = (s) => document.querySelector(s);
   const STATUS_LABEL = { new: 'Nouvelle', confirmed: 'Confirmée', cancelled: 'Annulée' };
   const PAY_LABEL = { revolut: 'Revolut', usdt: 'USDT', btc: 'BTC', eth: 'ETH', especes: 'Espèces', virement: 'Virement', autre: 'Autre' };
-  const CAT_LABEL = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV' };
+  const CAT_LABEL = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV', logiciels: 'Logiciels' };
   const fmt = (n) => (Math.round(n * 100) / 100).toString().replace('.', ',') + ' €';
 
   let toastTimer;
@@ -438,12 +777,329 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     tiles.forEach(([v, l]) => box.append(h('div', { className: 'stat' }, h('b', {}, String(v)), h('span', {}, l))));
   }
 
+  function waPhone(raw) {
+    let d = String(raw || '').replace(/\D/g, '');
+    if (d.startsWith('00')) d = d.slice(2);
+    else if (/^0\d{9}$/.test(d)) d = '33' + d.slice(1);
+    return d.length >= 8 ? d : '';
+  }
+
+  function copyOrderRecap(o) {
+    const name = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client';
+    const itemsStr = (o.items || []).map((i) => '• ' + i.name + ' (' + fmt(i.price) + ')').join('\n');
+    const expStr = o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '';
+    const msg =
+      'Bonjour ' + name + ',\n\n' +
+      'Voici le récapitulatif de votre commande NeonPass (réf. #' + o.id + ') :\n' +
+      (itemsStr || '• Aucun produit') + '\n\n' +
+      'Montant total : ' + fmt(o.total) + '\n' +
+      (o.promo_code ? 'Code promo : ' + o.promo_code + ' (−' + o.promo_pct + ' %)\n' : '') +
+      (expStr ? 'Date d\'échéance : ' + expStr + '\n' : '') +
+      (PAY_LABEL[o.payment_method] ? 'Paiement : ' + PAY_LABEL[o.payment_method] + '\n' : '') +
+      '\nMerci pour votre confiance ! Restant à votre entière disposition.';
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg)
+        .then(() => toast('Récapitulatif WhatsApp copié !'))
+        .catch(() => prompt('Récapitulatif à copier :', msg));
+    } else {
+      prompt('Récapitulatif à copier :', msg);
+    }
+  }
+
+  // ----- Fiche Client -----
+  const clientDlg = $('#clientDlg');
+  async function openClientDialog(clientKey) {
+    if (!clientKey) return;
+    const cleanKey = String(clientKey).trim();
+    const pKey = waPhone(cleanKey);
+
+    // Chargement des détails complets du client depuis le serveur (avec comptes attribués)
+    const data = await api('/clients/' + encodeURIComponent(cleanKey)).catch(() => null);
+    const client = data && data.client ? data.client : {};
+    let clientOrders = data && data.orders ? data.orders : [];
+    if (!clientOrders.length) {
+      clientOrders = allOrders.filter((o) => {
+        if (pKey && waPhone(o.customer_phone) === pKey) return true;
+        const fn = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ').trim();
+        return fn && fn.toLowerCase() === cleanKey.toLowerCase();
+      });
+    }
+    const clientAccounts = data && data.accounts ? data.accounts : [];
+
+    const first = clientOrders[0] || {};
+    const fullName = client.name || [first.customer_name, first.customer_last_name].filter(Boolean).join(' ') || cleanKey;
+    const phone = client.phone || first.customer_phone || (pKey ? cleanKey : '');
+
+    $('#clientDlgName').textContent = fullName || 'Client anonyme';
+    $('#clientDlgPhone').textContent = phone ? 'WhatsApp / Tél : ' + phone : 'Aucun numéro de téléphone enregistré';
+    const notesEl = $('#clientDlgNotes');
+    if (client.notes) {
+      notesEl.hidden = false;
+      notesEl.textContent = 'Note : ' + client.notes;
+    } else {
+      notesEl.hidden = true;
+    }
+
+    const wa = $('#clientWaLink');
+    const directPhoneKey = waPhone(phone);
+    if (directPhoneKey) {
+      wa.hidden = false;
+      wa.href = 'https://wa.me/' + directPhoneKey;
+    } else {
+      wa.hidden = true;
+    }
+
+    $('#clientNewOrder').onclick = () => {
+      clientDlg.close();
+      openOrderDialog(null, { firstName: client.name || first.customer_name || '', lastName: first.customer_last_name || '', phone: phone || '' });
+    };
+
+    $('#clientEditBtn').onclick = () => {
+      clientDlg.close();
+      openClientEditDialog(client);
+    };
+
+    // Groupement des comptes par Pack ou par Service pour l'affichage client
+    const orderMap = {};
+    clientOrders.forEach((o) => { orderMap[o.id] = o; });
+
+    function getAccountPackInfo(a) {
+      if (!a.order_id || !orderMap[a.order_id]) return null;
+      const ord = orderMap[a.order_id];
+      const items = Array.isArray(ord.items) ? ord.items : [];
+      for (const item of items) {
+        const fullOffer = offers.find((off) => off.id === item.id) || item;
+        if (fullOffer && fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.includes(a.offer_id)) {
+          return { packId: fullOffer.id, packName: fullOffer.name || item.name, orderId: ord.id };
+        }
+      }
+      return null;
+    }
+
+    $('#clientCopyInfo').onclick = () => {
+      let text = 'Fiche Client : ' + fullName + '\n';
+      if (phone) text += 'Téléphone : ' + phone + '\n';
+      if (client.notes) text += 'Notes : ' + client.notes + '\n';
+      if (clientAccounts.length) {
+        text += '\n--- Accès & Comptes attribués ---\n';
+        const packsShown = new Set();
+        clientAccounts.forEach((a) => {
+          const packInfo = getAccountPackInfo(a);
+          if (packInfo) {
+            const key = packInfo.orderId + '-' + packInfo.packId;
+            if (!packsShown.has(key)) {
+              packsShown.add(key);
+              text += '\n📦 ' + packInfo.packName + ' (Commande #' + packInfo.orderId + ') :\n';
+            }
+            text += '  • ' + (a.offer_name || a.service_name) + ' : ' + a.login + (a.password ? ' / ' + a.password : '') + (a.slot_profile ? ' (' + a.slot_profile + ')' : '') + '\n';
+          } else {
+            text += '• ' + (a.offer_name || a.service_name) + ' : ' + a.login + (a.password ? ' / ' + a.password : '') + (a.slot_profile ? ' (' + a.slot_profile + ')' : '') + '\n';
+          }
+        });
+      }
+      navigator.clipboard.writeText(text)
+        .then(() => toast('Fiche et accès client copiés !'))
+        .catch(() => prompt('Informations à copier :', text));
+    };
+
+    const confirmed = clientOrders.filter((o) => o.status === 'confirmed');
+    const totalCa = confirmed.reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const activeSubs = confirmed.filter((o) => !o.expires_at || new Date(o.expires_at) > new Date()).length;
+
+    const statsBox = $('#clientStats');
+    statsBox.textContent = '';
+    [
+      [clientOrders.length, 'commande(s)'],
+      [fmt(totalCa), 'total dépensé (confirmé)'],
+      [activeSubs, 'abonnement(s) actif(s)'],
+      [clientAccounts.length, 'accès attribué(s)']
+    ].forEach(([v, l]) => statsBox.append(h('div', { className: 'stat' }, h('b', {}, String(v)), h('span', {}, l))));
+
+    // Liste des accès et comptes attribués au client (groupés par Pack si applicable)
+    const accBox = $('#clientAccountsList');
+    accBox.textContent = '';
+    const accEmpty = $('#clientAccountsEmpty');
+    if (!clientAccounts.length) {
+      accEmpty.hidden = false;
+    } else {
+      accEmpty.hidden = true;
+
+      // Group accounts by pack key or single
+      const grouped = [];
+      const packGroups = {}; // key -> container
+
+      clientAccounts.forEach((a) => {
+        const packInfo = getAccountPackInfo(a);
+        if (packInfo) {
+          const key = packInfo.orderId + '-' + packInfo.packId;
+          if (!packGroups[key]) {
+            const grp = { isPack: true, title: packInfo.packName, orderId: packInfo.orderId, accounts: [] };
+            packGroups[key] = grp;
+            grouped.push(grp);
+          }
+          packGroups[key].accounts.push(a);
+        } else {
+          grouped.push({ isPack: false, a });
+        }
+      });
+
+      grouped.forEach((g) => {
+        if (g.isPack) {
+          const packContainer = h('div', { style: 'background:rgba(0,242,254,.03);border:1px solid rgba(0,242,254,.3);border-radius:12px;padding:12px;margin-bottom:10px' },
+            h('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(0,242,254,.2)' },
+              h('div', { style: 'display:flex;align-items:center;gap:8px' },
+                h('span', { className: 'pill on', style: 'font-weight:700' }, '📦 Pack commercial'),
+                h('b', { style: 'color:var(--cyan);font-size:15px' }, g.title)
+              ),
+              h('small', { style: 'color:var(--muted)' }, 'Commande #' + g.orderId)
+            )
+          );
+
+          g.accounts.forEach((a) => {
+            const copyBtn = h('button', { className: 'btn small', type: 'button', title: 'Copier login et mot de passe' }, '📋 Copier');
+            copyBtn.onclick = () => {
+              const creds = a.login + (a.password ? ' : ' + a.password : '') + (a.slot_profile ? ' (' + a.slot_profile + ')' : '');
+              navigator.clipboard.writeText(creds)
+                .then(() => toast('Identifiants copiés !'))
+                .catch(() => prompt('Identifiants :', creds));
+            };
+            const viewBtn = h('button', { className: 'btn small primary', type: 'button', title: 'Voir la fiche complète du compte' }, '👁️ Fiche');
+            viewBtn.onclick = () => {
+              clientDlg.close();
+              openAccountViewDialog(a);
+            };
+
+            const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
+            repBtn.onclick = async () => {
+              const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+              if (reason === null) return;
+              try {
+                const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
+                  method: 'POST',
+                  body: { reason: reason.trim() || 'Signalement client' }
+                });
+                toast('Compte remplacé sous garantie !');
+                clientDlg.close();
+                openClientDialog(clientKey);
+                loadAccounts();
+                loadOrders();
+                if (repRes.whatsappUrl && confirm('Notifier le client sur WhatsApp ?')) {
+                  window.open(repRes.whatsappUrl, '_blank');
+                }
+              } catch (err) { toast(err.message, true); }
+            };
+
+            packContainer.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap' },
+              h('div', {},
+                h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px' },
+                  h('b', { style: 'color:var(--text);font-size:13px' }, '• ' + (a.offer_name || a.service_name || 'Service')),
+                  a.supplier ? h('span', { className: 'pill', style: 'font-size:10px' }, a.supplier) : ''
+                ),
+                h('div', { style: 'font-size:13px' }, 'Login : ', h('span', { className: 'code' }, a.login)),
+                a.password ? h('div', { style: 'font-size:13px' }, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
+                a.slot_profile ? h('div', { style: 'color:var(--muted);font-size:12px' }, a.slot_profile) : ''
+              ),
+              h('div', { style: 'display:flex;gap:8px' }, repBtn, copyBtn, viewBtn)
+            ));
+          });
+
+          accBox.append(packContainer);
+        } else {
+          const a = g.a;
+          const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
+          repBtn.onclick = async () => {
+            const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+            if (reason === null) return;
+            try {
+              const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
+                method: 'POST',
+                body: { reason: reason.trim() || 'Signalement client' }
+              });
+              toast('Compte remplacé sous garantie !');
+              clientDlg.close();
+              openClientDialog(clientKey);
+              loadAccounts();
+              loadOrders();
+              if (repRes.whatsappUrl && confirm('Notifier le client sur WhatsApp ?')) {
+                window.open(repRes.whatsappUrl, '_blank');
+              }
+            } catch (err) { toast(err.message, true); }
+          };
+
+          const copyBtn = h('button', { className: 'btn small', type: 'button', title: 'Copier login et mot de passe' }, '📋 Copier');
+          copyBtn.onclick = () => {
+            const creds = a.login + (a.password ? ' : ' + a.password : '') + (a.slot_profile ? ' (' + a.slot_profile + ')' : '');
+            navigator.clipboard.writeText(creds)
+              .then(() => toast('Identifiants copiés !'))
+              .catch(() => prompt('Identifiants :', creds));
+          };
+          const viewBtn = h('button', { className: 'btn small primary', type: 'button', title: 'Voir la fiche complète du compte' }, '👁️ Fiche');
+          viewBtn.onclick = () => {
+            clientDlg.close();
+            openAccountViewDialog(a);
+          };
+          accBox.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px' },
+            h('div', {},
+              h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px' },
+                h('b', { style: 'color:var(--cyan);font-size:14px' }, a.offer_name || a.service_name || 'Accès'),
+                a.supplier ? h('span', { className: 'pill', style: 'font-size:10px' }, a.supplier) : ''
+              ),
+              h('div', { style: 'font-size:13px' }, 'Login : ', h('span', { className: 'code' }, a.login)),
+              a.password ? h('div', { style: 'font-size:13px' }, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
+              a.slot_profile ? h('div', { style: 'color:var(--muted);font-size:12px' }, a.slot_profile) : ''
+            ),
+            h('div', { style: 'display:flex;gap:8px' }, repBtn, copyBtn, viewBtn)
+          ));
+        }
+      });
+    }
+
+    // Historique des commandes
+    const body = $('#clientOrdersBody');
+    body.textContent = '';
+    clientOrders.forEach((o) => {
+      const accessCell = h('td', {});
+      if (o.access_token) {
+        const accLink = h('a', { href: '/acces/' + o.access_token, target: '_blank', rel: 'noopener', className: 'pill', style: 'text-decoration:none;font-size:11px' }, '🔗 Fiche');
+        accessCell.append(accLink);
+      } else {
+        accessCell.textContent = '—';
+      }
+
+      body.append(h('tr', {},
+        h('td', { className: 'num' }, '#' + o.id),
+        h('td', { className: 'num' }, new Date(o.created_at).toLocaleDateString('fr-FR')),
+        h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
+        h('td', { className: 'num' }, fmt(o.total)),
+        h('td', {}, h('span', { className: 'pill ' + (o.status === 'confirmed' ? 'on' : o.status === 'cancelled' ? 'late' : 'wait') }, STATUS_LABEL[o.status] || o.status)),
+        h('td', { className: 'num' }, o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '—'),
+        accessCell
+      ));
+    });
+
+    clientDlg.showModal();
+  }
+  $('#clientDlgClose').addEventListener('click', () => clientDlg.close());
+
   // ----- Commandes -----
-  async function loadOrders() {
-    const status = $('#orderFilter').value;
-    const rows = await api('/orders' + (status ? '?status=' + status : ''));
+  let allOrders = [];
+  function renderOrders() {
+    const q = ($('#orderSearch').value || '').trim().toLowerCase();
     const body = $('#ordersBody');
     body.textContent = '';
+    const rows = allOrders.filter((o) => {
+      if (!q) return true;
+      const fullName = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ').toLowerCase();
+      const phone = (o.customer_phone || '').toLowerCase();
+      const idStr = '#' + o.id;
+      const itemsStr = (o.items || []).map((i) => i.name).join(' ').toLowerCase();
+      const notesStr = (o.notes || '').toLowerCase();
+      const promoStr = (o.promo_code || '').toLowerCase();
+      const payStr = (PAY_LABEL[o.payment_method] || o.payment_method || '').toLowerCase();
+      return idStr.includes(q) || String(o.id) === q || fullName.includes(q) || phone.includes(q) ||
+             itemsStr.includes(q) || notesStr.includes(q) || promoStr.includes(q) || payStr.includes(q);
+    });
     $('#ordersEmpty').hidden = rows.length > 0;
     rows.forEach((o) => {
       const sel = h('select', { ariaLabel: 'Statut de la commande ' + o.id });
@@ -461,28 +1117,57 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       });
       const edit = h('button', { className: 'btn small', type: 'button' }, 'Détails');
       edit.addEventListener('click', () => openOrderDialog(o));
+      const recap = h('button', { className: 'btn small', type: 'button', title: 'Copier récapitulatif WhatsApp' }, '📋 Récap');
+      recap.addEventListener('click', () => copyOrderRecap(o));
       const del = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
       del.addEventListener('click', async () => {
         if (!confirm('Supprimer la commande n°' + o.id + ' ?')) return;
         try { await api('/orders/' + o.id, { method: 'DELETE' }); loadOrders(); loadStats(); }
         catch (e) { toast(e.message, true); }
       });
+
+      const clientName = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ');
+      const clientEl = (clientName || o.customer_phone)
+        ? h('button', {
+            className: 'client-link',
+            type: 'button',
+            title: 'Voir la fiche client'
+          }, clientName || 'Client ' + o.customer_phone)
+        : h('span', { style: 'color:var(--muted)' }, '—');
+
+      if (clientName || o.customer_phone) {
+        clientEl.addEventListener('click', () => openClientDialog(o.customer_phone || clientName));
+      }
+
       const when = new Date(o.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      const accBadge = o.status === 'confirmed'
+        ? (o.assigned_accounts_count > 0
+            ? h('span', { className: 'pill on', title: o.assigned_accounts_count + ' compte(s) attribué(s)' }, '🔐 ' + o.assigned_accounts_count)
+            : h('span', { className: 'pill wait', title: 'Aucun compte attribué' }, '⚠️ sans accès'))
+        : '';
       body.append(h('tr', {},
         h('td', { className: 'num' }, '#' + o.id, o.source === 'admin' ? h('span', { className: 'pill src', title: 'Saisie dans l\'admin' }, 'admin') : ''),
         h('td', { className: 'num' }, when),
-        h('td', {}, [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || '—',
+        h('td', {}, clientEl,
           o.notes ? h('span', { className: 'note-dot', title: o.notes }, '●') : '',
           o.customer_phone ? h('small', { className: 'sub' }, o.customer_phone) : ''),
         h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
         h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : ''),
           o.promo_code ? h('small', { style: 'display:block;color:var(--cyan)' }, o.promo_code + ' −' + o.promo_pct + ' %') : ''),
         h('td', {}, PAY_LABEL[o.payment_method] || '—'),
-        h('td', {}, sel),
-        h('td', {}, h('div', { className: 'row-actions' }, edit, del))
+        h('td', {}, sel, accBadge ? h('div', { style: 'margin-top:4px' }, accBadge) : ''),
+        h('td', {}, h('div', { className: 'row-actions' }, recap, edit, del))
       ));
     });
   }
+
+  async function loadOrders() {
+    const status = $('#orderFilter').value;
+    allOrders = await api('/orders' + (status ? '?status=' + status : ''));
+    renderOrders();
+  }
+  $('#orderFilter').addEventListener('change', loadOrders);
+  $('#orderSearch').addEventListener('input', renderOrders);
 
   // ----- Saisie / modification d'une commande -----
   const orderDlg = $('#orderDlg');
@@ -498,45 +1183,341 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     return out.filter(Boolean);
   }
   function updateOrderSum() {
-    if (editingOrder) { $('#oSum').textContent = ''; return; }
     const items = pickedItems();
     const sum = items.reduce((s, o) => s + o.price, 0);
     const disc = items.length >= discountCfg.discountMin && discountCfg.discountPct > 0;
     const auto = Math.round((disc ? sum * (1 - discountCfg.discountPct / 100) : sum) * 100) / 100;
-    $('#oSum').textContent = items.length
-      ? items.length + ' produit(s) · calcul auto : ' + fmt(auto) + (disc ? ' (remise pack −' + discountCfg.discountPct + ' %)' : '') +
-        ($('#oTotal').value !== '' ? ' · total saisi : ' + fmt(Number($('#oTotal').value)) : '')
-      : 'Aucun produit sélectionné.';
+    if (items.length) {
+      $('#oSum').textContent = items.length + ' produit(s) · calcul auto : ' + fmt(auto) + (disc ? ' (remise pack −' + discountCfg.discountPct + ' %)' : '') +
+        ($('#oTotal').value !== '' ? ' · total saisi : ' + fmt(Number($('#oTotal').value)) : '');
+      if (!editingOrder && $('#oTotal').value === '') $('#oTotal').placeholder = 'calcul auto (' + auto + ')';
+    } else {
+      $('#oSum').textContent = editingOrder
+        ? 'Conserver les produits d\'origine (' + (editingOrder.items || []).map((i) => i.name).join(' + ') + ') ou sélectionner ci-dessus.'
+        : 'Aucun produit sélectionné.';
+    }
   }
-  async function openOrderDialog(o) {
+
+  function formatDeliveryMessage(o, list) {
+    const name = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client';
+    const expStr = o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '1 an';
+    const accessUrl = o.access_token ? (location.origin + '/acces/' + o.access_token) : '';
+
+    const orderItems = Array.isArray(o.items) ? o.items : [];
+    const assignedRemaining = [...list];
+    const sections = [];
+
+    // Groupement par pack pour la livraison client
+    orderItems.forEach((item) => {
+      const fullOffer = offers.find((off) => off.id === item.id) || item;
+      if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
+        let packStr = '📦 Pack ' + (fullOffer.name || item.name) + ' :\n';
+        fullOffer.packItems.forEach((subId) => {
+          const idx = assignedRemaining.findIndex((a) => a.offer_id === subId);
+          if (idx !== -1) {
+            const a = assignedRemaining.splice(idx, 1)[0];
+            packStr += '• ' + (a.offer_name || a.service_name || 'Service') + ' :\n';
+            packStr += '  - Identifiant : ' + a.login + '\n';
+            if (a.password) packStr += '  - Mot de passe : ' + a.password + '\n';
+            if (a.slot_profile) packStr += '  - Profil / Slot : ' + a.slot_profile + '\n';
+            if (a.notes) packStr += '  - Consignes : ' + a.notes + '\n';
+          }
+        });
+        sections.push(packStr.trim());
+      } else {
+        const idx = assignedRemaining.findIndex((a) => a.offer_id === item.id);
+        if (idx !== -1) {
+          const a = assignedRemaining.splice(idx, 1)[0];
+          let s = '📺 ' + (a.offer_name || a.service_name || item.name || 'Service') + ' :\n';
+          s += '• Identifiant : ' + a.login + '\n';
+          if (a.password) s += '• Mot de passe : ' + a.password + '\n';
+          if (a.slot_profile) s += '• Profil / Slot : ' + a.slot_profile + '\n';
+          if (a.notes) s += '• Consignes : ' + a.notes + '\n';
+          sections.push(s.trim());
+        }
+      }
+    });
+
+    assignedRemaining.forEach((a) => {
+      let s = '📺 ' + (a.offer_name || a.service_name || 'Accès') + ' :\n';
+      s += '• Identifiant : ' + a.login + '\n';
+      if (a.password) s += '• Mot de passe : ' + a.password + '\n';
+      if (a.slot_profile) s += '• Profil / Slot : ' + a.slot_profile + '\n';
+      if (a.notes) s += '• Consignes : ' + a.notes + '\n';
+      sections.push(s.trim());
+    });
+
+    const accLines = sections.join('\n\n');
+
+    return (
+      'Bonjour ' + name + ',\n\n' +
+      'Voici vos accès NeonPass pour votre commande (réf. #' + o.id + ') :\n\n' +
+      (accLines || 'Accès en cours de préparation.\n') + '\n\n' +
+      (accessUrl ? '🔗 Votre espace abonné sécurisé : ' + accessUrl + '\n(Consultez vos codes à tout moment et suivez votre garantie 24/7)\n\n' : '') +
+      (expStr ? 'Validité jusqu\'au : ' + expStr + '\n' : '') +
+      'Bonne utilisation ! Restant à votre écoute sur WhatsApp.'
+    );
+  }
+
+  async function refreshOrderAccounts(o, pKey) {
+    const accSection = $('#oAccountsSection');
+    if (!o) { accSection.hidden = true; return; }
+    accSection.hidden = false;
+    const list = await api('/orders/' + o.id + '/accounts').catch(() => []);
+    const box = $('#oAssignedList');
+    box.textContent = '';
+    if (!list.length) {
+      box.append(h('p', { className: 'hint', style: 'margin:0' }, 'Aucun identifiant attribué pour cette commande. Clique ci-dessous pour piocher dans le stock.'));
+    } else {
+      const orderItems = Array.isArray(o.items) ? o.items : [];
+      const assignedRemaining = [...list];
+
+      // Affiche les packs groupés
+      orderItems.forEach((item) => {
+        const fullOffer = offers.find((off) => off.id === item.id) || item;
+        if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
+          const packAccounts = [];
+          fullOffer.packItems.forEach((subId) => {
+            const idx = assignedRemaining.findIndex((a) => a.offer_id === subId);
+            if (idx !== -1) packAccounts.push(assignedRemaining.splice(idx, 1)[0]);
+          });
+
+          if (packAccounts.length) {
+            const packCard = h('div', { style: 'background:rgba(0,242,254,.03);border:1px solid rgba(0,242,254,.3);border-radius:10px;padding:10px;margin-bottom:8px' },
+              h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:8px' },
+                h('span', { className: 'pill on', style: 'font-weight:700' }, '📦 Pack commercial'),
+                h('b', { style: 'color:var(--cyan);font-size:14px' }, fullOffer.name || item.name)
+              )
+            );
+
+            packAccounts.forEach((a) => {
+              const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
+              repBtn.onclick = async () => {
+                const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+                if (reason === null) return;
+                try {
+                  const repRes = await api('/orders/' + o.id + '/replace-account/' + a.id, {
+                    method: 'POST',
+                    body: { reason: reason.trim() || 'Signalement client' }
+                  });
+                  toast('Compte remplacé sous garantie ! Nouvel accès attribué.');
+                  refreshOrderAccounts(o, pKey);
+                  loadOrders();
+                  loadAccounts();
+                  if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
+                    window.open(repRes.whatsappUrl, '_blank');
+                  }
+                } catch (err) { toast(err.message, true); }
+              };
+
+              const unassignBtn = h('button', { className: 'btn small danger', type: 'button', title: 'Désassigner ce compte' }, 'Retirer');
+              unassignBtn.onclick = async () => {
+                if (!confirm('Retirer l\'accès « ' + a.login + ' » de cette commande ?')) return;
+                try {
+                  await api('/orders/' + o.id + '/unassign-account/' + a.id, { method: 'POST', body: {} });
+                  toast('Compte retiré.');
+                  refreshOrderAccounts(o, pKey);
+                  loadOrders();
+                  loadAccounts();
+                } catch (err) { toast(err.message, true); }
+              };
+              packCard.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' },
+                h('div', { style: 'font-size:13px' },
+                  h('b', { style: 'color:var(--text)' }, '• ' + (a.offer_name || a.service_name || 'Service')),
+                  h('div', {}, 'Login : ', h('span', { className: 'code' }, a.login)),
+                  a.password ? h('div', {}, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
+                  a.slot_profile ? h('div', { style: 'color:var(--muted)' }, a.slot_profile) : ''
+                ),
+                h('div', { style: 'display:flex;gap:6px' }, repBtn, unassignBtn)
+              ));
+            });
+
+            box.append(packCard);
+          }
+        }
+      });
+
+      // Affiche les comptes individuels restants
+      assignedRemaining.forEach((a) => {
+        const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
+        repBtn.onclick = async () => {
+          const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+          if (reason === null) return;
+          try {
+            const repRes = await api('/orders/' + o.id + '/replace-account/' + a.id, {
+              method: 'POST',
+              body: { reason: reason.trim() || 'Signalement client' }
+            });
+            toast('Compte remplacé sous garantie ! Nouvel accès attribué.');
+            refreshOrderAccounts(o, pKey);
+            loadOrders();
+            loadAccounts();
+            if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
+              window.open(repRes.whatsappUrl, '_blank');
+            }
+          } catch (err) { toast(err.message, true); }
+        };
+
+        const unassignBtn = h('button', { className: 'btn small danger', type: 'button', title: 'Désassigner ce compte' }, 'Retirer');
+        unassignBtn.onclick = async () => {
+          if (!confirm('Retirer l\'accès « ' + a.login + ' » de cette commande ?')) return;
+          try {
+            await api('/orders/' + o.id + '/unassign-account/' + a.id, { method: 'POST', body: {} });
+            toast('Compte retiré.');
+            refreshOrderAccounts(o, pKey);
+            loadOrders();
+            loadAccounts();
+          } catch (err) { toast(err.message, true); }
+        };
+        box.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' },
+          h('div', { style: 'font-size:13px' },
+            h('b', { style: 'color:var(--cyan)' }, a.offer_name || a.service_name || 'Service'),
+            h('div', {}, 'Login : ', h('span', { className: 'code' }, a.login)),
+            a.password ? h('div', {}, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
+            a.slot_profile ? h('div', { style: 'color:var(--muted)' }, a.slot_profile) : '',
+            a.notes ? h('div', { style: 'color:var(--warn);font-size:12px' }, a.notes) : ''
+          ),
+          h('div', { style: 'display:flex;gap:6px' }, repBtn, unassignBtn)
+        ));
+      });
+    }
+
+    // Auto-attribution depuis le stock (gère intelligemment les packs et services individuels)
+    $('#oAutoAssignBtn').onclick = async () => {
+      const orderItems = o.items || [];
+      if (!orderItems.length) return toast('Aucun produit dans la commande.', true);
+
+      const assignedOfferIds = list.map((a) => a.offer_id);
+      const unassignedItems = [];
+
+      orderItems.forEach((item) => {
+        const fullOffer = offers.find((off) => off.id === item.id) || item;
+        if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
+          // Si au moins un sous-service du pack manque
+          const allAssigned = fullOffer.packItems.every((subId) => assignedOfferIds.includes(subId));
+          if (!allAssigned) unassignedItems.push(item);
+        } else {
+          if (!assignedOfferIds.includes(item.id)) unassignedItems.push(item);
+        }
+      });
+
+      if (!unassignedItems.length) {
+        return toast('Tous les produits ou packs de cette commande ont déjà leurs comptes attribués.');
+      }
+
+      let count = 0;
+      for (const item of unassignedItems) {
+        try {
+          const res = await api('/orders/' + o.id + '/assign-account', { method: 'POST', body: { offerId: item.id } });
+          count += (res.accounts ? res.accounts.length : 1);
+        } catch (err) {
+          toast('Stock insuffisant pour ' + item.name + ' : ' + err.message, true);
+        }
+      }
+      if (count > 0) {
+        toast(count + ' compte(s) attribué(s) depuis le stock !');
+        refreshOrderAccounts(o, pKey);
+        loadOrders();
+        loadAccounts();
+      }
+    };
+
+    // Message de livraison WhatsApp
+    const deliveryMsg = formatDeliveryMessage(o, list);
+    $('#oCopyDeliveryBtn').onclick = () => {
+      if (!list.length) return toast('Aucun identifiant attribué à envoyer.', true);
+      navigator.clipboard.writeText(deliveryMsg)
+        .then(() => toast('Message de livraison copié !'))
+        .catch(() => prompt('Message à copier :', deliveryMsg));
+    };
+    const sendWa = $('#oSendDeliveryWa');
+    if (pKey && list.length) {
+      sendWa.hidden = false;
+      sendWa.href = 'https://wa.me/' + pKey + '?text=' + encodeURIComponent(deliveryMsg);
+    } else {
+      sendWa.hidden = true;
+    }
+
+    // Espace Abonné Client
+    const copyAccessBtn = $('#oCopyAccessLinkBtn');
+    const openAccessBtn = $('#oOpenAccessLinkBtn');
+    if (o.access_token) {
+      const accessUrl = location.origin + '/acces/' + o.access_token;
+      copyAccessBtn.hidden = false;
+      copyAccessBtn.onclick = () => {
+        navigator.clipboard.writeText(accessUrl)
+          .then(() => toast('Lien de l\'espace abonné copié !'))
+          .catch(() => prompt('Lien espace abonné :', accessUrl));
+      };
+      openAccessBtn.hidden = false;
+      openAccessBtn.href = '/acces/' + o.access_token;
+    } else {
+      copyAccessBtn.hidden = true;
+      openAccessBtn.hidden = true;
+    }
+  }
+
+  async function openOrderDialog(o, prefill = null) {
     editingOrder = o || null;
-    if (!o) { try { discountCfg = await api('/settings'); } catch (e) {} }
+    try { discountCfg = await api('/settings'); } catch (e) {}
     $('#orderDlgTitle').textContent = o ? 'Commande n°' + o.id : 'Nouvelle commande';
-    $('#oFirst').value = o ? o.customer_name || '' : '';
-    $('#oLast').value = o ? o.customer_last_name || '' : '';
-    $('#oPhone').value = o ? o.customer_phone || '' : '';
+    $('#oFirst').value = o ? o.customer_name || '' : (prefill ? prefill.firstName || '' : '');
+    $('#oLast').value = o ? o.customer_last_name || '' : (prefill ? prefill.lastName || '' : '');
+    $('#oPhone').value = o ? o.customer_phone || '' : (prefill ? prefill.phone || '' : '');
     $('#oPay').value = o ? o.payment_method || '' : '';
     $('#oStatus').value = o ? o.status : 'confirmed';
     $('#oNotes').value = o ? o.notes || '' : '';
     $('#oTotal').value = o ? o.total : '';
-    $('#oTotal').disabled = !!o;
+    $('#oTotal').disabled = false;
     $('#oExpiresRow').hidden = !o;
     $('#oExpires').value = o && o.expires_at ? o.expires_at : '';
-    $('#oItemsBox').hidden = !!o;
-    $('#oItemsRead').hidden = !o;
-    if (o) {
-      $('#oItemsList').textContent = (o.items || []).map((i) => i.name + ' (' + fmt(i.price) + ')').join(' + ') || '—';
-    } else {
-      const box = $('#oPick');
-      box.textContent = '';
-      offers.forEach((x) => {
-        const qty = h('input', { type: 'number', min: 0, max: 9, step: 1, value: 0, ariaLabel: 'Quantité ' + x.name });
-        qty.dataset.id = x.id;
-        qty.addEventListener('input', updateOrderSum);
-        box.append(h('div', { className: 'pick-row' + (x.active ? '' : ' muted-row') },
-          h('span', {}, x.name + (x.active ? '' : ' (masquée)')), h('small', {}, fmt(x.price)), qty));
-      });
+    $('#oItemsBox').hidden = false;
+    $('#oItemsRead').hidden = true;
+
+    const itemCounts = {};
+    if (o && Array.isArray(o.items)) {
+      o.items.forEach((i) => { if (i && i.id) itemCounts[i.id] = (itemCounts[i.id] || 0) + 1; });
     }
+
+    const box = $('#oPick');
+    box.textContent = '';
+    offers.forEach((x) => {
+      const initVal = itemCounts[x.id] || 0;
+      const qty = h('input', { type: 'number', min: 0, max: 9, step: 1, value: initVal, ariaLabel: 'Quantité ' + x.name });
+      qty.dataset.id = x.id;
+      qty.addEventListener('input', updateOrderSum);
+      box.append(h('div', { className: 'pick-row' + (x.active ? '' : ' muted-row') },
+        h('span', {}, x.name + (x.active ? '' : ' (masquée)')), h('small', {}, fmt(x.price)), qty));
+    });
+
+    const phone = o ? o.customer_phone : (prefill ? prefill.phone : '');
+    const pKey = waPhone(phone);
+    const openWa = $('#dlgOpenWa');
+    if (pKey) {
+      openWa.hidden = false;
+      openWa.href = 'https://wa.me/' + pKey;
+    } else {
+      openWa.hidden = true;
+    }
+
+    $('#dlgCopyWa').onclick = () => {
+      const curItems = pickedItems();
+      const mockOrder = {
+        id: o ? o.id : 'nouveau',
+        customer_name: $('#oFirst').value,
+        customer_last_name: $('#oLast').value,
+        customer_phone: $('#oPhone').value,
+        items: curItems.length ? curItems : (o ? o.items : []),
+        total: $('#oTotal').value !== '' ? Number($('#oTotal').value) : 0,
+        expires_at: $('#oExpires').value,
+        payment_method: $('#oPay').value,
+        promo_code: o ? o.promo_code : '',
+        promo_pct: o ? o.promo_pct : ''
+      };
+      copyOrderRecap(mockOrder);
+    };
+
+    refreshOrderAccounts(o, pKey);
     updateOrderSum();
     orderDlg.showModal();
   }
@@ -551,12 +1532,14 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       paymentMethod: $('#oPay').value, status: $('#oStatus').value, notes: $('#oNotes').value
     };
     try {
+      const ids = pickedItems().map((x) => x.id);
       if (editingOrder) {
         if ($('#oExpires').value !== (editingOrder.expires_at || '')) info.expiresAt = $('#oExpires').value;
+        if (ids.length) info.offerIds = ids;
+        if ($('#oTotal').value !== '') info.total = $('#oTotal').value;
         await api('/orders/' + editingOrder.id, { method: 'PATCH', body: info });
         toast('Commande n°' + editingOrder.id + ' mise à jour.');
       } else {
-        const ids = pickedItems().map((x) => x.id);
         const r = await api('/orders', { method: 'POST', body: { ...info, offerIds: ids, total: $('#oTotal').value } });
         toast('Commande n°' + r.id + ' créée (' + fmt(r.total) + ').');
       }
@@ -612,6 +1595,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   let offers = [];
   async function loadOffers() {
     offers = await api('/offers');
+    updateAccountOfferSelects();
     const body = $('#offersBody');
     body.textContent = '';
     offers.forEach((o) => {
@@ -636,6 +1620,20 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
   const dlg = $('#offerDlg');
   let editingId = null;
+  function renderPackServicesList(selectedIds) {
+    const box = $('#fPackServicesList');
+    box.textContent = '';
+    const baseOffers = offers.filter((x) => !x.isPack && (!editingId || x.id !== editingId));
+    baseOffers.forEach((x) => {
+      const checked = selectedIds.includes(x.id);
+      const lbl = h('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;background:rgba(255,255,255,.04);padding:6px 10px;border-radius:8px' },
+        h('input', { type: 'checkbox', value: String(x.id), checked: checked }),
+        x.name
+      );
+      box.append(lbl);
+    });
+  }
+
   function openDialog(o) {
     editingId = o ? o.id : null;
     $('#dlgTitle').textContent = o ? 'Modifier « ' + o.name + ' »' : 'Nouvelle offre';
@@ -646,10 +1644,17 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     $('#fSort').value = o ? o.sort : (offers.length ? Math.max(...offers.map((x) => x.sort)) + 10 : 0);
     $('#fPrice').value = o ? o.price : '';
     $('#fWas').value = o && o.was != null ? o.was : '';
+    $('#fLowStock').value = o && o.lowStockThreshold != null ? o.lowStockThreshold : 2;
     $('#fDesc').value = o ? o.description : '';
     $('#fFeat').value = o ? (o.features || []).join('\n') : '';
     $('#fHue').value = o ? o.hue : 330;
-    $('#fPack').checked = o ? o.isPack : false;
+    const isPack = o ? !!o.isPack : false;
+    $('#fPack').checked = isPack;
+    $('#fPackBox').hidden = !isPack;
+    renderPackServicesList(o && Array.isArray(o.packItems) ? o.packItems : []);
+    $('#fPack').onchange = () => {
+      $('#fPackBox').hidden = !$('#fPack').checked;
+    };
     $('#fActive').checked = o ? o.active : true;
     dlg.showModal();
   }
@@ -666,10 +1671,14 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       sort: $('#fSort').value,
       price: $('#fPrice').value,
       was: $('#fWas').value,
+      lowStockThreshold: Math.max(0, parseInt($('#fLowStock').value, 10) || 2),
       description: $('#fDesc').value,
       features: $('#fFeat').value.split('\n'),
       hue: $('#fHue').value,
       isPack: $('#fPack').checked,
+      packItems: $('#fPack').checked
+        ? Array.from(document.querySelectorAll('#fPackServicesList input[type="checkbox"]:checked')).map((cb) => Number(cb.value))
+        : [],
       active: $('#fActive').checked
     };
     try {
@@ -682,12 +1691,672 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     } catch (err) { toast(err.message, true); }
   });
 
+  // ----- Stock & Comptes -----
+  const accDlg = $('#accountDlg');
+  let accountsList = [];
+  let editingAccountId = null;
+
+  function updateAccountOfferSelects() {
+    const filter = $('#accOfferFilter');
+    if (filter) {
+      const curFilterVal = filter.value;
+      filter.textContent = '';
+      filter.append(h('option', { value: '' }, 'Toutes les offres & services'));
+
+      const baseGroup = h('optgroup', { label: 'Services individuels (Stock réel)' });
+      offers.filter((o) => !o.isPack).forEach((o) => baseGroup.append(h('option', { value: String(o.id) }, o.name)));
+      filter.append(baseGroup);
+
+      const packs = offers.filter((o) => o.isPack);
+      if (packs.length) {
+        const packGroup = h('optgroup', { label: 'Packs commerciaux (Filtre composants)' });
+        packs.forEach((o) => packGroup.append(h('option', { value: String(o.id) }, '📦 ' + o.name)));
+        filter.append(packGroup);
+      }
+      if (curFilterVal) filter.value = curFilterVal;
+    }
+
+    const aOffer = $('#aOffer');
+    if (aOffer) {
+      const curAOffer = aOffer.value;
+      aOffer.textContent = '';
+      // On n'ajoute du stock que sur des services individuels réels, jamais sur un pack !
+      offers.filter((o) => !o.isPack).forEach((o) => aOffer.append(h('option', { value: String(o.id) }, o.name)));
+      if (curAOffer) aOffer.value = curAOffer;
+    }
+  }
+
+  const accViewDlg = $('#accountViewDlg');
+  let viewingAccount = null;
+
+  function renderSupplierFilter(suppliers) {
+    const sel = $('#accSupplierFilter');
+    if (!sel) return;
+    const curVal = sel.value;
+    sel.textContent = '';
+    sel.append(h('option', { value: '' }, 'Tous les fournisseurs (' + (suppliers ? suppliers.length : 0) + ')'));
+    (suppliers || []).forEach((s) => {
+      sel.append(h('option', { value: s }, s));
+    });
+    if (curVal) sel.value = curVal;
+  }
+
+  let activeWarrantyFilter = false;
+
+  function renderQuickChips(curStatus, warrantyCount = 0) {
+    const box = $('#accQuickChips');
+    if (!box) return;
+    box.textContent = '';
+    const chips = [
+      { key: '', label: '⚡ Tous', isWarranty: false },
+      { key: 'available', label: '🟢 Disponibles', isWarranty: false },
+      { key: 'assigned', label: '🔵 Assignés', isWarranty: false },
+      { key: 'archived', label: '⚪ Archivés', isWarranty: false },
+      { key: 'warranty', label: '🚨 Réclamations SAV' + (warrantyCount > 0 ? ' (' + warrantyCount + ')' : ''), isWarranty: true }
+    ];
+    chips.forEach((c) => {
+      const active = c.isWarranty ? activeWarrantyFilter : (!activeWarrantyFilter && (curStatus || '') === c.key);
+      const btn = h('button', {
+        type: 'button',
+        className: 'pill ' + (active ? 'on' : ''),
+        style: 'cursor:pointer;font-size:12px;padding:4px 11px;border-radius:20px;' + (active ? 'border-color:var(--neon);font-weight:700' : 'background:rgba(255,255,255,.05);border:1px solid var(--line)')
+      }, c.label);
+      btn.onclick = () => {
+        if (c.isWarranty) {
+          activeWarrantyFilter = true;
+          $('#accStatusFilter').value = '';
+        } else {
+          activeWarrantyFilter = false;
+          $('#accStatusFilter').value = c.key;
+        }
+        loadAccounts().catch((e) => toast(e.message, true));
+      };
+      box.append(btn);
+    });
+  }
+
+  function openAccountViewDialog(a) {
+    if (!a) return;
+    viewingAccount = a;
+    $('#viewAccTitle').textContent = 'Compte #' + a.id;
+
+    const pill = $('#viewAccStatusPill');
+    pill.className = 'pill ' + (a.status === 'available' ? 'on' : a.status === 'assigned' ? '' : 'off');
+    pill.textContent = a.status === 'available' ? 'Disponible' : a.status === 'assigned' ? 'Assigné' : 'Archivé';
+
+    $('#viewAccOffer').textContent = a.offer_name || a.service_name || 'Offre #' + a.offer_id;
+    $('#viewAccSupplier').textContent = a.supplier || 'Non spécifié';
+
+    const sUrl = $('#viewAccSupplierUrl');
+    if (a.supplier_url) {
+      sUrl.hidden = false;
+      sUrl.href = a.supplier_url;
+    } else {
+      sUrl.hidden = true;
+    }
+
+    $('#viewAccCost').textContent = a.cost > 0 ? fmt(a.cost) : '0,00 €';
+    $('#viewAccLogin').textContent = a.login || '—';
+
+    const passEl = $('#viewAccPass');
+    const toggleBtn = $('#viewAccTogglePass');
+    let passVisible = false;
+    const updatePassDisplay = () => {
+      if (!a.password) {
+        passEl.textContent = '—';
+        toggleBtn.hidden = true;
+      } else if (passVisible) {
+        passEl.textContent = a.password;
+        toggleBtn.hidden = false;
+        toggleBtn.textContent = '🙈 Masquer';
+      } else {
+        passEl.textContent = '••••••••';
+        toggleBtn.hidden = false;
+        toggleBtn.textContent = '👁️ Afficher';
+      }
+    };
+    updatePassDisplay();
+    toggleBtn.onclick = () => {
+      passVisible = !passVisible;
+      updatePassDisplay();
+    };
+
+    $('#viewAccCopyPass').onclick = () => {
+      if (!a.password) return toast('Aucun mot de passe', true);
+      navigator.clipboard.writeText(a.password)
+        .then(() => toast('Mot de passe copié !'))
+        .catch(() => prompt('Mot de passe :', a.password));
+    };
+
+    $('#viewAccCopyLogin').onclick = () => {
+      if (!a.login) return toast('Aucun identifiant', true);
+      navigator.clipboard.writeText(a.login)
+        .then(() => toast('Identifiant copié !'))
+        .catch(() => prompt('Identifiant :', a.login));
+    };
+
+    $('#viewAccSlot').textContent = a.slot_profile || 'Non spécifié';
+
+    const clientBox = $('#viewAccClientBox');
+    const unassignBtn = $('#viewAccUnassign');
+    if (a.order_id) {
+      clientBox.hidden = false;
+      unassignBtn.hidden = false;
+      const cName = [a.customer_name, a.customer_last_name].filter(Boolean).join(' ').trim() || 'Client (Commande #' + a.order_id + ')';
+      const clientLink = $('#viewAccClientLink');
+      clientLink.textContent = cName;
+      clientLink.onclick = () => {
+        accViewDlg.close();
+        openClientDialog(a.customer_phone || a.customer_name);
+      };
+      $('#viewAccClientPhone').textContent = a.customer_phone ? 'Tél : ' + a.customer_phone : 'Aucun téléphone';
+
+      const pKey = waPhone(a.customer_phone);
+      const waBtn = $('#viewAccClientWa');
+      if (pKey) {
+        waBtn.hidden = false;
+        waBtn.href = 'https://wa.me/' + pKey;
+      } else {
+        waBtn.hidden = true;
+      }
+
+      const ordBtn = $('#viewAccOrderBtn');
+      ordBtn.textContent = 'Commande #' + a.order_id;
+      ordBtn.onclick = () => {
+        accViewDlg.close();
+        const ord = allOrders.find((o) => o.id === a.order_id);
+        if (ord) openOrderDialog(ord);
+        else openOrderDialog({ id: a.order_id });
+      };
+    } else {
+      clientBox.hidden = true;
+      unassignBtn.hidden = true;
+    }
+
+    // Section Réclamation SAV Fournisseur
+    const savBox = $('#viewAccSavBox');
+    if (a.warranty_claim) {
+      savBox.hidden = false;
+      $('#viewAccSavReason').textContent = 'Motif : ' + (a.defect_reason || 'Signalement client / Non fonctionnel');
+      let metaStr = a.defect_at ? 'Signalé le ' + new Date(a.defect_at).toLocaleString('fr-FR') : '';
+      if (a.replaced_by_account_id) {
+        metaStr += (metaStr ? ' · ' : '') + 'Remplacé par le compte #' + a.replaced_by_account_id;
+      }
+      $('#viewAccSavMeta').textContent = metaStr;
+      $('#viewAccCloseSavBtn').onclick = async () => {
+        if (!confirm('Clôturer cette réclamation SAV auprès du fournisseur ?')) return;
+        try {
+          await api('/accounts/' + a.id + '/close-warranty', { method: 'POST', body: {} });
+          toast('Réclamation SAV clôturée.');
+          a.warranty_claim = false;
+          savBox.hidden = true;
+          loadAccounts();
+        } catch (err) { toast(err.message, true); }
+      };
+    } else {
+      savBox.hidden = true;
+    }
+
+    // Bouton de remplacement SAV (1-clic) si assigné à une commande
+    const repSavBtn = $('#viewAccReplaceSav');
+    if (a.status === 'assigned' && a.order_id) {
+      repSavBtn.hidden = false;
+      repSavBtn.onclick = async () => {
+        const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+        if (reason === null) return;
+        try {
+          const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
+            method: 'POST',
+            body: { reason: reason.trim() || 'Signalement client' }
+          });
+          toast('Compte remplacé avec succès ! Nouvel accès attribué.');
+          accViewDlg.close();
+          loadAccounts();
+          loadOrders();
+          if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
+            window.open(repRes.whatsappUrl, '_blank');
+          }
+        } catch (err) { toast(err.message, true); }
+      };
+    } else {
+      repSavBtn.hidden = true;
+    }
+
+    $('#viewAccNotes').textContent = a.notes || 'Aucune consigne enregistrée.';
+    $('#viewAccPrivateNotes').textContent = a.private_notes || 'Aucune note privée enregistrée (accessible uniquement par les admins).';
+
+    $('#viewAccCopyAll').onclick = () => {
+      let str = 'Offre : ' + (a.offer_name || a.service_name || '') + '\n' +
+                'Identifiant : ' + (a.login || '') + '\n' +
+                (a.password ? 'Mot de passe : ' + a.password + '\n' : '') +
+                (a.slot_profile ? 'Profil / Slot : ' + a.slot_profile + '\n' : '') +
+                (a.supplier ? 'Fournisseur : ' + a.supplier + '\n' : '');
+      navigator.clipboard.writeText(str)
+        .then(() => toast('Identifiants complets copiés !'))
+        .catch(() => prompt('Identifiants :', str));
+    };
+
+    unassignBtn.onclick = async () => {
+      if (!confirm('Désassigner ce compte de la commande #' + a.order_id + ' ? Il redeviendra disponible en stock libre.')) return;
+      try {
+        await api('/accounts/' + a.id, { method: 'PATCH', body: { orderId: null } });
+        toast('Compte libéré et remis en stock disponible.');
+        accViewDlg.close();
+        loadAccounts();
+        loadOrders();
+      } catch (err) { toast(err.message, true); }
+    };
+
+    $('#viewAccEdit').onclick = () => {
+      accViewDlg.close();
+      openAccountDialog(a);
+    };
+
+    $('#viewAccDelete').onclick = async () => {
+      if (!confirm('Supprimer définitivement le compte « ' + a.login + ' » ?')) return;
+      try {
+        await api('/accounts/' + a.id, { method: 'DELETE' });
+        toast('Compte supprimé.');
+        accViewDlg.close();
+        loadAccounts();
+        loadOrders();
+      } catch (err) { toast(err.message, true); }
+    };
+
+    accViewDlg.showModal();
+  }
+
+  $('#viewAccClose').addEventListener('click', () => accViewDlg.close());
+
+  function renderStockAlerts(alerts) {
+    const banner = $('#accAlertBanner');
+    if (!banner) return;
+    if (!alerts || !alerts.length) {
+      banner.hidden = true;
+      banner.textContent = '';
+      return;
+    }
+    banner.hidden = false;
+    banner.textContent = '';
+    const title = h('div', { style: 'display:flex;align-items:center;gap:8px;font-weight:700;color:var(--bad);margin-bottom:8px' },
+      h('span', { style: 'font-size:16px' }, '⚠️'),
+      h('span', {}, 'ALERTE STOCK BAS & RÉAPPROVISIONNEMENT FOURNISSEUR (' + alerts.length + ' service' + (alerts.length > 1 ? 's' : '') + ')')
+    );
+    const listEl = h('div', { style: 'display:flex;flex-direction:column;gap:6px' });
+    alerts.forEach((alt) => {
+      const filterBtn = h('button', { className: 'btn small', type: 'button', style: 'font-size:11px;padding:3px 8px' }, 'Filtrer');
+      filterBtn.onclick = () => {
+        $('#accOfferFilter').value = String(alt.offerId);
+        activeWarrantyFilter = false;
+        $('#accStatusFilter').value = 'available';
+        loadAccounts();
+      };
+      const row = h('div', { style: 'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:rgba(255,255,255,.04);padding:6px 10px;border-radius:8px' },
+        h('span', { style: 'font-size:13px' },
+          '🔴 ', h('b', {}, alt.offerName), ' : ',
+          h('span', { style: 'color:var(--warn);font-weight:700' }, alt.available + ' disponible(s)'),
+          ' (seuil minimal : ' + alt.threshold + ')'
+        ),
+        filterBtn
+      );
+      listEl.append(row);
+    });
+    banner.append(title, listEl);
+  }
+
+  async function loadAccounts() {
+    const q = new URLSearchParams();
+    const offerId = $('#accOfferFilter').value;
+    const supplier = $('#accSupplierFilter').value;
+    const status = $('#accStatusFilter').value;
+    const sort = $('#accSort').value;
+    const search = $('#accSearch').value.trim();
+    if (offerId) q.set('offerId', offerId);
+    if (supplier) q.set('supplier', supplier);
+    if (activeWarrantyFilter) {
+      q.set('warranty', 'true');
+    } else if (status) {
+      q.set('status', status);
+    }
+    if (sort) q.set('sort', sort);
+    if (search) q.set('search', search);
+
+    const data = await api('/accounts?' + q.toString());
+    accountsList = data.accounts || [];
+    renderStockAlerts(data.alerts || []);
+    renderStockTiles(data.summary || data.stock || []);
+    renderAccounts(accountsList);
+    renderSupplierFilter(data.suppliers || []);
+    renderQuickChips(status, data.warrantyClaimsCount || 0);
+    updateAccountOfferSelects();
+  }
+
+  function renderStockTiles(summary) {
+    const box = $('#accStockTiles');
+    box.textContent = '';
+    const baseSummary = summary.filter((s) => !s.is_pack);
+    const packsSummary = summary.filter((s) => s.is_pack);
+
+    const totalAvail = baseSummary.reduce((acc, s) => acc + Number(s.available_count || 0), 0);
+    const totalAssigned = baseSummary.reduce((acc, s) => acc + Number(s.assigned_count || 0), 0);
+
+    box.append(
+      h('div', { className: 'stat' },
+        h('b', { style: 'color:' + (totalAvail > 0 ? 'var(--neon)' : 'var(--warn)') }, String(totalAvail)),
+        h('span', {}, 'comptes réels en stock libre')
+      ),
+      h('div', { className: 'stat' },
+        h('b', {}, String(totalAssigned)),
+        h('span', {}, 'comptes actifs assignés')
+      )
+    );
+
+    // 1. Stock des services individuels (XpressVPN, Disney+, Netflix...)
+    baseSummary.forEach((s) => {
+      const avail = Number(s.available_count || 0);
+      const thresh = s.low_stock_threshold == null ? 2 : Number(s.low_stock_threshold);
+      const isLow = avail <= thresh;
+      const tile = h('div', {
+        className: 'stat',
+        style: isLow ? 'border-color:var(--bad);background:rgba(255,122,156,.06)' : ''
+      },
+        h('b', { style: isLow ? 'color:var(--bad)' : (avail === 0 ? 'color:var(--warn)' : '') }, String(avail)),
+        h('span', {}, (s.offer_name || 'Offre #' + s.offer_id) + (isLow ? ' ⚠️ Stock bas (≤' + thresh + ')' : ' (stock réel)'))
+      );
+      box.append(tile);
+    });
+
+    // 2. Packs commerciaux : affichage des packs livrables calculés d'après les stocks séparés
+    packsSummary.forEach((p) => {
+      const deliv = Number(p.pack_deliverable_count || 0);
+      const comps = (p.pack_components || []).map((c) => c.name + ' : ' + c.available).join(' · ');
+      box.append(h('div', { className: 'stat', style: 'border-color:rgba(0,242,254,.35);background:rgba(0,242,254,.04)' },
+        h('b', { style: 'color:' + (deliv > 0 ? 'var(--cyan)' : 'var(--warn)') }, String(deliv)),
+        h('span', {}, '📦 ' + (p.offer_name || 'Pack #' + p.offer_id) + ' (livrables' + (comps ? ' · ' + comps : '') + ')')
+      ));
+    });
+  }
+
+  function renderAccounts(rows) {
+    const body = $('#accountsBody');
+    body.textContent = '';
+    $('#accountsEmpty').hidden = rows.length > 0;
+
+    rows.forEach((a) => {
+      let statusPill;
+      if (a.warranty_claim) {
+        statusPill = h('span', { className: 'pill', style: 'background:rgba(255,122,156,.2);color:var(--bad);border:1px solid var(--bad)', title: 'Réclamation SAV : ' + (a.defect_reason || 'Signalé') }, '🚨 SAV EN COURS');
+      } else if (a.status === 'available') {
+        statusPill = h('span', { className: 'pill on' }, 'Disponible');
+      } else if (a.status === 'assigned') {
+        statusPill = h('span', { className: 'pill' }, 'Assigné #' + (a.order_id || ''));
+      } else {
+        statusPill = h('span', { className: 'pill off' }, 'Archivé');
+      }
+
+      const viewBtn = h('button', { className: 'btn small primary', type: 'button', title: 'Voir la fiche complète' }, '👁️ Fiche');
+      viewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAccountViewDialog(a);
+      });
+
+      const editBtn = h('button', { className: 'btn small', type: 'button', title: 'Modifier les informations' }, '✏️ Modifier');
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openAccountDialog(a);
+      });
+
+      const delBtn = h('button', { className: 'btn small danger', type: 'button', title: 'Supprimer' }, '🗑️');
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('Supprimer le compte « ' + a.login + ' » ?')) return;
+        try {
+          await api('/accounts/' + a.id, { method: 'DELETE' });
+          toast('Compte supprimé.');
+          loadAccounts();
+          loadOrders();
+        } catch (err) { toast(err.message, true); }
+      });
+
+      const clientInfo = a.order_id
+        ? h('small', { className: 'sub' },
+            'Cmd #' + a.order_id + (a.customer_name ? ' · ' + a.customer_name : '') + (a.customer_phone ? ' (' + a.customer_phone + ')' : ''))
+        : '';
+
+      const supplierEl = h('div', {},
+        h('b', { style: 'color:var(--cyan)' }, a.supplier || '—'),
+        a.supplier_url ? h('a', { href: a.supplier_url, target: '_blank', rel: 'noopener', className: 'pill', style: 'margin-left:6px;font-size:10px;text-decoration:none', onclick: (ev) => ev.stopPropagation() }, '🔗 Lien') : '',
+        h('div', { style: 'font-size:12px;color:var(--muted)' }, 'Coût : ' + (a.cost > 0 ? fmt(a.cost) : '0 €'))
+      );
+
+      const notesTd = h('td', { style: 'max-width:200px;font-size:12px;color:var(--muted)' },
+        a.notes ? h('div', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.notes) : h('span', {}, '—'),
+        a.private_notes ? h('div', { style: 'color:var(--warn);font-size:11px;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: 'Note privée admin : ' + a.private_notes }, '🔒 ' + (a.private_notes.length > 25 ? a.private_notes.slice(0, 25) + '…' : a.private_notes)) : ''
+      );
+
+      const tr = h('tr', { style: 'cursor:pointer', title: 'Cliquer pour consulter la fiche du compte' },
+        h('td', {}, h('b', {}, a.offer_name || a.service_name || '—')),
+        h('td', {}, supplierEl),
+        h('td', {}, h('span', { className: 'code' }, a.login)),
+        h('td', {}, a.password ? h('span', { className: 'code' }, a.password.length > 12 ? a.password.slice(0, 10) + '…' : a.password) : h('span', { style: 'color:var(--muted)' }, '—')),
+        h('td', {}, a.slot_profile || h('span', { style: 'color:var(--muted)' }, '—')),
+        h('td', {}, statusPill, clientInfo),
+        notesTd,
+        h('td', {}, h('div', { className: 'row-actions' }, viewBtn, editBtn, delBtn))
+      );
+
+      tr.addEventListener('click', () => openAccountViewDialog(a));
+      body.append(tr);
+    });
+  }
+
+  function openAccountDialog(a) {
+    editingAccountId = a ? a.id : null;
+    $('#accDlgTitle').textContent = a ? 'Modifier le compte #' + a.id : 'Ajouter un compte au stock';
+    updateAccountOfferSelects();
+    if (a && a.offer_id) $('#aOffer').value = a.offer_id;
+    $('#aSupplier').value = a ? a.supplier || '' : '';
+    $('#aCost').value = a && a.cost != null ? a.cost : '';
+    $('#aSupplierUrl').value = a ? a.supplier_url || '' : '';
+    $('#aLogin').value = a ? a.login || '' : '';
+    $('#aPass').value = a ? a.password || '' : '';
+    $('#aSlot').value = a ? a.slot_profile || '' : '';
+    $('#aNotes').value = a ? a.notes || '' : '';
+    $('#aPrivateNotes').value = a ? a.private_notes || '' : '';
+    $('#aStatus').value = a ? a.status || 'available' : 'available';
+    accDlg.showModal();
+  }
+
+  $('#newAccount').addEventListener('click', () => openAccountDialog(null));
+  $('#accDlgCancel').addEventListener('click', () => accDlg.close());
+
+  $('#accountForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      offerId: Number($('#aOffer').value) || null,
+      login: $('#aLogin').value.trim(),
+      password: $('#aPass').value,
+      slotProfile: $('#aSlot').value.trim(),
+      notes: $('#aNotes').value.trim(),
+      privateNotes: $('#aPrivateNotes').value.trim(),
+      supplier: $('#aSupplier').value.trim(),
+      supplierUrl: $('#aSupplierUrl').value.trim(),
+      cost: parseFloat($('#aCost').value) || 0,
+      status: $('#aStatus').value
+    };
+    try {
+      if (editingAccountId) {
+        await api('/accounts/' + editingAccountId, { method: 'PATCH', body: payload });
+        toast('Compte mis à jour.');
+      } else {
+        await api('/accounts', { method: 'POST', body: payload });
+        toast('Compte ajouté au stock.');
+      }
+      accDlg.close();
+      loadAccounts();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  $('#accOfferFilter').addEventListener('change', () => loadAccounts().catch((e) => toast(e.message, true)));
+  $('#accSupplierFilter').addEventListener('change', () => loadAccounts().catch((e) => toast(e.message, true)));
+  $('#accStatusFilter').addEventListener('change', () => loadAccounts().catch((e) => toast(e.message, true)));
+  $('#accSort').addEventListener('change', () => loadAccounts().catch((e) => toast(e.message, true)));
+  let accSearchTimer = null;
+  $('#accSearch').addEventListener('input', () => {
+    clearTimeout(accSearchTimer);
+    accSearchTimer = setTimeout(() => loadAccounts().catch((e) => toast(e.message, true)), 250);
+  });
+
+  $('#syncAirtableBtn').addEventListener('click', async () => {
+    if (!confirm('Lancer la synchronisation avec SubManager (Airtable) ?\n\nCela va importer tous les stocks fournisseurs, les clients et lier les ventes existantes sans supprimer vos données actuelles.')) return;
+    const btn = $('#syncAirtableBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Synchronisation...';
+    try {
+      const res = await api('/sync-airtable', { method: 'POST', body: {} });
+      toast(res.message || 'Synchronisation SubManager réussie !');
+      loadAccounts();
+      loadClients();
+      loadOrders();
+      loadSales();
+      loadStats();
+    } catch (err) {
+      toast('Échec de synchronisation : ' + err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 Synchroniser SubManager';
+    }
+  });
+
+  // ----- Clients & Annuaire -----
+  const clientEditDlg = $('#clientEditDlg');
+  let editingClient = null;
+
+  async function loadClients() {
+    const q = ($('#clientSearch').value || '').trim();
+    const data = await api('/clients' + (q ? '?search=' + encodeURIComponent(q) : ''));
+    const rows = data.clients || [];
+
+    const totalClients = rows.length;
+    const totalSpent = rows.reduce((s, c) => s + Number(c.total_spent || 0), 0);
+    const withPhone = rows.filter((c) => c.phone && c.phone.trim()).length;
+
+    const tilesBox = $('#clientTiles');
+    tilesBox.textContent = '';
+    tilesBox.append(
+      h('div', { className: 'stat' }, h('b', {}, String(totalClients)), h('span', {}, 'clients enregistrés')),
+      h('div', { className: 'stat' }, h('b', { style: 'color:var(--neon)' }, fmt(totalSpent)), h('span', {}, 'volume total dépensé')),
+      h('div', { className: 'stat' }, h('b', { style: 'color:var(--cyan)' }, String(withPhone)), h('span', {}, 'contacts WhatsApp directs'))
+    );
+
+    renderClients(rows);
+  }
+
+  function renderClients(rows) {
+    const body = $('#clientsBody');
+    body.textContent = '';
+    $('#clientsEmpty').hidden = rows.length > 0;
+
+    rows.forEach((c) => {
+      const pKey = waPhone(c.phone);
+      const waBtn = pKey
+        ? h('a', {
+            href: 'https://wa.me/' + pKey,
+            target: '_blank',
+            rel: 'noopener',
+            className: 'pill on',
+            style: 'text-decoration:none;display:inline-flex;align-items:center;gap:4px',
+            title: 'Écrire sur WhatsApp'
+          }, '💬 ' + (c.phone || 'WhatsApp'))
+        : h('span', { style: 'color:var(--muted)' }, c.phone || '—');
+
+      const nameEl = h('button', {
+        className: 'client-link',
+        type: 'button',
+        title: 'Voir la fiche client détaillée'
+      }, c.name || 'Client sans nom');
+      nameEl.addEventListener('click', () => openClientDialog(c.phone || c.name));
+
+      const editBtn = h('button', { className: 'btn small', type: 'button' }, 'Modifier');
+      editBtn.addEventListener('click', () => openClientEditDialog(c));
+
+      const delBtn = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('Supprimer ce client (' + (c.name || c.phone) + ') ?')) return;
+        try {
+          if (c.id) await api('/clients/' + c.id, { method: 'DELETE' });
+          toast('Client supprimé.');
+          loadClients();
+        } catch (e) { toast(e.message, true); }
+      });
+
+      const lastDate = c.last_order_at
+        ? new Date(c.last_order_at).toLocaleDateString('fr-FR')
+        : (c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '—');
+
+      body.append(h('tr', {},
+        h('td', {}, nameEl, c.notes ? h('small', { className: 'sub' }, c.notes) : ''),
+        h('td', {}, c.phone ? h('span', { className: 'code' }, c.phone) : '—'),
+        h('td', {}, waBtn),
+        h('td', { className: 'num', style: 'font-weight:700' }, String(c.orders_count || 0)),
+        h('td', { className: 'num', style: 'color:var(--neon);font-weight:700' }, fmt(c.total_spent || 0)),
+        h('td', { className: 'num' }, lastDate),
+        h('td', {}, h('div', { className: 'row-actions' }, editBtn, delBtn))
+      ));
+    });
+  }
+
+  function openClientEditDialog(c) {
+    editingClient = c || null;
+    $('#clientEditDlgTitle').textContent = c ? 'Modifier le client' : 'Nouveau client';
+    $('#cName').value = c ? c.name || '' : '';
+    $('#cPhone').value = c ? c.phone || '' : '';
+    $('#cNotes').value = c ? c.notes || '' : '';
+    clientEditDlg.showModal();
+  }
+
+  $('#newClientBtn').addEventListener('click', () => openClientEditDialog(null));
+  $('#clientEditCancel').addEventListener('click', () => clientEditDlg.close());
+
+  $('#clientEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: $('#cName').value.trim(),
+      phone: $('#cPhone').value.trim(),
+      notes: $('#cNotes').value.trim()
+    };
+    try {
+      if (editingClient && editingClient.id) {
+        await api('/clients/' + editingClient.id, { method: 'PATCH', body: payload });
+        toast('Client mis à jour.');
+      } else {
+        await api('/clients', { method: 'POST', body: payload });
+        toast('Client ajouté.');
+      }
+      clientEditDlg.close();
+      loadClients();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  let clientSearchTimer = null;
+  $('#clientSearch').addEventListener('input', () => {
+    clearTimeout(clientSearchTimer);
+    clientSearchTimer = setTimeout(() => loadClients().catch((e) => toast(e.message, true)), 250);
+  });
+
   // ----- Avis -----
-  async function loadReviews() {
-    const status = $('#reviewFilter').value;
-    const rows = await api('/reviews' + (status ? '?status=' + status : ''));
+  let allReviews = [];
+  function renderReviews() {
+    const q = ($('#reviewSearch').value || '').trim().toLowerCase();
     const body = $('#reviewsBody');
     body.textContent = '';
+    const rows = allReviews.filter((r) => {
+      if (!q) return true;
+      const author = (r.author || '').toLowerCase();
+      const comment = (r.comment || '').toLowerCase();
+      const offer = (r.offer_name || '').toLowerCase();
+      return author.includes(q) || comment.includes(q) || offer.includes(q);
+    });
     $('#reviewsEmpty').hidden = rows.length > 0;
     rows.forEach((r) => {
       const toggle = h('button', { className: 'btn small' + (r.approved ? '' : ' primary'), type: 'button' }, r.approved ? 'Masquer' : 'Publier');
@@ -717,7 +2386,14 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       ));
     });
   }
+
+  async function loadReviews() {
+    const status = $('#reviewFilter').value;
+    allReviews = await api('/reviews' + (status ? '?status=' + status : ''));
+    renderReviews();
+  }
   $('#reviewFilter').addEventListener('change', loadReviews);
+  $('#reviewSearch').addEventListener('input', renderReviews);
 
   // ----- Codes promo -----
   $('#promoLinkEx').textContent = location.origin + '/?promo=CODE';
@@ -809,6 +2485,9 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     $('#pwAlert').hidden = !s.defaultPassword;
     $('#totpOn').hidden = !s.totp;
     $('#totpOff').hidden = s.totp;
+    $('#backupBlock').hidden = !s.totp;
+    $('#backupInfo').textContent = s.totp ? 'Codes de secours restants : ' + s.backupCodesLeft + ' sur 10. Ils permettent de se connecter si l\'application d\'authentification n\'est plus accessible.' : '';
+    renderIpAllow(s);
     const body = $('#sessionsBody');
     body.textContent = '';
     s.sessions.forEach((x) => body.append(h('tr', {},
@@ -841,9 +2520,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   $('#totpEnableForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      await api('/totp/enable', { method: 'POST', body: { code: $('#totpCode').value } });
+      const r = await api('/totp/enable', { method: 'POST', body: { code: $('#totpCode').value } });
       toast('Double authentification activée.');
       $('#totpSetup').hidden = true; $('#totpStart').hidden = false; $('#totpCode').value = '';
+      showBackupCodes(r.backupCodes);
       loadSecurity(); loadAudit();
     } catch (err) { toast(err.message, true); }
   });
@@ -898,14 +2578,161 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     } catch (err) { toast(err.message, true); }
   });
 
+  // ----- Codes de secours, liste blanche d'IP, ventes -----
+  function showBackupCodes(codes) {
+    const box = $('#backupShow');
+    box.textContent = '';
+    if (!codes || !codes.length) { box.hidden = true; return; }
+    box.append(h('p', { className: 'hint', style: 'grid-column:1 / -1; margin:0' }, 'Note ces codes maintenant. Chacun ne fonctionne qu\'une fois, et ils ne seront plus affichés.'));
+    codes.forEach((c) => box.append(h('div', { className: 'secret' }, c)));
+    box.hidden = false;
+  }
+  let currentIp = '';
+  function renderIpAllow(s) {
+    currentIp = s.currentIp || '';
+    const list = s.ipAllowlist || [];
+    $('#ipList').value = list.join('\n');
+    $('#ipInfo').textContent = list.length
+      ? 'Accès admin limité à ' + list.length + ' adresse(s). Ton IP actuelle : ' + currentIp + '.'
+      : 'Aucune restriction. Une liste vide laisse l\'accès ouvert. Ton IP actuelle : ' + currentIp + '.';
+    $('#ipOffNote').hidden = !s.ipAllowlistOff;
+  }
+  $('#backupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!confirm('Régénérer les codes de secours ? Les anciens codes ne fonctionneront plus.')) return;
+    try {
+      const r = await api('/totp/backup-codes', { method: 'POST', body: { code: $('#backupCode').value } });
+      $('#backupCode').value = '';
+      showBackupCodes(r.backupCodes);
+      toast('Nouveaux codes de secours générés.');
+      loadSecurity();
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#ipAddMe').addEventListener('click', () => {
+    const lines = $('#ipList').value.split('\n').map((x) => x.trim()).filter(Boolean);
+    if (currentIp && !lines.includes(currentIp)) lines.push(currentIp);
+    $('#ipList').value = lines.join('\n');
+  });
+  $('#ipForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('/ip-allowlist', { method: 'PUT', body: { list: $('#ipList').value } });
+      toast(r.list.length ? 'Liste blanche enregistrée.' : 'Liste blanche désactivée.');
+      loadSecurity();
+    } catch (err) { toast(err.message, true); }
+  });
+  async function loadSales() {
+    const s = await api('/sales');
+    const max = Math.max(1, ...s.months.map((m) => m.revenue));
+    const chart = $('#salesChart');
+    chart.textContent = '';
+    s.months.forEach((m) => {
+      const pct = Math.round((m.revenue / max) * 100);
+      chart.append(h('div', { className: 'bar-col', title: m.month + ' : ' + fmt(m.revenue) + ' (' + m.orders + ' commande(s))' },
+        h('div', { className: 'bar-track' }, h('div', { className: 'bar', style: 'height:' + pct + '%' })),
+        h('span', { className: 'bar-label' }, m.month.slice(5) + '/' + m.month.slice(2, 4))));
+    });
+    const k = s.kpis || {};
+    const tiles = [
+      [fmt(k.confirmed_revenue || 0), 'CA total confirmé (' + (k.confirmed_count || 0) + ' ventes)'],
+      [fmt(k.total_expenses || 0), 'Dépenses fournisseurs (achats)'],
+      [
+        (k.net_margin >= 0 ? '+' : '') + fmt(k.net_margin || 0) + ' (' + (k.margin_pct || 0) + ' %)',
+        'Marge nette & Rentabilité'
+      ],
+      [fmt(k.avg_basket || 0), 'Panier moyen (AOV)'],
+      [(k.month_orders || 0) + ' (' + fmt(k.month_revenue || 0) + ')', 'Ventes du mois en cours'],
+      [(k.available_stock != null ? k.available_stock : '—'), 'Comptes en réserve disponible'],
+      [(k.pending_count || 0) + ' (' + fmt(k.pending_revenue || 0) + ')', 'En attente de règlement']
+    ];
+    const tilesBox = $('#salesTiles');
+    tilesBox.textContent = '';
+    tiles.forEach(([v, label]) => tilesBox.append(h('div', { className: 'stat' }, h('b', {}, String(v)), h('span', {}, label))));
+    const body = $('#salesOffers');
+    body.textContent = '';
+    $('#salesEmpty').hidden = s.offers.length > 0;
+    s.offers.forEach((o) => body.append(h('tr', {},
+      h('td', {}, o.name || '—'),
+      h('td', { className: 'num' }, String(o.qty)),
+      h('td', { className: 'num' }, fmt(o.amount)))));
+  }
+  $('#salesRefresh').addEventListener('click', () => loadSales().catch((e) => toast(e.message, true)));
+
+  // ----- Exports CSV et état du système -----
+  async function downloadCsv(path, filename) {
+    const r = await fetch('/api/admin' + path, { headers: { 'X-NP-Admin': '1' }, credentials: 'same-origin' });
+    if (r.status === 401) { location.href = '/admin/login'; return; }
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      throw new Error(data.error || 'Erreur ' + r.status);
+    }
+    const url = URL.createObjectURL(await r.blob());
+    const a = h('a', { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const today = () => new Date().toISOString().slice(0, 10);
+  $('#ordersExport').addEventListener('click', () => {
+    const status = $('#orderFilter').value;
+    downloadCsv('/export/orders.csv' + (status ? '?status=' + encodeURIComponent(status) : ''), 'commandes-' + today() + '.csv')
+      .then(() => { toast('Export des commandes téléchargé.'); loadAudit().catch(() => {}); })
+      .catch((e) => toast(e.message, true));
+  });
+  $('#auditExport').addEventListener('click', () => {
+    downloadCsv('/export/audit.csv', 'journal-' + today() + '.csv')
+      .then(() => { toast('Export du journal téléchargé.'); loadAudit().catch(() => {}); })
+      .catch((e) => toast(e.message, true));
+  });
+
+  const fmtBytes = (n) => n >= 1073741824 ? (n / 1073741824).toFixed(2).replace('.', ',') + ' Go'
+    : n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo'
+    : Math.max(1, Math.round(n / 1024)) + ' Ko';
+  function fmtUptime(s) {
+    const d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return (d ? d + ' j ' : '') + (d || hh ? hh + ' h ' : '') + m + ' min';
+  }
+  async function loadSystem() {
+    const s = await api('/system');
+    const tiles = [
+      [fmtUptime(s.uptime), 'en ligne depuis le dernier démarrage'],
+      [fmtBytes(s.rss), 'mémoire du processus (tas utilisé : ' + fmtBytes(s.heapUsed) + ')'],
+      [s.dbMs + ' ms', 'latence de la base de données'],
+      [fmtBytes(s.pg.size), 'taille de la base'],
+      [String(s.pg.orders), 'commandes enregistrées'],
+      [String(s.pg.sessions), 'sessions admin ouvertes'],
+      [String(s.pg.audit), 'entrées dans le journal']
+    ];
+    const box = $('#systemTiles');
+    box.textContent = '';
+    tiles.forEach(([v, label]) => box.append(h('div', { className: 'stat' }, h('b', {}, v), h('span', {}, label))));
+    $('#systemInfo').textContent = 'Node ' + s.node + ' · PostgreSQL ' + s.pg.version
+      + ' · connexions : ' + s.pool.total + ' ouvertes, ' + s.pool.idle + ' libres, ' + s.pool.waiting + ' en attente'
+      + ' · heure du serveur : ' + new Date(s.serverTime).toLocaleString('fr-FR');
+  }
+  $('#systemRefresh').addEventListener('click', () => loadSystem().catch((e) => toast(e.message, true)));
+
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-    ['orders', 'renewals', 'offers', 'reviews', 'promos', 'settings', 'security', 'audit'].forEach((p) => { $('#panel-' + p).hidden = p !== t.dataset.panel; });
+    const pName = t.dataset.panel;
+    ['orders', 'renewals', 'accounts', 'clients', 'offers', 'reviews', 'promos', 'sales', 'settings', 'security', 'audit'].forEach((p) => {
+      const el = $('#panel-' + p);
+      if (el) el.hidden = p !== pName;
+    });
+    if (pName === 'accounts') loadAccounts().catch((e) => toast(e.message, true));
+    if (pName === 'clients') loadClients().catch((e) => toast(e.message, true));
+    if (pName === 'sales') loadSales().catch((e) => toast(e.message, true));
+    if (pName === 'settings') {
+      loadSettings().catch(() => {});
+      loadNotify().catch(() => {});
+      loadSystem().catch(() => {});
+    }
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadAudit()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>

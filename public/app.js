@@ -2,7 +2,7 @@
   'use strict';
 
   const DEMO_TAIL = "";
-  const LABELS = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV' };
+  const LABELS = { packs: 'Packs', streaming: 'Streaming', vpn: 'VPN', musique: 'Musique', tv: 'TV', logiciels: 'Logiciels' };
   const $ = (id) => document.getElementById(id);
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -30,13 +30,27 @@
   }
 
   // ---------- Commande : enregistrement en base puis redirection WhatsApp ----------
-  async function placeOrder(ids, name, affiliation) {
+  async function placeOrder(ids, name, affiliation, phone) {
+    let clientName = name != null && name !== '' ? name : '';
+    let clientPhone = phone != null && phone !== '' ? phone : '';
+    if (!clientName) {
+      try { clientName = sessionStorage.getItem('np_name') || ''; } catch (e) {}
+    }
+    if (!clientPhone) {
+      try { clientPhone = sessionStorage.getItem('np_phone') || ''; } catch (e) {}
+    }
     const popup = window.open('', '_blank'); // ouvert tout de suite pour éviter le blocage
     try {
       const r = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offerIds: ids, name: name || '', affiliation: affiliation || '', promoCode: PROMO ? PROMO.code : '' })
+        body: JSON.stringify({
+          offerIds: ids,
+          name: clientName,
+          phone: clientPhone,
+          affiliation: affiliation || '',
+          promoCode: PROMO ? PROMO.code : ''
+        })
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -357,6 +371,23 @@
     $('rcTotal').textContent = euro(0);
     updateComposer();
     setupCounters();
+    // Restauration nom et téléphone saisis
+    try {
+      const savedName = sessionStorage.getItem('np_name');
+      if (savedName && $('rcName')) $('rcName').value = savedName;
+      const savedPhone = sessionStorage.getItem('np_phone');
+      if (savedPhone && $('rcPhone')) $('rcPhone').value = savedPhone;
+    } catch (e) {}
+    if ($('rcName')) {
+      $('rcName').addEventListener('input', () => {
+        try { sessionStorage.setItem('np_name', $('rcName').value.trim()); } catch (e) {}
+      });
+    }
+    if ($('rcPhone')) {
+      $('rcPhone').addEventListener('input', () => {
+        try { sessionStorage.setItem('np_phone', $('rcPhone').value.trim()); } catch (e) {}
+      });
+    }
     // Code promo : depuis l'URL (?promo=CODE) ou conservé pendant la session
     let saved = new URLSearchParams(location.search).get('promo');
     if (!saved) { try { saved = sessionStorage.getItem('np_promo'); } catch (e) {} }
@@ -389,7 +420,9 @@
     if (!b) return;
     e.preventDefault();
     const affil = b.closest('.card').querySelector('.affil-input').value.trim();
-    placeOrder([Number(b.dataset.id)], '', affil);
+    const name = $('rcName') ? $('rcName').value.trim() : '';
+    const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
+    placeOrder([Number(b.dataset.id)], name, affil, phone);
   });
 
   $('chips').addEventListener('click', (e) => {
@@ -405,7 +438,10 @@
   $('rcBtn').addEventListener('click', (e) => {
     e.preventDefault();
     if ($('rcBtn').getAttribute('aria-disabled') === 'true') return;
-    placeOrder([...picked], $('rcName').value, $('rcAffil').value);
+    const name = $('rcName') ? $('rcName').value.trim() : '';
+    const affil = $('rcAffil') ? $('rcAffil').value.trim() : '';
+    const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
+    placeOrder([...picked], name, affil, phone);
   });
 
   init();

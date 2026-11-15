@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Espace Abonné Sécurisé — NeonPass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918;
+  --ink-2: #110f26;
+  --panel: #16142e;
+  --panel-card: rgba(26, 23, 54, 0.7);
+  --line: rgba(160, 150, 255, 0.16);
+  --text: #efecff;
+  --muted: #a8a5cf;
+  --pink: #ff4d94;
+  --cyan: #2be6ff;
+  --violet: #7a5cff;
+  --green: #2ee59d;
+  --orange: #ffb347;
+  --red: #ff5252;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--ink);
+  color: var(--text);
+  font: 400 15px/1.6 var(--font-body);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+.aurora {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.aurora i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: .35;
+}
+.aurora i:nth-child(1) { width: 500px; height: 500px; left: -100px; top: -100px; background: var(--violet); }
+.aurora i:nth-child(2) { width: 450px; height: 450px; right: -120px; top: 15%; background: var(--pink); opacity: .25; }
+.aurora i:nth-child(3) { width: 400px; height: 400px; left: 20%; bottom: -100px; background: var(--cyan); opacity: .15; }
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 680px;
+  margin-inline: auto;
+  padding: 24px 16px;
+}
+
+header {
+  text-align: center;
+  padding: 20px 0 28px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  margin-bottom: 12px;
+}
+.brand img {
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 0 12px rgba(255, 77, 148, .45));
+}
+.brand span {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.portal-card {
+  background: var(--panel-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+.badge-status.active {
+  background: rgba(46, 229, 157, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(46, 229, 157, 0.35);
+}
+.badge-status.expiring {
+  background: rgba(255, 179, 71, 0.15);
+  color: var(--orange);
+  border: 1px solid rgba(255, 179, 71, 0.35);
+}
+.badge-status.expired {
+  background: rgba(255, 82, 82, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(255, 82, 82, 0.35);
+}
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  display: inline-block;
+}
+
+.order-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.countdown-box {
+  background: rgba(10, 9, 24, 0.6);
+  border: 1px solid rgba(160, 150, 255, 0.12);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.countdown-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+}
+.countdown-days {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--cyan);
+}
+.countdown-dates {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 28px 0 14px;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-card {
+  background: var(--panel-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .2s, border-color .2s;
+}
+.acc-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: hsl(var(--acc-hue, 270), 85%, 65%);
+}
+.acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.acc-svc-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+.acc-slot-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(122, 92, 255, 0.2);
+  color: #bfa9ff;
+  border: 1px solid rgba(122, 92, 255, 0.3);
+}
+
+.cred-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(10, 9, 24, 0.55);
+  border: 1px solid rgba(160, 150, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.cred-info {
+  flex: 1;
+  min-width: 0;
+}
+.cred-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+.cred-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cred-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.copy-btn, .toggle-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .2s;
+}
+.copy-btn:hover, .toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+.copy-btn.copied {
+  background: rgba(46, 229, 157, 0.2);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.acc-notes {
+  background: rgba(122, 92, 255, 0.08);
+  border-left: 3px solid var(--violet);
+  padding: 10px 14px;
+  border-radius: 0 10px 10px 0;
+  font-size: 12px;
+  color: #dedaff;
+  margin-top: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.btn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform .2s, box-shadow .2s;
+  border: none;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn-wa {
+  background: linear-gradient(100deg, #25D366, #128C7E);
+  color: #fff;
+  box-shadow: 0 8px 24px -4px rgba(37, 211, 102, 0.4);
+}
+.btn-renew {
+  background: linear-gradient(100deg, var(--pink), var(--violet));
+  color: #fff;
+  box-shadow: 0 8px 24px -4px rgba(255, 77, 148, 0.4);
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.btn-outline:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.rules-card {
+  background: rgba(10, 9, 24, 0.45);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rules-card h4 {
+  color: #fff;
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-family: var(--font-display);
+}
+.rules-card ul {
+  padding-left: 20px;
+}
+.rules-card li {
+  margin-bottom: 6px;
+}
+
+.state-box {
+  text-align: center;
+  padding: 60px 20px;
+}
+.state-box svg {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 16px;
+  color: var(--pink);
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(40px);
+  background: rgba(22, 20, 46, 0.95);
+  border: 1px solid var(--cyan);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: all .25s ease;
+  z-index: 999;
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div>
+
+<div class="wrap">
+  <header>
+    <a href="/" class="brand">
+      <img src="/favicon.svg" alt="NeonPass">
+      <span>NeonPass</span>
+    </a>
+    <div class="subtitle">Espace Abonné & Accès Sécurisé</div>
+  </header>
+
+  <main id="app">
+    <div class="state-box">
+      <div style="display:inline-block;width:36px;height:36px;border:3px solid rgba(160,150,255,0.2);border-top-color:var(--pink);border-radius:50%;animation:spin .8s linear infinite"></div>
+      <p style="margin-top:16px;color:var(--muted)">Chargement de vos accès sécurisés...</p>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast">Copié dans le presse-papier !</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+(function() {
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const token = pathParts[pathParts.length - 1];
+  const app = document.getElementById('app');
+  const toast = document.getElementById('toast');
+
+  function showToast(msg) {
+    toast.textContent = msg || 'Copié !';
+    toast.classList.add('show');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  window.copyText = function(text, btn) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Copié dans le presse-papier !');
+      if (btn) {
+        const oldText = btn.innerHTML;
+        btn.classList.add('copied');
+        btn.innerHTML = '✓ Copié';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = oldText;
+        }, 1800);
+      }
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copié dans le presse-papier !');
+    });
+  };
+
+  window.togglePassword = function(btn, pwdVal) {
+    const row = btn.closest('.cred-row');
+    const valEl = row.querySelector('.cred-val');
+    const isMasked = valEl.getAttribute('data-masked') === '1';
+    if (isMasked) {
+      valEl.textContent = pwdVal;
+      valEl.setAttribute('data-masked', '0');
+      btn.innerHTML = '🙈 Masquer';
+    } else {
+      valEl.textContent = '••••••••••••';
+      valEl.setAttribute('data-masked', '1');
+      btn.innerHTML = '👁️ Afficher';
+    }
+  };
+
+  if (!token) {
+    renderError('Lien invalide ou référence manquante.');
+    return;
+  }
+
+  fetch('/api/acces/' + encodeURIComponent(token))
+    .then(r => {
+      if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.error || 'Fiche d\'accès introuvable')));
+      return r.json();
+    })
+    .then(renderPortal)
+    .catch(err => {
+      renderError(err.message || 'Impossible de charger vos accès.');
+    });
+
+  function renderError(msg) {
+    app.innerHTML = `
+      <div class="portal-card" style="text-align:center;padding:40px 24px">
+        <div style="font-size:44px;margin-bottom:14px">🔒</div>
+        <h2 style="font-family:var(--font-display);font-size:20px;margin-bottom:10px">Accès non disponible</h2>
+        <p style="color:var(--muted);font-size:14px;max-width:440px;margin:0 auto 24px">${escapeHtml(msg)}</p>
+        <a href="/" class="btn btn-outline" style="display:inline-flex">Retour à l'accueil</a>
+      </div>
+    `;
+  }
+
+  function renderPortal(data) {
+    const o = data.order;
+    const accs = data.accounts || [];
+    const wa = data.waNumber || '';
+
+    let statusClass = 'active';
+    let statusLabel = 'Abonnement Actif';
+    if (o.isExpired) {
+      statusClass = 'expired';
+      statusLabel = 'Abonnement Échu';
+    } else if (o.daysRemaining !== null && o.daysRemaining <= 15) {
+      statusClass = 'expiring';
+      statusLabel = 'Échéance Imminente';
+    }
+
+    let countdownHtml = '';
+    if (o.daysRemaining !== null) {
+      if (o.daysRemaining > 0) {
+        countdownHtml = `
+          <div class="countdown-box">
+            <div class="countdown-title">Temps de validité restant</div>
+            <div class="countdown-days">${o.daysRemaining} jour${o.daysRemaining > 1 ? 's' : ''}</div>
+            <div class="countdown-dates">Valide jusqu'au ${escapeHtml(o.expiresAt || '—')}</div>
+          </div>
+        `;
+      } else if (o.daysRemaining === 0) {
+        countdownHtml = `
+          <div class="countdown-box" style="border-color:var(--orange)">
+            <div class="countdown-title">Dernier jour</div>
+            <div class="countdown-days" style="color:var(--orange)">Expire aujourd'hui</div>
+            <div class="countdown-dates">Valide jusqu'à minuit (${escapeHtml(o.expiresAt)})</div>
+          </div>
+        `;
+      } else {
+        countdownHtml = `
+          <div class="countdown-box" style="border-color:var(--red)">
+            <div class="countdown-title">Statut de l'abonnement</div>
+            <div class="countdown-days" style="color:var(--red)">Abonnement Expiré</div>
+            <div class="countdown-dates">A expiré le ${escapeHtml(o.expiresAt || '—')}</div>
+          </div>
+        `;
+      }
+    }
+
+    let accCardsHtml = '';
+    if (!accs.length) {
+      accCardsHtml = `
+        <div class="portal-card" style="text-align:center;padding:32px 18px">
+          <div style="font-size:32px;margin-bottom:8px">⏳</div>
+          <div style="font-weight:600;margin-bottom:6px">Attribution en cours</div>
+          <p style="color:var(--muted);font-size:13px">Vos accès sont en cours de préparation par notre équipe. Vous recevrez un message WhatsApp dès qu'ils seront actifs.</p>
+        </div>
+      `;
+    } else {
+      accCardsHtml = accs.map(a => {
+        const hue = a.hue || 260;
+        return `
+          <div class="acc-card" style="--acc-hue: ${hue}">
+            <div class="acc-header">
+              <div class="acc-svc-name">${escapeHtml(a.serviceName)}</div>
+              ${a.slotProfile ? `<div class="acc-slot-badge">👤 ${escapeHtml(a.slotProfile)}</div>` : ''}
+            </div>
+
+            <!-- Login -->
+            <div class="cred-row">
+              <div class="cred-info">
+                <div class="cred-label">Identifiant / Email</div>
+                <div class="cred-val">${escapeHtml(a.login)}</div>
+              </div>
+              <div class="cred-actions">
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(a.login)}', this)">
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+
+            <!-- Mot de passe -->
+            <div class="cred-row">
+              <div class="cred-info">
+                <div class="cred-label">Mot de passe</div>
+                <div class="cred-val" data-masked="1">••••••••••••</div>
+              </div>
+              <div class="cred-actions">
+                <button type="button" class="toggle-btn" onclick="togglePassword(this, '${escapeJs(a.password)}')">
+                  👁️ Afficher
+                </button>
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(a.password)}', this)">
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+
+            ${a.notes ? `<div class="acc-notes">📌 <strong>Consignes :</strong><br>${escapeHtml(a.notes)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    const waHelpMsg = encodeURIComponent(`Bonjour NeonPass, j'ai besoin d'aide pour ma commande #${o.id} (${o.customerName}).`);
+    const waRenewMsg = encodeURIComponent(`Bonjour NeonPass, je souhaite renouveler mon abonnement #${o.id} (${o.customerName}).`);
+    const waHelpUrl = wa ? `https://wa.me/${wa}?text=${waHelpMsg}` : '#';
+    const waRenewUrl = wa ? `https://wa.me/${wa}?text=${waRenewMsg}` : '#';
+
+    app.innerHTML = `
+      <div class="portal-card">
+        <div class="status-row">
+          <div class="badge-status ${statusClass}">
+            <span class="pulse-dot"></span>
+            ${statusLabel}
+          </div>
+          <div class="order-meta">Commande #${o.id} · ${escapeHtml(o.customerName)}</div>
+        </div>
+
+        ${countdownHtml}
+
+        <div class="section-head">
+          <h3 class="section-title">
+            <span>🔑</span> Vos accès & identifiants
+          </h3>
+          <span style="font-size:12px;color:var(--muted);font-family:var(--font-mono)">${accs.length} service${accs.length > 1 ? 's' : ''}</span>
+        </div>
+
+        ${accCardsHtml}
+
+        <div class="rules-card">
+          <h4>🛡️ Règles d'utilisation & Garantie NeonPass</h4>
+          <ul>
+            <li><strong>Ne modifiez jamais</strong> l'adresse e-mail ou le mot de passe associé au compte.</li>
+            <li>Respectez votre écran ou profil assigné pour préserver la stabilité de l'accès.</li>
+            <li>En cas de déconnexion ou problème technique, notre SAV intervient immédiatement sous garantie.</li>
+          </ul>
+        </div>
+
+        <div class="btn-actions">
+          <a href="${waHelpUrl}" target="_blank" rel="noopener" class="btn btn-wa">
+            💬 Besoin d'aide / SAV WhatsApp
+          </a>
+          <a href="${waRenewUrl}" target="_blank" rel="noopener" class="btn btn-renew">
+            🔄 Renouveler mon abonnement
+          </a>
+          <a href="/#avis" class="btn btn-outline">
+            ⭐ Déposer un avis sur NeonPass
+          </a>
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function escapeJs(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
+  }
+})();
+</script>
+</body>
+</html>
