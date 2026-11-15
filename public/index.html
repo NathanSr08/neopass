@@ -386,7 +386,8 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
     <nav class="nav-links" aria-label="Navigation">
       <a href="#offres">Offres</a>
       <a href="#composer">Composez votre pack</a>
-      <a href="#etapes">Commande</a>
+      <a href="/suivi">Suivi</a>
+      <a href="/status">Statut</a>
       <a href="#faq">FAQ</a>
     </nav>
     <a class="btn btn-primary" id="navWa" href="#" target="_blank" rel="noopener">
@@ -522,7 +523,16 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
 
 <footer>
   <div class="wrap foot">
-    <p><strong style="color:var(--text)">NeonPass</strong> — streaming, VPN, musique et chaînes TV. Des formules annuelles à tarif fixe, une commande simple sur WhatsApp.</p>
+    <div>
+      <p><strong style="color:var(--text)">NeonPass</strong> — streaming, VPN, musique et chaînes TV. Des formules annuelles à tarif fixe, une commande simple sur WhatsApp.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:13px">
+        <a href="/suivi" style="color:var(--cyan);text-decoration:none">🔍 Suivi de commande</a>
+        <a href="/status" style="color:var(--muted);text-decoration:none">🟢 Statut des Serveurs</a>
+        <a href="/garantie" style="color:var(--muted);text-decoration:none">🛡️ Garantie & SAV</a>
+        <a href="/cgv" style="color:var(--muted);text-decoration:none">⚖ CGV</a>
+        <a href="/mentions-legales" style="color:var(--muted);text-decoration:none">🔒 Mentions Légales & RGPD</a>
+      </div>
+    </div>
     <p style="text-align:right">© 2026 NeonPass</p>
   </div>
 </footer>

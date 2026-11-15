@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Mentions légales, politique de confidentialité et protection des données RGPD de la plateforme NeonPass.">
+<meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Mentions Légales & Confidentialité RGPD — NeonPass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918;
+  --panel: #16142e;
+  --line: rgba(160, 150, 255, 0.16);
+  --text: #efecff;
+  --muted: #a8a5cf;
+  --pink: #ff4d94;
+  --cyan: #2be6ff;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 15px/1.7 var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap {
+  width: 100%;
+  max-width: 860px;
+  margin-inline: auto;
+  padding-inline: max(20px, env(safe-area-inset-left, 0px));
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 9, 24, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.nav-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 14px;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: #fff;
+  text-decoration: none;
+}
+.logo img { width: 32px; height: 32px; }
+.logo span {
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nav-links { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+.nav-links a { text-decoration: none; color: var(--muted); transition: color .2s; }
+.nav-links a:hover { color: var(--cyan); }
+
+.page-head {
+  padding-block: 44px 24px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.8vw, 36px);
+  margin: 10px 0 12px;
+  line-height: 1.2;
+}
+.meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.content-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: clamp(24px, 4vw, 36px);
+  margin-bottom: 40px;
+}
+.content-card h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: #fff;
+  margin-top: 28px;
+  margin-bottom: 12px;
+}
+.content-card h2:first-of-type { margin-top: 0; }
+.content-card p {
+  margin: 0 0 14px;
+  color: #d8d4f0;
+}
+.content-card ul {
+  margin: 0 0 16px 20px;
+  padding: 0;
+  color: #d8d4f0;
+}
+.content-card li { margin-bottom: 8px; }
+
+footer {
+  border-top: 1px solid var(--line);
+  padding-block: 28px;
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+.foot-links a { color: var(--muted); }
+.foot-links a:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a href="/" class="logo">
+      <img src="/favicon.svg" alt="NeonPass Logo">
+      <span>NeonPass</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/#offres">Offres</a>
+      <a href="/suivi">Suivi de commande</a>
+      <a href="/garantie">Garantie & SAV</a>
+      <a href="/status">Statut Réseau</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="flex:1">
+  <div class="page-head">
+    <span class="eyebrow">Transparence & Vie Privée</span>
+    <h1>Mentions Légales & Confidentialité RGPD</h1>
+    <div class="meta">Conformité RGPD · Sécurité des échanges · Respect absolu des données personnelles</div>
+  </div>
+
+  <div class="content-card">
+    <h2>1. Éditeur de la Plateforme</h2>
+    <p>Le service <strong>NeonPass</strong> est une plateforme numérique spécialisée dans la distribution de licences et d'abonnements multimédia et réseaux privés, accessible à l'adresse officielle : <code>https://neonpass.uned.live</code>.</p>
+    <p>Pour toute demande administrative, partenariat ou assistance technique :</p>
+    <ul>
+      <li><strong>Contact direct :</strong> Support officiel via WhatsApp accessible sur notre site.</li>
+      <li><strong>Assistance technique :</strong> 7 jours sur 7 avec engagement de réponse rapide.</li>
+    </ul>
+
+    <h2>2. Hébergement & Sécurité Technique</h2>
+    <p>Le site internet et son infrastructure d'application sont hébergés sur des serveurs haute disponibilité situés au sein de l'Union Européenne.</p>
+    <ul>
+      <li><strong>Chiffrement en transit :</strong> L'ensemble des échanges entre votre terminal et nos serveurs est chiffré via le protocole TLS/SSL moderne (certificat HTTPS certifié).</li>
+      <li><strong>Bases de données isolées :</strong> Vos identifiants et accès sont stockés dans un environnement conteneurisé chiffré et protégé contre tout accès extérieur non autorisé.</li>
+      <li><strong>Monitoring permanent :</strong> L'état de fonctionnement et la sécurité de l'infrastructure peuvent être suivis en direct sur notre page <a href="/status">Statut Réseau (/status)</a>.</li>
+    </ul>
+
+    <h2>3. Politique de Confidentialité & RGPD (Minimisation des Données)</h2>
+    <p>NeonPass applique le principe strict de la <strong>minimisation des données</strong> conformément au Règlement Général sur la Protection des Données (RGPD - Règlement UE 2016/679) :</p>
+    <ul>
+      <li><strong>Données collectées :</strong> Seules les informations strictement indispensables à la livraison de vos accès sont requises (votre prénom ou pseudonyme, et votre numéro WhatsApp pour la transmission sécurisée des clés).</li>
+      <li><strong>Zéro donnée bancaire :</strong> NeonPass ne collecte, ne traite et ne stocke <strong>jamais</strong> aucun numéro de carte bancaire ou donnée financière sur ses serveurs. Les règlements sont effectués directement de gré à gré via des prestataires certifiés (Revolut, passerelle de virement bancaire SEPA, ou réseaux Blockchain).</li>
+      <li><strong>Absence de revente :</strong> Vos données ne font l'objet d'aucune cession, revente, profilage publicitaire ou transmission à des tiers à des fins commerciales.</li>
+    </ul>
+
+    <h2>4. Durée de Conservation & Sécurité des Accès</h2>
+    <p>Les données liées à une commande sont conservées uniquement pendant la durée de validité de votre formule d'abonnement afin d'assurer l'assistance technique et le service après-vente (SAV). Chaque commande dispose d'un identifiant de suivi confidentiel et unique (<code>tracking_code</code>) empêchant toute consultation non autorisée par des tiers.</p>
+
+    <h2>5. Vos Droits Informatique & Libertés</h2>
+    <p>Conformément à la réglementation applicable, vous disposez d'un droit d'accès, de rectification, de portabilité et d'effacement (« droit à l'oubli ») de l'ensemble des informations vous concernant.</p>
+    <p>Pour exercer ce droit ou demander la suppression définitive de votre fiche client, il vous suffit d'adresser une simple demande à notre équipe d'assistance via la conversation WhatsApp officielle. Votre demande sera traitée dans un délai maximum de 48 heures ouvrées.</p>
+
+    <h2>6. Cookies & Traceurs</h2>
+    <p>Le site NeonPass fonctionne sans cookies tiers intrusifs, sans traceurs publicitaires et sans outils d'espionnage comportemental. Seuls des cookies strictement techniques nécessaires au bon fonctionnement de la navigation et de la sécurité des requêtes peuvent être temporairement déposés.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+    <div>
+      <strong style="color:var(--text)">NeonPass</strong> · Divertissement, VPN et TV en formules sécurisées.
+      <div class="foot-links">
+        <a href="/suivi">Suivi de commande</a>
+        <a href="/status">Statut des serveurs</a>
+        <a href="/garantie">Garantie & SAV</a>
+        <a href="/cgv">CGV</a>
+        <a href="/mentions-legales">Mentions Légales & RGPD</a>
+      </div>
+    </div>
+    <div>© 2026 NeonPass · Tous droits réservés.</div>
+  </div>
+</footer>
+
+</body>
+</html>

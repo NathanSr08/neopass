@@ -180,6 +180,25 @@ ALTER TABLE offers ADD COLUMN IF NOT EXISTS pack_items JSONB NOT NULL DEFAULT '[
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER NOT NULL DEFAULT 2;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS access_token TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS orders_access_token_idx ON orders (access_token);
+
+-- Suivi sécurisé & Codes confidentiels clients
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_code TEXT UNIQUE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_code TEXT UNIQUE;
+CREATE UNIQUE INDEX IF NOT EXISTS clients_client_code_idx ON clients (client_code);
+CREATE UNIQUE INDEX IF NOT EXISTS orders_tracking_code_idx ON orders (tracking_code);
+
+UPDATE clients
+SET client_code = 'NP-CLI-' || upper(substring(md5(random()::text || id::text) from 1 for 4)) || '-' ||
+                               upper(substring(md5(random()::text || id::text) from 5 for 4)) || '-' ||
+                               upper(substring(md5(random()::text || id::text) from 9 for 4))
+WHERE client_code IS NULL;
+
+UPDATE orders
+SET tracking_code = 'NP-TRK-' || upper(substring(md5(random()::text || id::text) from 1 for 4)) || '-' ||
+                                 upper(substring(md5(random()::text || id::text) from 5 for 4)) || '-' ||
+                                 upper(substring(md5(random()::text || id::text) from 9 for 4))
+WHERE tracking_code IS NULL;
+
 INSERT INTO offers (slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items)
 VALUES ('disney-plus', 'Disney+', 'streaming', 'Populaire', 25.00, 35.00, 'Films et séries Disney, Pixar, Marvel, Star Wars et Star.', '["Films et séries illimités", "4K Ultra HD", "Profil personnel", "Garantie 1 an"]'::jsonb, 210, FALSE, TRUE, 25, '[]'::jsonb)
 ON CONFLICT (slug) DO NOTHING;

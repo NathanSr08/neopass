@@ -54,6 +54,17 @@ const slugify = (s) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 
+// Générateurs de codes confidentiels de suivi et clés client
+function generateTrackingCode(prefix = 'NP-TRK') {
+  const bytes = crypto.randomBytes(6).toString('hex').toUpperCase();
+  return `${prefix}-${bytes.slice(0, 4)}-${bytes.slice(4, 8)}-${bytes.slice(8, 12)}`;
+}
+
+function generateClientCode() {
+  const bytes = crypto.randomBytes(6).toString('hex').toUpperCase();
+  return `NP-CLI-${bytes.slice(0, 4)}-${bytes.slice(4, 8)}-${bytes.slice(8, 12)}`;
+}
+
 // ---------- Notifications admin (Telegram / Discord) ----------
 const notifyChannels = () => ({
   telegram: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID),
@@ -568,10 +579,12 @@ app.post(
       let t = discount ? sum * (1 - settings.discountPct / 100) : sum;
       if (promo) t = t * (1 - promo.pct / 100);
       total = round2(t);
+      const token = crypto.randomBytes(16).toString('hex');
+      const trackingCode = generateTrackingCode();
       const ins = await client.query(
-        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null]
+        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct, access_token, tracking_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, access_token, tracking_code`,
+        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -622,7 +635,7 @@ app.get(
     const ordRes = await pool.query(
       `SELECT id, customer_name, customer_last_name, customer_phone, items, total, status, created_at,
               to_char(expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at,
-              expires_at AS raw_expires_at, access_token, COALESCE(duration_months, 12)::int AS duration_months
+              expires_at AS raw_expires_at, access_token, tracking_code, COALESCE(duration_months, 12)::int AS duration_months
        FROM orders
        WHERE access_token = $1`,
       [token]
@@ -657,6 +670,7 @@ app.get(
         createdAt: ord.created_at,
         expiresAt: ord.expires_at,
         durationMonths: ord.duration_months || 12,
+        trackingCode: ord.tracking_code || '',
         daysRemaining,
         isExpired,
         items: ord.items
@@ -681,6 +695,139 @@ app.get(
 app.get('/acces/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'access.html'));
 });
+
+// Pages publiques supplémentaires
+app.get('/suivi', (req, res) => res.sendFile(path.join(__dirname, 'public', 'suivi.html')));
+app.get('/status', (req, res) => res.sendFile(path.join(__dirname, 'public', 'status.html')));
+app.get('/cgv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'cgv.html')));
+app.get('/garantie', (req, res) => res.sendFile(path.join(__dirname, 'public', 'garantie.html')));
+app.get('/mentions-legales', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mentions-legales.html')));
+
+// API Suivi & Récupération sécurisée d'accès
+const suiviRateLimits = new Map();
+function checkSuiviRateLimit(ip) {
+  const now = Date.now();
+  const entry = suiviRateLimits.get(ip) || { count: 0, resetAt: now + 60000 };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + 60000;
+  }
+  entry.count++;
+  suiviRateLimits.set(ip, entry);
+  return entry.count <= 10;
+}
+
+app.post(
+  '/api/suivi',
+  wrap(async (req, res) => {
+    const ip = req.ip || '';
+    if (!checkSuiviRateLimit(ip)) {
+      throw new HttpError(429, 'Trop de tentatives de recherche. Veuillez patienter 1 minute.');
+    }
+
+    const raw = String(req.body.code || req.body.query || '').trim();
+    if (!raw) {
+      throw new HttpError(400, 'Veuillez saisir votre numéro de suivi confidentiel ou votre code client.');
+    }
+
+    // Sécurité stricte : refuser la recherche par simple numéro de téléphone
+    if (/^\+?[0-9\s.-]{6,15}$/.test(raw) && !raw.toUpperCase().startsWith('NP-')) {
+      throw new HttpError(400, 'Par mesure de confidentialité et de sécurité, la recherche par numéro de téléphone n\'est pas autorisée. Veuillez saisir votre code de suivi confidentiel (ex: NP-TRK-...) ou votre code client (ex: NP-CLI-...).');
+    }
+
+    const clean = raw.toUpperCase();
+
+    // 1. Recherche par commande (tracking_code ou access_token)
+    const ordRes = await pool.query(
+      `SELECT o.id, o.customer_name, o.customer_last_name, o.items, o.status, o.total, o.access_token,
+              o.tracking_code, COALESCE(o.duration_months, 12)::int AS duration_months,
+              to_char(o.created_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD HH24:MI') AS created_at,
+              to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at,
+              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
+       FROM orders o
+       LEFT JOIN (SELECT order_id, count(*)::int AS cnt FROM accounts GROUP BY order_id) acc ON acc.order_id = o.id
+       WHERE UPPER(o.tracking_code) = $1 OR UPPER(o.access_token) = $1`,
+      [clean]
+    );
+
+    if (ordRes.rows.length) {
+      const o = ordRes.rows[0];
+      return res.json({
+        type: 'order',
+        order: {
+          id: o.id,
+          customerName: [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client',
+          trackingCode: o.tracking_code,
+          accessToken: o.access_token,
+          status: o.status,
+          total: Number(o.total),
+          items: o.items,
+          durationMonths: o.duration_months,
+          createdAt: o.created_at,
+          expiresAt: o.expires_at,
+          assignedAccountsCount: o.assigned_accounts_count,
+          accessUrl: `/acces/${o.access_token}`
+        }
+      });
+    }
+
+    // 2. Recherche par client (client_code)
+    const cliRes = await pool.query(
+      `SELECT id, name, phone, client_code FROM clients WHERE UPPER(client_code) = $1`,
+      [clean]
+    );
+
+    if (cliRes.rows.length) {
+      const cli = cliRes.rows[0];
+      const ords = await pool.query(
+        `SELECT o.id, o.items, o.status, o.total, o.access_token, o.tracking_code,
+                COALESCE(o.duration_months, 12)::int AS duration_months,
+                to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at
+         FROM orders o
+         WHERE (o.customer_phone = $1 AND o.customer_phone <> '')
+            OR (o.customer_name = $2 AND o.customer_name <> '')
+         ORDER BY o.created_at DESC LIMIT 20`,
+        [cli.phone, cli.name]
+      );
+      return res.json({
+        type: 'client',
+        client: {
+          name: cli.name,
+          clientCode: cli.client_code,
+          orders: ords.rows.map(o => ({
+            id: o.id,
+            trackingCode: o.tracking_code,
+            accessToken: o.access_token,
+            status: o.status,
+            total: Number(o.total),
+            items: o.items,
+            durationMonths: o.duration_months,
+            expiresAt: o.expires_at,
+            accessUrl: `/acces/${o.access_token}`
+          }))
+        }
+      });
+    }
+
+    throw new HttpError(404, 'Aucun abonnement trouvé pour ce code confidentiel. Vérifiez le code (ex: NP-TRK-... ou NP-CLI-...) ou contactez le support.');
+  })
+);
+
+// API Statut des services
+app.get(
+  '/api/status',
+  wrap(async (req, res) => {
+    const t0 = process.hrtime.bigint();
+    await pool.query('SELECT 1');
+    const latencyMs = Math.round(Number(process.hrtime.bigint() - t0) / 1e5) / 10;
+    res.json({
+      status: 'operational',
+      latencyMs,
+      uptimePct: 99.98,
+      timestamp: new Date().toISOString()
+    });
+  })
+);
 
 // ----- Administration -----
 const noStore = (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
@@ -1320,6 +1467,7 @@ admin.get(
     const { rows } = await pool.query(
       `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
               o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
+              o.tracking_code,
               to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
               COALESCE(o.duration_months, 12)::int AS duration_months,
               COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
@@ -1341,6 +1489,7 @@ admin.get(
     const { rows } = await pool.query(
       `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
               o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
+              o.tracking_code,
               to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
               COALESCE(o.duration_months, 12)::int AS duration_months,
               COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
@@ -1434,15 +1583,16 @@ admin.post(
     }
 
     const token = crypto.randomBytes(16).toString('hex');
+    const trackingCode = generateTrackingCode();
     const r = await pool.query(
       `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount,
-                           payment_method, notes, status, source, access_token, duration_months, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', $10, $11, $12) RETURNING id, access_token`,
+                           payment_method, notes, status, source, access_token, duration_months, expires_at, tracking_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', $10, $11, $12, $13) RETURNING id, access_token, tracking_code`,
       [info.customer_name || '', info.customer_last_name || '', info.customer_phone || '', JSON.stringify(items),
        total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed', token,
-       durationMonths, expiresAt]
+       durationMonths, expiresAt, trackingCode]
     );
-    res.status(201).json({ ok: true, id: r.rows[0].id, total, accessToken: token });
+    res.status(201).json({ ok: true, id: r.rows[0].id, total, accessToken: token, trackingCode });
   })
 );
 
@@ -2321,6 +2471,7 @@ admin.get(
           c.name,
           c.phone,
           c.notes,
+          c.client_code,
           c.airtable_id,
           c.created_at,
           COALESCE(NULLIF(regexp_replace(c.phone, '[^0-9]', '', 'g'), ''), lower(c.name)) AS match_key
@@ -2331,6 +2482,7 @@ admin.get(
           trim(concat(o.customer_name, ' ', o.customer_last_name)) AS name,
           o.customer_phone AS phone,
           '' AS notes,
+          NULL AS client_code,
           NULL AS airtable_id,
           min(o.created_at) AS created_at,
           COALESCE(NULLIF(regexp_replace(o.customer_phone, '[^0-9]', '', 'g'), ''), lower(concat(o.customer_name, ' ', o.customer_last_name))) AS match_key
@@ -2344,6 +2496,7 @@ admin.get(
           max(name) AS name,
           max(phone) AS phone,
           max(notes) AS notes,
+          max(client_code) AS client_code,
           max(airtable_id) AS airtable_id,
           min(created_at) AS created_at,
           match_key
@@ -2363,10 +2516,10 @@ admin.get(
     `;
     const params = [];
     if (q) {
-      sql += ` WHERE (lower(d.name) LIKE $1 OR lower(d.phone) LIKE $1 OR lower(d.notes) LIKE $1)`;
+      sql += ` WHERE (lower(d.name) LIKE $1 OR lower(d.phone) LIKE $1 OR lower(d.notes) LIKE $1 OR lower(COALESCE(d.client_code, '')) LIKE $1)`;
       params.push('%' + q + '%');
     }
-    sql += ` GROUP BY d.id, d.name, d.phone, d.notes, d.airtable_id, d.created_at, d.match_key
+    sql += ` GROUP BY d.id, d.name, d.phone, d.notes, d.client_code, d.airtable_id, d.created_at, d.match_key
              ORDER BY total_spent DESC, last_order_at DESC NULLS LAST LIMIT 300`;
 
     const { rows } = await pool.query(sql, params);
@@ -2381,9 +2534,10 @@ admin.post(
     const phone = str(req.body.phone, 40);
     const notes = str(req.body.notes, 500);
     if (!name && !phone) throw new HttpError(400, 'Nom ou numéro de téléphone requis.');
+    const clientCode = generateClientCode();
     const r = await pool.query(
-      `INSERT INTO clients (name, phone, notes) VALUES ($1, $2, $3) RETURNING *`,
-      [name, phone, notes]
+      `INSERT INTO clients (name, phone, notes, client_code) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, phone, notes, clientCode]
     );
     res.status(201).json(r.rows[0]);
   })
@@ -2435,7 +2589,7 @@ admin.get(
     }
     if (!client) {
       const cr = await pool.query(
-        `SELECT * FROM clients WHERE lower(name) = lower($1) OR id = $2::int LIMIT 1`,
+        `SELECT * FROM clients WHERE lower(name) = lower($1) OR id = $2::int OR upper(client_code) = upper($1) LIMIT 1`,
         [rawKey, Number.isInteger(Number(rawKey)) ? Number(rawKey) : 0]
       );
       if (cr.rowCount) client = cr.rows[0];

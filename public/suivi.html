@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Suivi de commande et récupération sécurisée de vos accès NeonPass.">
+<meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Suivi de Commande & Récupération d'Accès — NeonPass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918;
+  --ink-2: #110f26;
+  --panel: #16142e;
+  --panel-hover: #1d1a3d;
+  --line: rgba(160, 150, 255, 0.16);
+  --line-strong: rgba(160, 150, 255, 0.32);
+  --text: #efecff;
+  --muted: #a8a5cf;
+  --pink: #ff4d94;
+  --cyan: #2be6ff;
+  --violet: #7a5cff;
+  --ok: #20e3b2;
+  --warn: #ffb84d;
+  --bad: #ff5c77;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 16px/1.6 var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color: inherit; }
+.wrap {
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+  padding-inline: max(20px, env(safe-area-inset-left, 0px));
+}
+
+/* Header */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 9, 24, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.nav-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 14px;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+}
+.logo img { width: 32px; height: 32px; }
+.logo span {
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nav-links { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+.nav-links a { text-decoration: none; transition: color .2s; }
+.nav-links a:hover { color: var(--cyan); }
+
+/* Hero */
+.hero {
+  padding-block: 48px 32px;
+  text-align: center;
+}
+.eyebrow {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 12px;
+}
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 4vw, 40px);
+  line-height: 1.15;
+  margin: 0 0 14px;
+  letter-spacing: -0.02em;
+}
+.subtitle {
+  color: var(--muted);
+  max-width: 580px;
+  margin: 0 auto;
+  font-size: 15px;
+}
+
+/* Card */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 20px 40px -15px rgba(0,0,0,.5);
+}
+
+.notice-box {
+  background: rgba(43, 230, 255, 0.05);
+  border: 1px solid rgba(43, 230, 255, 0.25);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.notice-box strong { color: var(--text); }
+
+/* Form */
+.search-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.input-code {
+  flex: 1;
+  min-width: 260px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+.input-code:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(43, 230, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 26px;
+  border-radius: 999px;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform .2s, box-shadow .2s;
+}
+.btn-primary {
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  color: var(--ink);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 77, 148, 0.4);
+}
+.btn-ghost {
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.btn-ghost:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+/* Results */
+.result-box { margin-top: 24px; }
+.order-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: border-color .2s;
+}
+.order-card:hover { border-color: var(--line-strong); }
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pill-on { background: rgba(32, 227, 178, 0.15); color: var(--ok); border: 1px solid rgba(32, 227, 178, 0.4); }
+.pill-wait { background: rgba(255, 184, 77, 0.15); color: var(--warn); border: 1px solid rgba(255, 184, 77, 0.4); }
+.pill-off { background: rgba(255, 92, 119, 0.15); color: var(--bad); border: 1px solid rgba(255, 92, 119, 0.4); }
+
+.item-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
+/* Collapsible FAQ */
+details {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+}
+details p { margin: 10px 0 0; color: var(--muted); line-height: 1.6; }
+
+/* Footer */
+footer {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-block: 28px;
+  font-size: 13px;
+  color: var(--muted);
+  background: rgba(10, 9, 24, 0.95);
+}
+.foot-links {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.foot-links a { text-decoration: none; }
+.foot-links a:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a href="/" class="logo">
+      <img src="/logo.svg" alt="NeonPass Logo">
+      <span>NeonPass</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/#catalogue">Catalogue</a>
+      <a href="/#composer">Composer</a>
+      <a href="/status">Statut Réseau</a>
+      <a href="/garantie">Garantie</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="flex:1">
+  <section class="hero">
+    <span class="eyebrow">Espace Client Confidentiel</span>
+    <h1>Suivi & Récupération d'Accès</h1>
+    <p class="subtitle">Saisissez votre numéro de suivi confidentiel ou votre code client pour retrouver instantanément vos abonnements et identifiants.</p>
+  </section>
+
+  <div class="card">
+    <div class="notice-box">
+      <span style="font-size:20px">🔒</span>
+      <div>
+        <strong>Recherche ultra-sécurisée :</strong> Pour préserver la confidentialité totale de vos comptes, aucune recherche par numéro de téléphone n'est permise. Utilisez le code confidentiel qui vous a été transmis lors de la livraison.
+      </div>
+    </div>
+
+    <form class="search-form" id="suiviForm">
+      <input
+        type="text"
+        id="suiviInput"
+        class="input-code"
+        placeholder="ex : NP-TRK-7A8B-9C0D ou NP-CLI-..."
+        autocomplete="off"
+        spellcheck="false"
+        required
+      >
+      <button type="submit" class="btn btn-primary" id="suiviBtn">
+        <span>Rechercher mes accès</span>
+        <span id="suiviSpinner" hidden>⏳</span>
+      </button>
+    </form>
+
+    <div id="suiviResult" class="result-box" hidden></div>
+
+    <details style="margin-top:24px">
+      <summary>Où trouver mon code de suivi confidentiel ?</summary>
+      <p>
+        Votre code sécurisé (au format <code>NP-TRK-XXXX-XXXX</code> ou <code>NP-CLI-XXXX-XXXX</code>) vous a été communiqué dans votre message officiel de livraison sur WhatsApp ainsi que sur votre espace abonné lors de votre commande.<br><br>
+        En cas de perte définitive, vous pouvez contacter directement notre assistance sur WhatsApp en précisant le prénom indiqué lors de votre achat.
+      </p>
+    </details>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+    <div>
+      <strong style="color:var(--text)">NeonPass</strong> · Divertissement, VPN et TV en formules sécurisées.
+      <div class="foot-links">
+        <a href="/suivi">Suivi de commande</a>
+        <a href="/status">Statut des serveurs</a>
+        <a href="/garantie">Garantie & SAV</a>
+        <a href="/cgv">CGV</a>
+        <a href="/mentions-legales">Mentions Légales & RGPD</a>
+      </div>
+    </div>
+    <div>© 2026 NeonPass · Tous droits réservés.</div>
+  </div>
+</footer>
+
+<script>
+const form = document.getElementById('suiviForm');
+const input = document.getElementById('suiviInput');
+const btn = document.getElementById('suiviBtn');
+const resBox = document.getElementById('suiviResult');
+
+// Prefill from URL query param if present: /suivi?code=NP-TRK-... or /suivi?q=...
+const params = new URLSearchParams(window.location.search);
+const initialCode = params.get('code') || params.get('q') || '';
+if (initialCode) {
+  input.value = initialCode;
+  setTimeout(() => form.dispatchEvent(new Event('submit')), 100);
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = input.value.trim();
+  if (!code) return;
+
+  resBox.hidden = false;
+  resBox.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">⏳ Recherche sécurisée en cours...</div>';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/suivi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Aucun abonnement trouvé.');
+    }
+
+    if (data.type === 'order') {
+      const o = data.order;
+      const statusPill = o.status === 'confirmed'
+        ? '<span class="pill pill-on">● Abonnement Actif</span>'
+        : (o.status === 'cancelled' ? '<span class="pill pill-off">● Annulé</span>' : '<span class="pill pill-wait">● En attente</span>');
+
+      const itemsHtml = (Array.isArray(o.items) ? o.items : []).map(i => `<span class="item-badge">${escapeHtml(i.name)}</span>`).join('');
+      const expDate = o.expiresAt ? new Date(o.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Non définie';
+
+      resBox.innerHTML = `
+        <div class="order-card" style="border-color:var(--cyan);background:rgba(43,230,255,0.03)">
+          <div class="order-header">
+            <div>
+              <span class="eyebrow" style="margin:0">COMMANDE #${o.id}</span>
+              <div style="font-size:17px;font-weight:700;color:#fff;margin-top:4px">${escapeHtml(o.customerName)}</div>
+            </div>
+            ${statusPill}
+          </div>
+
+          <div style="margin-bottom:14px">
+            <small style="color:var(--muted);display:block;margin-bottom:6px">PRODUITS COMMANDÉS :</small>
+            ${itemsHtml || '<span style="color:var(--muted)">Produits enregistrés</span>'}
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:18px;flex-wrap:wrap;gap:8px">
+            <div style="font-size:13px">
+              <span style="color:var(--muted)">Échéance de l'abonnement :</span> <strong style="color:#fff">${expDate}</strong>
+            </div>
+            <div style="font-size:12px;color:var(--cyan);font-family:var(--font-mono)">
+              Suivi : ${escapeHtml(o.trackingCode || code)}
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap">
+            <a href="${o.accessUrl}" class="btn btn-primary" style="padding:10px 22px">
+              👁️ Accéder à mes codes & identifiants
+            </a>
+          </div>
+        </div>
+      `;
+    } else if (data.type === 'client') {
+      const cli = data.client;
+      const orders = cli.orders || [];
+
+      let listHtml = '';
+      if (!orders.length) {
+        listHtml = '<p style="color:var(--muted)">Aucune commande active enregistrée.</p>';
+      } else {
+        listHtml = orders.map(o => {
+          const itemsHtml = (Array.isArray(o.items) ? o.items : []).map(i => `<span class="item-badge">${escapeHtml(i.name)}</span>`).join('');
+          const expDate = o.expiresAt ? new Date(o.expiresAt).toLocaleDateString('fr-FR') : '—';
+          return `
+            <div class="order-card">
+              <div class="order-header">
+                <div>
+                  <b style="color:#fff">Commande #${o.id}</b>
+                  <span style="font-size:12px;color:var(--muted);margin-left:8px">Validité : ${expDate}</span>
+                </div>
+                <span class="pill ${o.status === 'confirmed' ? 'pill-on' : 'pill-wait'}">${o.status === 'confirmed' ? 'Actif' : o.status}</span>
+              </div>
+              <div style="margin-bottom:12px">${itemsHtml}</div>
+              <div style="text-align:right">
+                <a href="${o.accessUrl}" class="btn btn-ghost" style="padding:8px 16px;font-size:13px">
+                  Ouvrir l'Espace Abonné ➔
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      resBox.innerHTML = `
+        <div style="margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px">
+          <span class="eyebrow" style="margin:0">DOSSIER CLIENT SÉCURISÉ</span>
+          <h3 style="margin:4px 0 0;font-size:18px">${escapeHtml(cli.name)}</h3>
+          <small style="color:var(--cyan);font-family:var(--font-mono)">Clé Client : ${escapeHtml(cli.clientCode)}</small>
+        </div>
+        ${listHtml}
+      `;
+    }
+  } catch (err) {
+    resBox.innerHTML = `
+      <div style="background:rgba(255,92,119,0.08);border:1px solid var(--bad);border-radius:12px;padding:16px;color:#fff">
+        <b style="color:var(--bad)">⚠️ Recherche infructueuse</b>
+        <p style="margin:6px 0 12px;font-size:14px;color:var(--muted)">${escapeHtml(err.message)}</p>
+        <a href="https://wa.me/33612345678" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:13px;padding:8px 16px">
+          💬 Contacter le support sur WhatsApp
+        </a>
+      </div>
+    `;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

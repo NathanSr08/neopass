@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Charte de Garantie & Remplacement NeonPass. Assistance 7j/7, remplacement immédiat et garantie sur toute la durée de votre abonnement.">
+<meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Charte de Garantie & Remplacement — NeonPass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918;
+  --panel: #16142e;
+  --line: rgba(160, 150, 255, 0.16);
+  --text: #efecff;
+  --muted: #a8a5cf;
+  --pink: #ff4d94;
+  --cyan: #2be6ff;
+  --green: #2ecc71;
+  --amber: #f59e0b;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 15px/1.7 var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap {
+  width: 100%;
+  max-width: 860px;
+  margin-inline: auto;
+  padding-inline: max(20px, env(safe-area-inset-left, 0px));
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 9, 24, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.nav-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 14px;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: #fff;
+  text-decoration: none;
+}
+.logo img { width: 32px; height: 32px; }
+.logo span {
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nav-links { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+.nav-links a { text-decoration: none; color: var(--muted); transition: color .2s; }
+.nav-links a:hover { color: var(--cyan); }
+
+.page-head {
+  padding-block: 44px 24px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.8vw, 36px);
+  margin: 10px 0 12px;
+  line-height: 1.2;
+}
+.meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.hero-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.badge-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.badge-card .icon { font-size: 24px; }
+.badge-card strong { font-size: 16px; color: #fff; font-family: var(--font-display); }
+.badge-card p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+.content-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: clamp(24px, 4vw, 36px);
+  margin-bottom: 40px;
+}
+.content-card h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: #fff;
+  margin-top: 28px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.content-card h2:first-of-type { margin-top: 0; }
+.content-card p {
+  margin: 0 0 14px;
+  color: #d8d4f0;
+}
+.content-card ul {
+  margin: 0 0 16px 20px;
+  padding: 0;
+  color: #d8d4f0;
+}
+.content-card li { margin-bottom: 8px; }
+
+.highlight-box {
+  background: rgba(43, 230, 255, 0.06);
+  border: 1px solid rgba(43, 230, 255, 0.28);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin: 20px 0;
+}
+.highlight-box strong { color: var(--cyan); }
+
+.step-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0;
+}
+.step-item {
+  display: flex;
+  gap: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--pink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+footer {
+  border-top: 1px solid var(--line);
+  padding-block: 28px;
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+.foot-links a { color: var(--muted); }
+.foot-links a:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a href="/" class="logo">
+      <img src="/favicon.svg" alt="NeonPass Logo">
+      <span>NeonPass</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/#offres">Offres</a>
+      <a href="/suivi">Suivi de commande</a>
+      <a href="/garantie" style="color:var(--cyan)">Garantie & SAV</a>
+      <a href="/status">Statut Réseau</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="flex:1">
+  <div class="page-head">
+    <span class="eyebrow">Engagement 100% Sérénité</span>
+    <h1>Charte de Garantie & Remplacement</h1>
+    <div class="meta">Transparence totale · Protection de votre abonnement sur toute la durée souscrite</div>
+  </div>
+
+  <div class="hero-badges">
+    <div class="badge-card">
+      <span class="icon">🛡️</span>
+      <strong>Garantie Intégrale</strong>
+      <p>Votre formule (1, 6 ou 12 mois) est couverte jusqu'au dernier jour sans exception.</p>
+    </div>
+    <div class="badge-card">
+      <span class="icon">⚡</span>
+      <strong>SAV en &lt; 30 min</strong>
+      <p>Assistance technique dédiée et réactive 7j/7 directement sur WhatsApp.</p>
+    </div>
+    <div class="badge-card">
+      <span class="icon">🔄</span>
+      <strong>Remplacement Immédiat</strong>
+      <p>Nouveaux identifiants générés sans surcoût en cas de dysfonctionnement avéré.</p>
+    </div>
+  </div>
+
+  <div class="content-card">
+    <h2>1. Notre Principe Fondateur : Zéro Risque Client</h2>
+    <p>Chez <strong>NeonPass</strong>, nous considérons que le client ne doit jamais subir les aléas techniques des plateformes numériques ou des serveurs. Lorsque vous souscrivez un pack pour une durée déterminée (1 mois, 6 mois ou 12 mois), <strong>nous nous engageons contractuellement à maintenir votre accès fonctionnel</strong> pendant toute cette période.</p>
+
+    <div class="highlight-box">
+      <strong>Règle d'or :</strong> Si un compte ou un accès cesse de fonctionner de manière imprévue au cours de votre période de validité, il est <strong>remplacé immédiatement et gratuitement</strong>.
+    </div>
+
+    <h2>2. Procédure de Prise en Charge SAV</h2>
+    <p>En cas de moindre anomalie technique, le processus de résolution est transparent et instantané :</p>
+    
+    <div class="step-flow">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Signalement simplifié</strong>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--muted)">Cliquez sur le bouton "Signaler un problème" directement depuis votre fiche <a href="/suivi">Espace Abonné</a>, ou contactez notre support sur WhatsApp en transmettant votre numéro de commande ou code de suivi.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Diagnostic express (&lt; 30 minutes)</strong>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--muted)">Notre équipe technique analyse immédiatement la source du dysfonctionnement (maintenance fournisseur, synchronisation DNS ou invalidation d'accès).</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Remplacement ou réinitialisation</strong>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--muted)">Si le problème persiste, un nouveau compte tout neuf issu de nos stocks de réserve vous est immédiatement réattribué sans frais.</p>
+        </div>
+      </div>
+    </div>
+
+    <h2>3. Engagement de Remboursement au Prorata</h2>
+    <p>Dans l'éventualité exceptionnelle où notre équipe serait dans l'impossibilité technique de rétablir ou de remplacer votre service sous un délai de <strong>48 heures consécutives</strong>, vous êtes éligible à un <strong>remboursement au prorata temporis</strong> du temps restant sur votre formule, calculé au jour près.</p>
+
+    <h2>4. Conditions d'Application & Éligibilité</h2>
+    <p>Pour bénéficier de la garantie de remplacement sans restriction, le Client s'engage à respecter les règles d'usage de bon sens :</p>
+    <ul>
+      <li><strong>Identifiants d'origine :</strong> Ne pas modifier l'adresse e-mail principale du compte, le mot de passe racine ou les informations de paiement associées.</li>
+      <li><strong>Respect des limites :</strong> Ne pas dépasser le nombre d'écrans ou de connexions simultanées inclus dans la formule souscrite.</li>
+      <li><strong>Usage privé :</strong> Les accès sont personnels et ne doivent pas être diffusés publiquement ou revendus à des tiers.</li>
+    </ul>
+
+    <h2>5. Comment retrouver ou consulter sa garantie ?</h2>
+    <p>La date d'échéance exacte et l'état de votre garantie sont affichés en temps réel sur votre espace privé :</p>
+    <ul>
+      <li>Rendez-vous sur notre page <a href="/suivi">Suivi de commande & Accès (/suivi)</a> muni de votre code de suivi confidentiel (format <code>NP-TRK-XXXX-XXXX-XXXX</code>).</li>
+      <li>Ou cliquez sur le lien personnalisé présent dans votre historique de conversation WhatsApp officiel.</li>
+    </ul>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+    <div>
+      <strong style="color:var(--text)">NeonPass</strong> · Divertissement, VPN et TV en formules sécurisées.
+      <div class="foot-links">
+        <a href="/suivi">Suivi de commande</a>
+        <a href="/status">Statut des serveurs</a>
+        <a href="/garantie">Garantie & SAV</a>
+        <a href="/cgv">CGV</a>
+        <a href="/mentions-legales">Mentions Légales & RGPD</a>
+      </div>
+    </div>
+    <div>© 2026 NeonPass · Tous droits réservés.</div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -581,6 +581,18 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         </div>
       </div>
 
+      <!-- Code de suivi confidentiel (/suivi) -->
+      <div id="orderViewTrackingBox" style="margin-bottom:16px;padding:10px 14px;background:rgba(43,230,255,0.06);border:1px dashed rgba(43,230,255,0.3);border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap" hidden>
+        <div style="font-size:13px;color:var(--muted)">
+          <span style="color:var(--cyan);font-weight:700">🛡️ N° de suivi confidentiel (/suivi) :</span>
+          <code id="orderViewTrackingCode" style="color:#fff;font-family:'JetBrains Mono',monospace;font-size:13px;margin-left:8px;font-weight:700"></code>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn small" type="button" id="orderViewCopyTrackingBtn" style="padding:3px 10px;font-size:11px">📋 Copier code</button>
+          <a class="btn small" id="orderViewOpenSuiviBtn" href="/suivi" target="_blank" rel="noopener" style="padding:3px 10px;font-size:11px">🔍 Tester sur /suivi</a>
+        </div>
+      </div>
+
       <!-- Grille d'informations (Client & Échéance) -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;margin-bottom:16px">
         <!-- Carte Client & Total -->
@@ -860,6 +872,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <div>
       <h2 id="clientDlgName" style="margin:0 0 4px">Fiche Client</h2>
       <p class="hint" id="clientDlgPhone" style="margin:0"></p>
+      <div id="clientDlgCodeBox" style="margin-top:6px;font-size:12px;display:flex;align-items:center;gap:6px" hidden>
+        <span style="color:var(--cyan);font-weight:700">🛡️ Code client confidentiel :</span>
+        <code id="clientDlgCode" style="color:#fff;font-family:'JetBrains Mono',monospace;font-weight:700"></code>
+        <button class="btn small" type="button" id="clientDlgCopyCode" style="padding:1px 6px;font-size:10px" title="Copier le code client">📋</button>
+      </div>
       <p class="hint" id="clientDlgNotes" style="margin:4px 0 0;color:var(--warn)" hidden></p>
     </div>
     <button class="btn small" type="button" id="clientDlgClose">Fermer</button>
@@ -1082,6 +1099,20 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     $('#clientDlgName').textContent = fullName || 'Client anonyme';
     $('#clientDlgPhone').textContent = phone ? 'WhatsApp / Tél : ' + phone : 'Aucun numéro de téléphone enregistré';
+
+    const clientCodeBox = $('#clientDlgCodeBox');
+    if (client.client_code) {
+      clientCodeBox.hidden = false;
+      $('#clientDlgCode').textContent = client.client_code;
+      $('#clientDlgCopyCode').onclick = () => {
+        navigator.clipboard.writeText(client.client_code)
+          .then(() => toast('Code client copié !'))
+          .catch(() => prompt('Code client :', client.client_code));
+      };
+    } else {
+      clientCodeBox.hidden = true;
+    }
+
     const notesEl = $('#clientDlgNotes');
     if (client.notes) {
       notesEl.hidden = false;
@@ -1128,6 +1159,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     $('#clientCopyInfo').onclick = () => {
       let text = 'Fiche Client : ' + fullName + '\n';
+      if (client.client_code) text += 'Code Client Confidentiel : ' + client.client_code + '\n';
       if (phone) text += 'Téléphone : ' + phone + '\n';
       if (client.notes) text += 'Notes : ' + client.notes + '\n';
       if (clientAccounts.length) {
@@ -1331,9 +1363,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       const itemsStr = (o.items || []).map((i) => i.name).join(' ').toLowerCase();
       const notesStr = (o.notes || '').toLowerCase();
       const promoStr = (o.promo_code || '').toLowerCase();
+      const trkStr = (o.tracking_code || '').toLowerCase();
       const payStr = (PAY_LABEL[o.payment_method] || o.payment_method || '').toLowerCase();
       return idStr.includes(q) || String(o.id) === q || fullName.includes(q) || phone.includes(q) ||
-             itemsStr.includes(q) || notesStr.includes(q) || promoStr.includes(q) || payStr.includes(q);
+             itemsStr.includes(q) || notesStr.includes(q) || promoStr.includes(q) || trkStr.includes(q) || payStr.includes(q);
     });
     $('#ordersEmpty').hidden = rows.length > 0;
     rows.forEach((o) => {
@@ -1719,6 +1752,12 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         `_(Retrouvez vos codes à tout moment, consignes et garantie en direct)_\n\n`;
     }
 
+    if (o.tracking_code) {
+      msg += `🛡️ *VOTRE CODE DE SUIVI CONFIDENTIEL :*\n` +
+        `👉 *${o.tracking_code}*\n` +
+        `_(Conservez ce code unique pour retrouver vos accès à tout moment sur ${location.origin}/suivi)_\n\n`;
+    }
+
     if (expStr) {
       msg += `📅 *Abonnement valide jusqu'au :* ${expStr}\n\n`;
     }
@@ -2000,6 +2039,21 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     if (!o) return;
     editingOrder = o;
     switchOrderDlgMode('view');
+
+    // Code de suivi confidentiel (/suivi)
+    const trkBox = $('#orderViewTrackingBox');
+    if (o.tracking_code) {
+      trkBox.hidden = false;
+      $('#orderViewTrackingCode').textContent = o.tracking_code;
+      $('#orderViewCopyTrackingBtn').onclick = () => {
+        navigator.clipboard.writeText(o.tracking_code)
+          .then(() => toast('Code de suivi copié !'))
+          .catch(() => prompt('Code de suivi :', o.tracking_code));
+      };
+      $('#orderViewOpenSuiviBtn').href = '/suivi?code=' + encodeURIComponent(o.tracking_code);
+    } else {
+      trkBox.hidden = true;
+    }
 
     $('#orderDlgHeaderTitle').textContent = 'Commande #' + o.id + (o.source === 'admin' ? ' (Admin)' : '');
     const statusPill = $('#orderDlgStatusPill');

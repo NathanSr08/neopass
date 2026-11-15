@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Conditions Générales de Vente NeonPass.">
+<meta name="theme-color" content="#0a0918">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Conditions Générales de Vente (CGV) — NeonPass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root {
+  --ink: #0a0918;
+  --panel: #16142e;
+  --line: rgba(160, 150, 255, 0.16);
+  --text: #efecff;
+  --muted: #a8a5cf;
+  --pink: #ff4d94;
+  --cyan: #2be6ff;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 15px/1.7 var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap {
+  width: 100%;
+  max-width: 860px;
+  margin-inline: auto;
+  padding-inline: max(20px, env(safe-area-inset-left, 0px));
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 9, 24, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.nav-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 14px;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: #fff;
+  text-decoration: none;
+}
+.logo img { width: 32px; height: 32px; }
+.logo span {
+  background: linear-gradient(100deg, var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nav-links { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+.nav-links a { text-decoration: none; color: var(--muted); transition: color .2s; }
+.nav-links a:hover { color: var(--cyan); }
+
+.page-head {
+  padding-block: 44px 24px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.8vw, 36px);
+  margin: 10px 0 12px;
+  line-height: 1.2;
+}
+.meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.content-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 32px;
+  margin-bottom: 40px;
+}
+h2 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: #fff;
+  margin: 28px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+h2:first-of-type { margin-top: 0; }
+p, ul { margin: 0 0 14px; color: #cfcbe8; }
+ul { padding-left: 20px; }
+li { margin-bottom: 6px; }
+
+footer {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-block: 28px;
+  font-size: 13px;
+  color: var(--muted);
+  background: rgba(10, 9, 24, 0.95);
+}
+.foot-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.foot-links a { color: var(--muted); text-decoration: none; }
+.foot-links a:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a href="/" class="logo">
+      <img src="/logo.svg" alt="NeonPass Logo">
+      <span>NeonPass</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/#catalogue">Catalogue</a>
+      <a href="/suivi">Suivi de commande</a>
+      <a href="/garantie">Garantie & SAV</a>
+      <a href="/status">Statut Réseau</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" style="flex:1">
+  <div class="page-head">
+    <span class="eyebrow">Cadre Légal & Transparence</span>
+    <h1>Conditions Générales de Vente (CGV)</h1>
+    <div class="meta">Dernière mise à jour : 15 Novembre 2026 · Applicables à toutes les commandes NeonPass</div>
+  </div>
+
+  <div class="content-card">
+    <h2>Article 1 — Objet & Champ d'application</h2>
+    <p>Les présentes Conditions Générales de Vente (CGV) régissent l'ensemble des relations entre la plateforme <strong>NeonPass</strong> et toute personne physique ou morale (ci-après le « Client ») procédant à la souscription d'une formule d'abonnement ou de licence numérique présentée sur le site officiel.</p>
+
+    <h2>Article 2 — Modalités de Commande via WhatsApp</h2>
+    <p>Les commandes s'effectuent selon un processus optimisé et direct :</p>
+    <ul>
+      <li>Le Client sélectionne une ou plusieurs offres ou compose son pack personnalisé sur le site.</li>
+      <li>Un récapitulatif détaillé est automatiquement préparé et s'ouvre dans une conversation WhatsApp officielle dédiée, avec mention de la référence de commande.</li>
+      <li>Le contrat est considéré comme conclu dès que le Client valide sa commande dans l'échange et que la disponibilité des accès est confirmée par notre équipe.</li>
+    </ul>
+
+    <h2>Article 3 — Tarifs & Moyens de Paiement</h2>
+    <p>Les prix affichés sur le site sont exprimés en euros (€) et sont fermes et définitifs pour toute la durée de la formule souscrite. Aucun frais caché n'est appliqué.</p>
+    <p>Les règlements sont sécurisés et acceptés via les canaux suivants :</p>
+    <ul>
+      <li><strong>Revolut</strong> (virement instantané entre comptes)</li>
+      <li><strong>Cryptomonnaies</strong> (USDT TRC20 / ERC20, Bitcoin, Ethereum)</li>
+      <li><strong>Virement bancaire SEPA</strong> instantané</li>
+    </ul>
+    <p><em>Aucune coordonnée bancaire n'est saisie ni conservée sur les serveurs de NeonPass.</em></p>
+
+    <h2>Article 4 — Activation & Mise à Disposition des Accès</h2>
+    <p>La livraison des identifiants s'effectue immédiatement dès confirmation de la réception du règlement, 7 jours sur 7. Le Client reçoit :</p>
+    <ul>
+      <li>Ses identifiants et consignes de connexion détaillées dans l'échange WhatsApp.</li>
+      <li>Un lien privé et sécurisé vers son <strong>Espace Abonné (/acces)</strong> consultable 24h/24.</li>
+      <li>Un <strong>numéro de suivi confidentiel</strong> unique lui permettant de récupérer ses accès à tout moment via <a href="/suivi">neonpass.uned.live/suivi</a>.</li>
+    </ul>
+
+    <h2>Article 5 — Durée des Abonnements & Non-Reconduction Tacite</h2>
+    <p>Les formules sont souscrites pour une durée fixe et déterminée (1 mois, 6 mois ou 12 mois). <strong>Il n'existe aucune reconduction automatique ni prélèvement tacite.</strong> À l'échéance de l'abonnement, le service prend fin automatiquement sauf si le Client manifeste explicitement le souhait de renouveler sa formule.</p>
+
+    <h2>Article 6 — Garantie & Continuité de Service</h2>
+    <p>Chaque formule bénéficie d'une <strong>Garantie Totale</strong> couvrant l'intégralité de la durée payée. En cas de dysfonctionnement technique ou de déconnexion imprévue, notre équipe technique procède au remplacement immédiat des identifiants dans un délai moyen inférieur à 30 minutes, conformément à notre <a href="/garantie">Charte de Garantie</a>.</p>
+
+    <h2>Article 7 — Obligations du Client & Règle d'Usage</h2>
+    <p>Le Client s'engage à utiliser les accès fournis dans un cadre strictement personnel. Il s'engage notamment à :</p>
+    <ul>
+      <li>Ne pas modifier l'adresse e-mail racine, le mot de passe principal ou les paramètres de facturation des comptes fournis.</li>
+      <li>Respecter le nombre d'écrans ou de profils alloués dans sa commande.</li>
+      <li>Conserver son code de suivi confidentiel en lieu sûr.</li>
+    </ul>
+
+    <h2>Article 8 — Service Client & Contact</h2>
+    <p>Pour toute question, réclamation ou assistance technique, notre équipe est à votre écoute 7 jours sur 7 directement sur WhatsApp ou par courriel.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+    <div>
+      <strong style="color:var(--text)">NeonPass</strong> · Divertissement, VPN et TV en formules sécurisées.
+      <div class="foot-links">
+        <a href="/suivi">Suivi de commande</a>
+        <a href="/status">Statut des serveurs</a>
+        <a href="/garantie">Garantie & SAV</a>
+        <a href="/cgv">CGV</a>
+        <a href="/mentions-legales">Mentions Légales & RGPD</a>
+      </div>
+    </div>
+    <div>© 2026 NeonPass · Tous droits réservés.</div>
+  </div>
+</footer>
+
+</body>
+</html>
