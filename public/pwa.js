@@ -21,30 +21,115 @@
     });
   }
 
-  // 2. Detection
+  // 2. Detection (Device & PWA installation status)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   const isApple = isIOS || isIPadOS;
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+
+  function isMobileDevice() {
+    // 1. User Agent test
+    const ua = (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase();
+    const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|silk|kindle|windows phone/i;
+    if (mobileRegex.test(ua)) return true;
+
+    // 2. iPadOS / iOS tablet with desktop UA spoofing
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+
+    // 3. Touch device with phone/tablet screen resolution
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    const isSmallOrMedium = window.matchMedia && window.matchMedia('(max-width: 960px)').matches;
+    if (hasTouch && isSmallOrMedium) return true;
+
+    return false;
+  }
+
+  function isAppInstalled() {
+    // Standalone display mode (PWA installed and launched from home screen / launcher)
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.navigator.standalone === true) return true;
+    if (document.referrer && document.referrer.includes('android-app://')) return true;
+
+    // Explicit installation markers
+    if (sessionStorage.getItem('np_pwa_mode') === '1') return true;
+    if (localStorage.getItem('np_pwa_installed') === '1') return true;
+
+    return false;
+  }
+
+  const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
                        window.navigator.standalone === true ||
-                       document.referrer.includes('android-app://');
+                       (document.referrer && document.referrer.includes('android-app://'));
+
+  if (isStandalone) {
+    sessionStorage.setItem('np_pwa_mode', '1');
+    localStorage.setItem('np_pwa_installed', '1');
+    document.documentElement.classList.add('is-pwa-standalone');
+    document.documentElement.classList.add('is-pwa-installed');
+  } else if (isAppInstalled()) {
+    document.documentElement.classList.add('is-pwa-installed');
+  }
+
+  if (isMobileDevice()) {
+    document.documentElement.classList.add('is-mobile-device');
+  } else {
+    document.documentElement.classList.add('is-desktop-device');
+  }
+
+  // Check Android getInstalledRelatedApps if supported
+  if ('getInstalledRelatedApps' in navigator) {
+    navigator.getInstalledRelatedApps().then(apps => {
+      if (Array.isArray(apps) && apps.length > 0) {
+        localStorage.setItem('np_pwa_installed', '1');
+        document.documentElement.classList.add('is-pwa-installed');
+        removeInstallUI();
+      }
+    }).catch(() => {});
+  }
+
+  function removeInstallUI() {
+    const btn = document.getElementById('pwaHeaderInstallBtn');
+    if (btn) btn.remove();
+    const banner = document.getElementById('pwaInstallBanner');
+    if (banner) banner.remove();
+    const modal = document.getElementById('pwaModalBackdrop');
+    if (modal) modal.remove();
+    document.querySelectorAll('.pwa-install-link').forEach(el => {
+      el.style.display = 'none';
+    });
+  }
 
   let deferredInstallPrompt = null;
 
-  if (isStandalone) {
-    document.documentElement.classList.add('is-pwa-standalone');
-    sessionStorage.setItem('np_pwa_mode', '1');
-  }
-
   // 3. Initialize UI
   function init() {
+    const isMobile = isMobileDevice();
+    const isInstalled = isAppInstalled();
+
+    if (isMobile) {
+      document.documentElement.classList.add('is-mobile-device');
+      document.documentElement.classList.remove('is-desktop-device');
+    } else {
+      document.documentElement.classList.add('is-desktop-device');
+      document.documentElement.classList.remove('is-mobile-device');
+    }
+
+    if (isInstalled) {
+      document.documentElement.classList.add('is-pwa-installed');
+    }
+
     injectStyles();
     setupResponsiveNavbar();
 
-    if (isStandalone) {
-      renderBottomNav();
-    } else {
+    if (isInstalled) {
+      removeInstallUI();
+      if (isStandalone && isMobile) {
+        renderBottomNav();
+      }
+    } else if (isMobile) {
       setupInstallPrompts();
+    } else {
+      // Desktop: strictly remove and don't setup install UI
+      removeInstallUI();
     }
   }
 
@@ -58,15 +143,20 @@
     e.preventDefault();
     deferredInstallPrompt = e;
     window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+    if (isMobileDevice() && !isAppInstalled()) {
+      setupInstallPrompts();
+    }
   });
 
   window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
-    document.documentElement.classList.add('is-pwa-standalone');
-    const banner = document.getElementById('pwaInstallBanner');
-    if (banner) banner.remove();
+    localStorage.setItem('np_pwa_installed', '1');
+    document.documentElement.classList.add('is-pwa-installed');
+    removeInstallUI();
     showPwaToast('Application NeonPass installée avec succès !');
-    setTimeout(() => renderBottomNav(), 500);
+    setTimeout(() => {
+      if (isMobileDevice()) renderBottomNav();
+    }, 500);
   });
 
   // Inject Styles for PWA and Mobile Responsive Navbar
@@ -507,33 +597,70 @@
         box-shadow: 0 0 8px #2be6ff;
       }
 
-      /* Header Install Button */
+      /* Desktop Protection: Strictly hide install controls on desktop screens */
+      @media (min-width: 961px) {
+        .pwa-header-btn,
+        #pwaHeaderInstallBtn,
+        .pwa-install-banner,
+        #pwaInstallBanner,
+        .pwa-bottom-bar,
+        #pwaBottomNav,
+        .pwa-install-link {
+          display: none !important;
+        }
+      }
+
+      /* Desktop Device or Installed App State: Strictly suppress install buttons & banners */
+      html.is-desktop-device .pwa-header-btn,
+      html.is-desktop-device #pwaHeaderInstallBtn,
+      html.is-desktop-device .pwa-install-banner,
+      html.is-desktop-device #pwaInstallBanner,
+      html.is-desktop-device .pwa-bottom-bar,
+      html.is-desktop-device #pwaBottomNav,
+      html.is-desktop-device .pwa-install-link,
+      html.is-pwa-installed .pwa-header-btn,
+      html.is-pwa-installed #pwaHeaderInstallBtn,
+      html.is-pwa-installed .pwa-install-banner,
+      html.is-pwa-installed #pwaInstallBanner,
+      html.is-pwa-installed .pwa-install-link,
+      html.is-pwa-standalone .pwa-header-btn,
+      html.is-pwa-standalone #pwaHeaderInstallBtn,
+      html.is-pwa-standalone .pwa-install-banner,
+      html.is-pwa-standalone #pwaInstallBanner,
+      html.is-pwa-standalone .pwa-install-link {
+        display: none !important;
+      }
+
+      /* Header Install Button (Mobile & Tablet when not installed) */
       .pwa-header-btn {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 7px 14px;
+        gap: 5px;
+        padding: 6px 12px;
         border-radius: 999px;
         background: rgba(43, 230, 255, 0.12);
-        border: 1px solid rgba(43, 230, 255, 0.35);
+        border: 1px solid rgba(43, 230, 255, 0.4);
         color: #2be6ff;
         font-family: 'Sora', system-ui, sans-serif;
-        font-size: 12px;
+        font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
         transition: all .2s;
         text-decoration: none;
         white-space: nowrap;
+        flex-shrink: 0;
       }
       .pwa-header-btn:hover {
         background: rgba(43, 230, 255, 0.22);
+        border-color: #2be6ff;
         transform: translateY(-1px);
         text-decoration: none;
       }
       .pwa-header-btn svg {
-        width: 15px;
-        height: 15px;
+        width: 14px;
+        height: 14px;
         fill: currentColor;
+        flex-shrink: 0;
       }
 
       /* Responsive Breakpoint: <= 960px (Mobile & Tablet) */
@@ -543,9 +670,6 @@
         }
         .nav-burger {
           display: flex !important;
-        }
-        .pwa-header-btn {
-          display: none !important;
         }
         #navWa {
           padding: 8px 12px !important;
@@ -558,6 +682,16 @@
       @media (max-width: 540px) {
         #navWa {
           display: none !important;
+        }
+        .pwa-header-btn {
+          padding: 6px 10px;
+          font-size: 11px;
+        }
+      }
+      @media (max-width: 360px) {
+        .pwa-header-btn {
+          padding: 5px 8px;
+          font-size: 10px;
         }
       }
 
@@ -980,6 +1114,13 @@
           drawer.style.maxHeight = 'calc(100dvh - ' + topVal + 'px)';
         }
       }
+
+      // Check device & install state on resize
+      if (!isMobileDevice() || isAppInstalled()) {
+        removeInstallUI();
+      } else if (!document.getElementById('pwaHeaderInstallBtn')) {
+        setupInstallPrompts();
+      }
     });
 
     // Populate WhatsApp link
@@ -1041,19 +1182,25 @@
 
   // 6. Setup Install Prompts (Header button + Floating card)
   function setupInstallPrompts() {
+    if (!isMobileDevice() || isAppInstalled()) {
+      removeInstallUI();
+      return;
+    }
+
     const actionsGroup = document.querySelector('.nav-actions-group');
     if (actionsGroup && !document.getElementById('pwaHeaderInstallBtn')) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.id = 'pwaHeaderInstallBtn';
       btn.className = 'pwa-header-btn';
+      btn.setAttribute('aria-label', "Installer l'application NeonPass");
       btn.innerHTML = `
         <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
         <span class="btn-label-text">Installer l'App</span>
       `;
       btn.addEventListener('click', triggerInstallFlow);
 
-      // Prepend in actions group so WhatsApp is on right
+      // Prepend in actions group before WhatsApp and burger
       actionsGroup.insertBefore(btn, actionsGroup.firstChild);
     }
 
@@ -1062,12 +1209,13 @@
     if (now < dismissedUntil) return;
 
     setTimeout(() => {
-      if (isStandalone) return;
+      if (!isMobileDevice() || isAppInstalled()) return;
       renderFloatingBanner();
-    }, 3200);
+    }, 2800);
   }
 
   function renderFloatingBanner() {
+    if (!isMobileDevice() || isAppInstalled()) return;
     if (document.getElementById('pwaInstallBanner')) return;
 
     const banner = document.createElement('div');
@@ -1090,19 +1238,26 @@
     banner.querySelector('#pwaBannerCloseBtn').addEventListener('click', () => {
       banner.classList.remove('show');
       setTimeout(() => banner.remove(), 400);
-      localStorage.setItem('np_pwa_dismissed', String(Date.now() + (4 * 86400000)));
+      localStorage.setItem('np_pwa_dismissed', String(Date.now() + (3 * 86400000)));
     });
   }
 
   // 7. Install Trigger
   function triggerInstallFlow() {
+    if (!isMobileDevice()) {
+      showPwaToast('L’installation de l’application est disponible sur mobile et tablette.');
+      return;
+    }
+
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
       deferredInstallPrompt.userChoice.then((choice) => {
-        if (choice.outcome === 'accepted') {
+        if (choice && choice.outcome === 'accepted') {
           deferredInstallPrompt = null;
-          const banner = document.getElementById('pwaInstallBanner');
-          if (banner) banner.remove();
+          localStorage.setItem('np_pwa_installed', '1');
+          document.documentElement.classList.add('is-pwa-installed');
+          removeInstallUI();
+          showPwaToast('Application NeonPass installée !');
         }
       });
       return;
@@ -1191,8 +1346,15 @@
   }
 
   window.NeonPassPWA = {
-    install: triggerInstallFlow,
-    isStandalone: () => isStandalone
+    install: () => {
+      if (!isMobileDevice()) {
+        showPwaToast('L’installation de l’application est disponible sur mobile et tablette.');
+        return;
+      }
+      triggerInstallFlow();
+    },
+    isStandalone: () => isAppInstalled(),
+    isMobile: isMobileDevice
   };
 
 })();

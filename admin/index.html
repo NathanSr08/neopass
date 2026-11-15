@@ -262,7 +262,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Ordre</th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>État</th><th></th></tr></thead>
+        <thead><tr><th>Ordre</th><th>Nom</th><th>Catégorie</th><th>Durée</th><th>Prix</th><th>État</th><th></th></tr></thead>
         <tbody id="offersBody"></tbody>
       </table>
     </div>
@@ -498,9 +498,36 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </section>
 
   <section class="panel" id="panel-audit" hidden>
-    <div class="toolbar">
+    <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <h2 style="margin:0">Journal des actions</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:4px 8px">
+          <span style="font-size:12px;color:var(--muted)">Supprimer :</span>
+          <select id="auditPurgePeriod" style="padding:4px 8px;font-size:12px;border:none;background:transparent;color:var(--text);outline:none;cursor:pointer">
+            <optgroup label="Antérieurs à (plus anciens que)">
+              <option value="older_1h">Plus de 1 heure</option>
+              <option value="older_6h">Plus de 6 heures</option>
+              <option value="older_12h">Plus de 12 heures</option>
+              <option value="older_1j" selected>Plus de 1 jour</option>
+              <option value="older_3j">Plus de 3 jours</option>
+              <option value="older_7j">Plus de 7 jours</option>
+              <option value="older_1mois">Plus de 1 mois</option>
+            </optgroup>
+            <optgroup label="Créés depuis (derniers logs)">
+              <option value="recent_1h">Dernière 1 heure</option>
+              <option value="recent_6h">Dernières 6 heures</option>
+              <option value="recent_12h">Dernières 12 heures</option>
+              <option value="recent_1j">Dernières 24 heures</option>
+              <option value="recent_3j">Derniers 3 jours</option>
+              <option value="recent_7j">Derniers 7 jours</option>
+              <option value="recent_1mois">Dernier mois</option>
+            </optgroup>
+            <optgroup label="Nettoyage intégral">
+              <option value="all">Tout supprimer (Vider le journal)</option>
+            </optgroup>
+          </select>
+          <button class="btn small danger" type="button" id="auditPurgeBtn" style="padding:4px 10px;font-size:12px">Purger</button>
+        </div>
         <button class="btn small" type="button" id="auditExport">Exporter en CSV</button>
         <button class="btn small" type="button" id="auditRefresh">Actualiser</button>
       </div>
@@ -530,7 +557,19 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       </label>
       <label for="fTag">Étiquette<input type="text" id="fTag" maxlength="30"></label>
       <label for="fSort">Ordre d'affichage<input type="number" id="fSort" step="1" value="0"></label>
-      <label for="fPrice">Prix annuel (€)<input type="number" id="fPrice" min="0" step="0.01" required></label>
+      <label for="fDuration">Durée de l'abonnement
+        <select id="fDuration" style="width:100%">
+          <option value="12">1 an (12 mois)</option>
+          <option value="6">6 mois</option>
+          <option value="3">3 mois</option>
+          <option value="1">1 mois</option>
+          <option value="custom">Personnalisée (en mois)...</option>
+        </select>
+      </label>
+      <label id="fDurationCustomBox" for="fDurationCustom" style="display:none">Durée personnalisée (en mois)
+        <input type="number" id="fDurationCustom" min="1" max="120" step="1" placeholder="ex: 24">
+      </label>
+      <label for="fPrice">Prix (€)<input type="number" id="fPrice" min="0" step="0.01" required></label>
       <label for="fWas">Valeur barrée démo (€)<input type="number" id="fWas" min="0" step="0.01"></label>
       <label for="fLowStock">Seuil alerte stock bas<input type="number" id="fLowStock" min="0" max="999" step="1" value="2" placeholder="2"></label>
       <label class="full" for="fDesc">Description<textarea id="fDesc" rows="2" maxlength="300"></textarea></label>
@@ -2329,6 +2368,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     updateAccountOfferSelects();
     const body = $('#offersBody');
     body.textContent = '';
+    const durLabel = (m) => (m === 12 ? '1 an' : (m === 1 ? '1 mois' : m + ' mois'));
     offers.forEach((o) => {
       const edit = h('button', { className: 'btn small', type: 'button' }, 'Modifier');
       edit.addEventListener('click', () => openDialog(o));
@@ -2342,6 +2382,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', { className: 'num' }, String(o.sort)),
         h('td', {}, o.name, o.reviewCount ? h('small', { style: 'display:block;color:var(--muted)' }, '★ ' + String(o.rating).replace('.', ',') + ' · ' + o.reviewCount + ' avis') : ''),
         h('td', {}, CAT_LABEL[o.category] || o.category),
+        h('td', {}, h('span', { className: 'pill', style: 'border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:11px' }, durLabel(o.durationMonths || 12))),
         h('td', { className: 'num' }, fmt(o.price)),
         h('td', {}, h('span', { className: 'pill ' + (o.active ? 'on' : 'off') }, o.active ? 'Visible' : 'Masquée')),
         h('td', {}, h('div', { className: 'row-actions' }, edit, del))
@@ -2373,6 +2414,16 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     $('#fCategory').value = o ? o.category : 'streaming';
     $('#fTag').value = o ? o.tag : '';
     $('#fSort').value = o ? o.sort : (offers.length ? Math.max(...offers.map((x) => x.sort)) + 10 : 0);
+    const dm = o && o.durationMonths ? o.durationMonths : 12;
+    if ([1, 3, 6, 12].includes(dm)) {
+      $('#fDuration').value = String(dm);
+      $('#fDurationCustomBox').style.display = 'none';
+      $('#fDurationCustom').value = '';
+    } else {
+      $('#fDuration').value = 'custom';
+      $('#fDurationCustomBox').style.display = 'block';
+      $('#fDurationCustom').value = dm;
+    }
     $('#fPrice').value = o ? o.price : '';
     $('#fWas').value = o && o.was != null ? o.was : '';
     $('#fLowStock').value = o && o.lowStockThreshold != null ? o.lowStockThreshold : 2;
@@ -2391,15 +2442,23 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   }
   $('#newOffer').addEventListener('click', () => openDialog(null));
   $('#dlgCancel').addEventListener('click', () => dlg.close());
+  $('#fDuration').addEventListener('change', () => {
+    $('#fDurationCustomBox').style.display = $('#fDuration').value === 'custom' ? 'block' : 'none';
+  });
 
   $('#offerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const durSel = $('#fDuration').value;
+    const durationMonths = durSel === 'custom'
+      ? Math.max(1, Math.min(120, parseInt($('#fDurationCustom').value, 10) || 12))
+      : parseInt(durSel, 10) || 12;
     const body = {
       name: $('#fName').value,
       slug: $('#fSlug').value,
       category: $('#fCategory').value,
       tag: $('#fTag').value,
       sort: $('#fSort').value,
+      durationMonths,
       price: $('#fPrice').value,
       was: $('#fWas').value,
       lowStockThreshold: Math.max(0, parseInt($('#fLowStock').value, 10) || 2),
@@ -3227,7 +3286,8 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     'POST /promos': 'Code promo créé', 'PATCH /promos': 'Code promo modifié', 'DELETE /promos': 'Code promo supprimé',
     'PUT /settings': 'Réglages modifiés', 'POST /logout': 'Déconnexion', 'POST /logout-all': 'Toutes les sessions fermées',
     'POST /totp/setup': '2FA : configuration', 'POST /totp/enable': '2FA activée', 'POST /totp/disable': '2FA désactivée',
-    'POST /notify/test': 'Test de notification'
+    'POST /notify/test': 'Test de notification',
+    'audit.purge': 'Purge du journal', 'POST /audit/purge': 'Purge du journal'
   };
   const actionLabel = (a) => {
     if (ACTION_LABEL[a]) return ACTION_LABEL[a];
@@ -3320,6 +3380,21 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     });
   }
   $('#auditRefresh').addEventListener('click', () => loadAudit().catch((e) => toast(e.message, true)));
+
+  $('#auditPurgeBtn').addEventListener('click', async () => {
+    const sel = $('#auditPurgePeriod');
+    const period = sel.value;
+    const label = sel.options[sel.selectedIndex].text;
+    if (!confirm('Confirmer la suppression des logs (' + label + ') ?')) return;
+    try {
+      const r = await api('/audit/purge', { method: 'POST', body: { period } });
+      toast(r.message || 'Journaux purgés avec succès.');
+      loadAudit();
+      loadStats();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
 
   // ----- Réglages & Alertes de Stock -----
   let currentStockThresholds = [];

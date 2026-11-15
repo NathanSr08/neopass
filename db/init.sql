@@ -178,6 +178,7 @@ CREATE INDEX IF NOT EXISTS accounts_order_idx ON accounts (order_id);
 -- Support des packs multi-services et découplage stock/packs
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS pack_items JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS duration_months INTEGER NOT NULL DEFAULT 12;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS access_token TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS orders_access_token_idx ON orders (access_token);
 

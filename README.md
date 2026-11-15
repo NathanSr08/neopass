@@ -25,6 +25,8 @@
   - [Workflow SAV & Remplacement](#4-workflow-sav--remplacement-intelligent)
   - [Espace Abonné Sécurisé 24/7](#5-espace-abonné-sécurisé-247-accestoken)
   - [Sauvegarde & Restauration BDD](#6-sauvegarde--restauration-de-la-base-de-données)
+  - [PWA & Responsive Mobile](#7-progressive-web-app-pwa--responsive-mobile)
+  - [Espace Confiance & Suivi](#8-pages-de-confiance-statut-réseau--suivi)
 - [Architecture & Stack Technique](#-architecture--stack-technique)
 - [Installation & Déploiement](#-installation--déploiement)
 - [Variables d'Environnement](#-variables-denvironnement-env)
@@ -55,16 +57,18 @@
 * **Tunnel WhatsApp fluide** : Génération instantanée de la commande en base et redirection WhatsApp avec message pré-formaté prêt à l'envoi.
 
 ### 2. Panel Admin CRM Moderne
+* **Gestion stricte des durées d'offres** :
+  * Définition de la durée exacte par l'administrateur (1 mois, 3 mois, 6 mois, 1 an / 12 mois ou durée personnalisée).
+  * Cohérence totale du panier et de la commande : le client commande exactement selon la durée configurée.
 * **Fiche Commande ergonomique** :
   * **Mode Consultation d'abord** : Synthèse complète du client, durée, échéance, badge des jours restants, produits achetés, comptes attribués et notes privées.
   * **Croix de fermeture rapide `✕`** en haut à droite.
   * **Mode Édition à la demande** avec bouton `✏️ Modifier la commande` et retour direct.
-* **Gestion flexible des durées d'abonnement** :
-  * Prise en charge des formules **1 mois**, **3 mois**, **6 mois**, **1 an (12 mois)** ou date personnalisée.
-  * **Boutons rapides d'ajustement** dans la fiche : recalcul immédiat de l'échéance en 1 clic.
 * **CRM Clients complet** :
   * Liste de tous les clients avec statistiques agrégées (commandes passées, CA généré, abonnements actifs, accès détenus).
   * Fiche client 360° avec accès direct WhatsApp, historique des commandes et liste de tous les identifiants attribués (groupés par pack ou individuels).
+* **Gestion & Purge du Journal d'Audit** :
+  * Purge sélective des logs d'audit directement depuis l'interface avec sélecteur de période : 1h, 6h, 12h, 1 jour, 3 jours, 7 jours, 1 mois ou purge complète.
 
 ### 3. Coffre-fort de Comptes & Gestion de Stock
 * **Découplage intelligent Packs vs Stock unitaire** :
@@ -91,6 +95,7 @@
   * Affichage propre des identifiants (Login, mot de passe, profil assigné).
   * Formatage spécialisé IPTV : détection automatique des URLs Xtream Codes, liens serveurs Smarters / Samsung / LG et URL playlist M3U.
   * Compteur et badge de garantie en direct.
+  * Formulaire d'avis client interactif direct (notation 1 à 5 étoiles, commentaire certifié, lié automatiquement au produit acheté).
   * Bouton direct de contact WhatsApp en cas de besoin.
 
 ### 6. Sauvegarde & Restauration de la Base de Données
@@ -102,6 +107,26 @@
   * **Sauvegarde préventive automatique** créée sur le serveur avant toute opération.
   * Réapplication systématique des migrations idempotentes pour garantir la parfaite synchronisation des colonnes et index.
   * Notification automatique sur Telegram / Discord lors de chaque restauration.
+
+### 7. Progressive Web App (PWA) & Responsive Mobile
+* **Installation native sur smartphone et tablette** :
+  * Compatible Android (Chrome TWA / WebAPK) et iOS / iPadOS (Safari).
+  * Détection d'environnement stricte :
+    * **Sur PC / Ordinateur** : Aucun bandeau ni bouton d'installation intempestif.
+    * **Sur Mobile non installé** : Bouton d'installation discret dans l'en-tête et notification avec croix de fermeture `✕`.
+    * **Sur Mobile déjà installé** : Détection automatique et suppression totale des invites d'installation.
+  * Barre de navigation applicative inférieure (Bottom Navigation) en mode plein écran / standalone.
+  * Menu tiroir (drawer hamburger) 100% responsive, sans débordement horizontal ni scroll résiduel.
+
+### 8. Pages de Confiance, Statut Réseau & Suivi
+* **Suivi de commande & Récupération d'accès (`/suivi`)** :
+  * Recherche sécurisée par numéro de commande ou numéro de suivi client unique.
+* **Statut réseau en direct (`/status`)** :
+  * Disponibilité opérationnelle des serveurs IPTV, VPN et streaming (99.98% uptime, latence FR/EU).
+* **Nouveautés & Concours (`/news`)** :
+  * Mises en avant des lancements (DAZN, Google One AI Pro) et du jeu concours officiel Instagram `@neonpass_officiel`.
+* **Cadre Légal & SAV (`/garantie`, `/cgv`, `/mentions-legales`)** :
+  * Charte de garantie 12 mois, engagement SAV en moins de 30 minutes, conformité RGPD.
 
 ---
 
@@ -271,7 +296,9 @@ cat backup.sql | docker exec -i neonpass-app psql "$DATABASE_URL"
 | `GET` | `/healthz` | Sonde de santé applicative et connectivité base |
 | `GET` | `/api/config` | Paramètres publics (numéro WhatsApp, configuration pack) |
 | `GET` | `/api/offers` | Liste des offres actives et notes certifiées |
+| `POST` | `/api/offers/:id/reviews` | Dépôt d'un avis client certifié |
 | `POST` | `/api/orders` | Création d'une commande et génération lien WhatsApp |
+| `POST` | `/api/orders/lookup` | Retrouver ses accès via numéro de commande ou suivi |
 | `POST` | `/api/promo/check` | Vérification de la validité d'un code promo |
 | `GET` | `/api/acces/:token` | Données de l'espace client sécurisé 24/7 |
 
@@ -290,6 +317,7 @@ cat backup.sql | docker exec -i neonpass-app psql "$DATABASE_URL"
 | `GET` | `/backup/sql` | Téléchargement du dump SQL complet |
 | `GET` | `/backup/json` | Téléchargement du snapshot JSON complet |
 | `POST` | `/backup/restore` | Restauration d'une sauvegarde SQL ou JSON |
+| `POST` | `/audit/purge` | Purge sélective du journal d'audit par période |
 | `GET` | `/sales` | Données financières, marge nette et KPI de vente |
 
 ---

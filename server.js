@@ -136,6 +136,7 @@ function toOffer(r) {
     isPack: r.is_pack,
     packItems: Array.isArray(r.pack_items) ? r.pack_items : [],
     lowStockThreshold: r.low_stock_threshold == null ? 2 : Number(r.low_stock_threshold),
+    durationMonths: r.duration_months == null ? 12 : Number(r.duration_months),
     active: r.active,
     sort: r.sort,
     rating: r.rating_avg == null ? null : Math.round(Number(r.rating_avg) * 10) / 10,
@@ -438,6 +439,7 @@ function parseOffer(b) {
       ? b.packItems.map(Number).filter((n) => Number.isInteger(n) && n > 0)
       : [],
     lowStockThreshold: clampInt(b.lowStockThreshold, 0, 100, 2),
+    durationMonths: Math.max(1, Math.min(120, Number(b.durationMonths) || 12)),
     active: b.active === undefined ? true : !!b.active,
     sort: clampInt(b.sort, -9999, 9999, 0)
   };
@@ -515,7 +517,7 @@ app.post(
     if (!author) throw new HttpError(400, 'Indique ton prénom.');
     if (!(rating >= 1 && rating <= 5)) throw new HttpError(400, 'Choisis une note de 1 à 5 étoiles.');
     if (comment.length < 5) throw new HttpError(400, 'Ton avis doit faire au moins 5 caractères.');
-    const o = await pool.query('SELECT 1 FROM offers WHERE id = $1 AND active', [offerId || 0]);
+    const o = await pool.query('SELECT 1 FROM offers WHERE id = $1', [offerId || 0]);
     if (!o.rowCount) throw new HttpError(404, 'Offre introuvable.');
     await pool.query('INSERT INTO reviews (offer_id, author, rating, comment) VALUES ($1, $2, $3, $4)', [
       offerId, author, rating, comment
@@ -553,27 +555,16 @@ app.post(
     const { rows } = await pool.query('SELECT * FROM offers WHERE id = ANY($1) AND active ORDER BY sort, id', [ids]);
     if (rows.length !== ids.length) throw new HttpError(400, 'Une des offres n\'est plus disponible.');
 
-    const durationMonths = Math.max(1, Math.min(60, Number(req.body.durationMonths) || 12));
-
-    function getOfferDurationPrice(annualPrice, months) {
-      annualPrice = Number(annualPrice);
-      if (months === 12) return annualPrice;
-      if (months === 6) return Math.round(annualPrice * 0.55 * 100) / 100;
-      if (months === 1) return Math.max(4.99, Math.round((annualPrice / 12 * 1.35) * 100) / 100);
-      if (months < 6) return Math.max(months * 3.99, Math.round((annualPrice / 12 * 1.25 * months) * 100) / 100);
-      if (months < 12) return Math.round((annualPrice / 12 * 1.10 * months) * 100) / 100;
-      return Math.round((annualPrice / 12 * months) * 100) / 100;
-    }
+    const orderDurationMonths = rows.length === 1 ? (rows[0].duration_months || 12) : Math.max(...rows.map((r) => r.duration_months || 12));
 
     const settings = await getSettings();
-    const sum = rows.reduce((s, r) => s + getOfferDurationPrice(r.price, durationMonths), 0);
+    const sum = rows.reduce((s, r) => s + Number(r.price), 0);
     const discount = rows.length >= settings.discountMin && settings.discountPct > 0;
     const items = rows.map((r) => ({
       id: r.id,
       name: r.name,
-      price: getOfferDurationPrice(r.price, durationMonths),
-      annualPrice: Number(r.price),
-      durationMonths
+      price: Number(r.price),
+      durationMonths: r.duration_months || 12
     }));
     const name = str(req.body.name || req.body.firstName, 60);
     const lastName = str(req.body.lastName, 60);
@@ -602,7 +593,7 @@ app.post(
       const ins = await client.query(
         `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct, access_token, tracking_code, duration_months, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::int, now() + make_interval(months => $11::int)) RETURNING id, access_token, tracking_code`,
-        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode, durationMonths]
+        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode, orderDurationMonths]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -613,11 +604,11 @@ app.post(
       client.release();
     }
 
-    const durationLabel = durationMonths === 12 ? '1 an' : (durationMonths + ' mois');
+    const durLabel = (m) => (m === 12 ? '1 an' : (m === 1 ? '1 mois' : m + ' mois'));
+    const itemsSummary = items.map((i) => i.name + ' (' + durLabel(i.durationMonths) + ')').join(' + ');
     const message =
       'Bonjour, je souhaite commander (réf. #' + orderId + ') : ' +
-      items.map((i) => i.name).join(' + ') +
-      ' (Durée : ' + durationLabel + '). ' +
+      itemsSummary + '. ' +
       'Total : ' + money(total) +
       (discount ? ' (remise ' + settings.discountPct + ' % incluse)' : '') +
       (promo ? ' (code ' + promo.code + ' −' + promo.pct + ' % inclus)' : '') + '.' +
@@ -627,8 +618,8 @@ app.post(
 
     notifyLater(
       '🛒 Nouvelle commande #' + orderId + '\n' +
-      items.map((i) => '• ' + i.name + ' — ' + money(i.price)).join('\n') + '\n' +
-      'Durée : ' + durationLabel + '\n' +
+      items.map((i) => '• ' + i.name + ' (' + durLabel(i.durationMonths) + ') — ' + money(i.price)).join('\n') + '\n' +
+      'Durée : ' + durLabel(orderDurationMonths) + '\n' +
       'Total : ' + money(total) +
       (discount ? ' · remise pack −' + settings.discountPct + ' %' : '') +
       (promo ? ' · code ' + promo.code + ' −' + promo.pct + ' %' : '') +
@@ -641,7 +632,7 @@ app.post(
     res.status(201).json({
       orderId,
       total,
-      durationMonths,
+      durationMonths: orderDurationMonths,
       whatsappUrl: 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(message)
     });
   })
@@ -974,6 +965,47 @@ admin.get('/audit', wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT id, at, ip, action, details FROM admin_audit ORDER BY at DESC LIMIT 300');
   res.json(rows);
 }));
+
+admin.post(
+  '/audit/purge',
+  wrap(async (req, res) => {
+    const raw = str(req.body.period, 30);
+    const period = raw.replace(/^(older_|recent_)/, '');
+    const isRecent = raw.startsWith('recent_');
+
+    const intervals = {
+      '1h': '1 hour',
+      '6h': '6 hours',
+      '12h': '12 hours',
+      '1j': '1 day',
+      '1d': '1 day',
+      '3j': '3 days',
+      '3d': '3 days',
+      '7j': '7 days',
+      '7d': '7 days',
+      '1mois': '1 month',
+      '1m': '1 month'
+    };
+
+    if (raw === 'all' || period === 'all') {
+      const del = await pool.query('DELETE FROM admin_audit');
+      await audit(req, 'audit.purge', { type: 'all', deleted: del.rowCount });
+      return res.json({ ok: true, deleted: del.rowCount, message: `${del.rowCount} entrée(s) du journal supprimée(s).` });
+    }
+
+    const intervalStr = intervals[period];
+    if (!intervalStr) throw new HttpError(400, 'Période de purge invalide.');
+
+    const op = isRecent ? '>=' : '<';
+    const del = await pool.query(`DELETE FROM admin_audit WHERE at ${op} now() - interval '${intervalStr}'`);
+    await audit(req, 'audit.purge', { period: raw, deleted: del.rowCount });
+    return res.json({
+      ok: true,
+      deleted: del.rowCount,
+      message: `${del.rowCount} entrée(s) de journal supprimée(s).`
+    });
+  })
+);
 
 // Activation de la 2FA : 1) générer un secret en attente, 2) confirmer avec un code
 admin.post('/totp/setup', wrap(async (req, res) => {
@@ -1754,9 +1786,25 @@ admin.get(
   })
 );
 
-const OFFER_COLS = 'slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items, low_stock_threshold';
+const OFFER_COLS = 'slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items, low_stock_threshold, duration_months';
 function offerValues(o) {
-  return [o.slug, o.name, o.category, o.tag, o.price, o.was, o.description, JSON.stringify(o.features), o.hue, o.isPack, o.active, o.sort, JSON.stringify(o.packItems || []), o.lowStockThreshold || 2];
+  return [
+    o.slug,
+    o.name,
+    o.category,
+    o.tag,
+    o.price,
+    o.was,
+    o.description,
+    JSON.stringify(o.features),
+    o.hue,
+    o.isPack,
+    o.active,
+    o.sort,
+    JSON.stringify(o.packItems || []),
+    o.lowStockThreshold || 2,
+    o.durationMonths || 12
+  ];
 }
 function dupGuard(e) {
   if (e && e.code === '23505') throw new HttpError(409, 'Ce slug existe déjà, choisis-en un autre.');
@@ -1769,7 +1817,7 @@ admin.post(
     const o = parseOffer(req.body);
     try {
       const r = await pool.query(
-        `INSERT INTO offers (${OFFER_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        `INSERT INTO offers (${OFFER_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
         offerValues(o)
       );
       res.status(201).json(toOffer(r.rows[0]));
@@ -1786,7 +1834,8 @@ admin.put(
     try {
       const r = await pool.query(
         `UPDATE offers SET slug=$1, name=$2, category=$3, tag=$4, price=$5, was_price=$6, description=$7,
-                features=$8, hue=$9, is_pack=$10, active=$11, sort=$12, pack_items=$13, low_stock_threshold=$14 WHERE id=$15 RETURNING *`,
+                features=$8, hue=$9, is_pack=$10, active=$11, sort=$12, pack_items=$13, low_stock_threshold=$14,
+                duration_months=$15 WHERE id=$16 RETURNING *`,
         [...offerValues(o), Number(req.params.id)]
       );
       if (!r.rowCount) throw new HttpError(404, 'Offre introuvable.');

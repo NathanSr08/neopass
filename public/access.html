@@ -390,6 +390,63 @@ header {
   margin-bottom: 6px;
 }
 
+.review-card {
+  background: var(--panel-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 77, 148, 0.25);
+  border-radius: 18px;
+  padding: 22px;
+  margin-top: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.review-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--pink), var(--cyan));
+}
+.star-rating {
+  display: inline-flex;
+  gap: 6px;
+  font-size: 30px;
+  cursor: pointer;
+  user-select: none;
+  margin: 4px 0 8px;
+}
+.star-item {
+  color: rgba(255, 255, 255, 0.18);
+  transition: color 0.15s, transform 0.15s;
+}
+.star-item.active,
+.star-item.hover {
+  color: #ffb800;
+  text-shadow: 0 0 12px rgba(255, 184, 0, 0.5);
+}
+.star-item:hover {
+  transform: scale(1.15);
+}
+.rev-input, .rev-textarea, .rev-select {
+  width: 100%;
+  background: rgba(10, 9, 24, 0.65);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  margin-top: 6px;
+  margin-bottom: 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .2s;
+}
+.rev-input:focus, .rev-textarea:focus, .rev-select:focus {
+  border-color: var(--cyan);
+}
+
 .state-box {
   text-align: center;
   padding: 60px 20px;
@@ -739,6 +796,65 @@ header {
       }).join('');
     }
 
+    // Extraction des offres associées à cette commande pour lier directement l'avis
+    const reviewableProducts = [];
+    const seenOfferIds = new Set();
+    if (Array.isArray(o.items)) {
+      o.items.forEach((it) => {
+        if (it && it.id && !seenOfferIds.has(it.id)) {
+          seenOfferIds.add(it.id);
+          reviewableProducts.push({ id: it.id, name: it.name });
+        }
+      });
+    }
+    accs.forEach((a) => {
+      if (a && a.offerId && !seenOfferIds.has(a.offerId)) {
+        seenOfferIds.add(a.offerId);
+        reviewableProducts.push({ id: a.offerId, name: a.serviceName });
+      }
+    });
+
+    let prefillAuthor = '';
+    if (o.customerName && o.customerName !== 'Client') {
+      const parts = o.customerName.trim().split(/\s+/);
+      if (parts.length > 1) {
+        prefillAuthor = parts[0] + ' ' + parts[1].charAt(0).toUpperCase() + '.';
+      } else {
+        prefillAuthor = parts[0];
+      }
+    }
+
+    let reviewProductSelectorHtml = '';
+    if (reviewableProducts.length === 1) {
+      reviewProductSelectorHtml = `
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span>Abonnement :</span>
+          <span style="color:#fff;font-weight:700;background:rgba(255,255,255,0.06);padding:3px 10px;border-radius:6px;border:1px solid var(--line)">
+            ${escapeHtml(reviewableProducts[0].name)}
+          </span>
+          <input type="hidden" id="revOfferId" value="${reviewableProducts[0].id}">
+        </div>
+      `;
+    } else if (reviewableProducts.length > 1) {
+      reviewProductSelectorHtml = `
+        <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:8px">
+          Abonnement concerné :
+          <select id="revOfferId" class="rev-select">
+            ${reviewableProducts.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+          </select>
+        </label>
+      `;
+    } else {
+      reviewProductSelectorHtml = `
+        <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:8px">
+          Abonnement concerné :
+          <select id="revOfferId" class="rev-select">
+            <option value="">Chargement des abonnements...</option>
+          </select>
+        </label>
+      `;
+    }
+
     const durLabel = o.durationMonths ? (o.durationMonths >= 12 ? (o.durationMonths / 12) + ' an' + (o.durationMonths >= 24 ? 's' : '') : o.durationMonths + ' mois') : '';
     const waHelpMsg = encodeURIComponent(`Bonjour NeonPass, j'ai besoin d'aide pour ma commande #${o.id} (${o.customerName}).`);
     const waRenewMsg = encodeURIComponent(`Bonjour NeonPass, je souhaite renouveler mon abonnement #${o.id} (${o.customerName}).`);
@@ -795,9 +911,51 @@ header {
           <a href="${waRenewUrl}" target="_blank" rel="noopener" class="btn btn-renew">
             🔄 Renouveler mon abonnement
           </a>
-          <a href="/#avis" class="btn btn-outline">
-            ⭐ Déposer un avis sur NeonPass
-          </a>
+          <button type="button" class="btn btn-outline" id="scrollToReviewBtn">
+            ⭐ Laisser un avis sur mon abonnement
+          </button>
+        </div>
+
+        <!-- Section Avis Client Directement Liée au Produit -->
+        <div class="review-card" id="reviewCard">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <h4 style="font-family:var(--font-display);font-size:15px;color:#fff;margin:0;display:flex;align-items:center;gap:8px">
+              <span>⭐</span> Donnez votre avis sur votre formule
+            </h4>
+            <span style="font-size:11px;color:var(--cyan);font-family:var(--font-mono);background:rgba(43,230,255,0.1);padding:3px 8px;border-radius:6px;border:1px solid rgba(43,230,255,0.25)">Avis client vérifié</span>
+          </div>
+
+          <form id="reviewForm">
+            ${reviewProductSelectorHtml}
+
+            <div style="margin-bottom:14px">
+              <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Votre évaluation :</div>
+              <div class="star-rating" id="starRating" role="radiogroup" aria-label="Note de 1 à 5 étoiles">
+                <span class="star-item active" data-val="1" title="1 étoile">★</span>
+                <span class="star-item active" data-val="2" title="2 étoiles">★</span>
+                <span class="star-item active" data-val="3" title="3 étoiles">★</span>
+                <span class="star-item active" data-val="4" title="4 étoiles">★</span>
+                <span class="star-item active" data-val="5" title="5 étoiles">★</span>
+              </div>
+              <div id="starRatingLabel" style="font-size:12px;color:var(--cyan);font-family:var(--font-mono);font-weight:600">5/5 — Excellent</div>
+              <input type="hidden" id="revRating" value="5">
+            </div>
+
+            <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:4px">
+              Votre prénom ou nom d'affichage :
+              <input type="text" id="revAuthor" class="rev-input" maxlength="40" placeholder="Ex: Yoel H." value="${escapeHtml(prefillAuthor)}" required>
+            </label>
+
+            <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:4px">
+              Votre commentaire :
+              <textarea id="revComment" class="rev-textarea" rows="3" minlength="5" maxlength="600" placeholder="Partagez votre retour d'expérience sur la qualité du service, l'accès, le support..." required></textarea>
+            </label>
+
+            <button type="submit" id="revSubmitBtn" class="btn" style="width:100%;background:linear-gradient(100deg,var(--pink),var(--cyan));color:#0a0918;font-weight:700;font-size:14px;border:none;margin-top:6px">
+              Publier mon avis
+            </button>
+            <div id="revMsg" style="margin-top:10px;font-size:13px;display:none"></div>
+          </form>
         </div>
       </div>
 
@@ -815,6 +973,128 @@ header {
         </div>
       </footer>
     `;
+
+    setupReviewForm(reviewableProducts);
+  }
+
+  function setupReviewForm(reviewableProducts) {
+    const form = document.getElementById('reviewForm');
+    if (!form) return;
+
+    if (reviewableProducts.length === 0) {
+      fetch('/api/offers')
+        .then((r) => r.json())
+        .then((offers) => {
+          const sel = document.getElementById('revOfferId');
+          if (sel && sel.tagName === 'SELECT') {
+            sel.innerHTML = offers.map((o) => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('');
+          }
+        })
+        .catch(() => {});
+    }
+
+    const scrollBtn = document.getElementById('scrollToReviewBtn');
+    if (scrollBtn) {
+      scrollBtn.addEventListener('click', () => {
+        const rc = document.getElementById('reviewCard');
+        if (rc) {
+          rc.scrollIntoView({ behavior: 'smooth' });
+          const c = document.getElementById('revComment');
+          if (c) c.focus();
+        }
+      });
+    }
+
+    const stars = form.querySelectorAll('.star-item');
+    const ratingInput = document.getElementById('revRating');
+    const ratingLabel = document.getElementById('starRatingLabel');
+    const labels = {
+      1: '1/5 — Médiocre',
+      2: '2/5 — Décevant',
+      3: '3/5 — Correct',
+      4: '4/5 — Très bien',
+      5: '5/5 — Excellent'
+    };
+
+    stars.forEach((star) => {
+      star.addEventListener('click', () => {
+        const val = parseInt(star.dataset.val, 10);
+        ratingInput.value = val;
+        ratingLabel.textContent = labels[val] || (val + '/5');
+        stars.forEach((s) => {
+          s.classList.toggle('active', parseInt(s.dataset.val, 10) <= val);
+        });
+      });
+      star.addEventListener('mouseenter', () => {
+        const val = parseInt(star.dataset.val, 10);
+        stars.forEach((s) => {
+          s.classList.toggle('hover', parseInt(s.dataset.val, 10) <= val);
+        });
+      });
+    });
+
+    const starContainer = document.getElementById('starRating');
+    if (starContainer) {
+      starContainer.addEventListener('mouseleave', () => {
+        stars.forEach((s) => s.classList.remove('hover'));
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const offerId = document.getElementById('revOfferId')?.value;
+      const author = document.getElementById('revAuthor')?.value.trim();
+      const rating = parseInt(document.getElementById('revRating')?.value, 10) || 5;
+      const comment = document.getElementById('revComment')?.value.trim();
+      const btn = document.getElementById('revSubmitBtn');
+      const msg = document.getElementById('revMsg');
+
+      if (!offerId) {
+        if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--red)'; msg.textContent = 'Sélectionnez un abonnement.'; }
+        return;
+      }
+      if (!author) {
+        if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--red)'; msg.textContent = 'Indiquez votre prénom.'; }
+        return;
+      }
+      if (!comment || comment.length < 5) {
+        if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--red)'; msg.textContent = 'Votre commentaire doit faire au moins 5 caractères.'; }
+        return;
+      }
+
+      btn.disabled = true;
+      const prevText = btn.textContent;
+      btn.textContent = 'Envoi en cours...';
+      if (msg) msg.style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/offers/${offerId}/reviews`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author, rating, comment })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi de l\'avis.');
+
+        document.getElementById('reviewCard').innerHTML = `
+          <div style="text-align:center;padding:22px 14px;background:rgba(46,229,157,0.1);border:1px solid rgba(46,229,157,0.3);border-radius:14px">
+            <div style="font-size:26px;color:var(--green);margin-bottom:8px">✓</div>
+            <div style="font-family:var(--font-display);font-weight:700;color:var(--green);font-size:16px;margin-bottom:6px">Merci pour votre avis !</div>
+            <p style="font-size:13.5px;color:var(--muted);max-width:45ch;margin:0 auto;line-height:1.5">
+              Votre évaluation (${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}) a bien été enregistrée et sera visible sur le site après validation.
+            </p>
+          </div>
+        `;
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        if (msg) {
+          msg.style.display = 'block';
+          msg.style.color = 'var(--red)';
+          msg.textContent = err.message;
+        }
+      }
+    });
   }
 
   function escapeHtml(s) {

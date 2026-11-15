@@ -12,32 +12,20 @@
   const picked = new Set();
   let PROMO = null; // { code, pct } une fois validé par le serveur
 
-  // Durée d'abonnement sélectionnée (1, 6, 12, ou personnalisé en mois)
-  let currentDuration = 12;
-  let customMonths = 3;
-
-  function getDurationLabel(months) {
+  function durLabel(months) {
+    months = Number(months) || 12;
     if (months === 1) return '1 mois';
     if (months === 6) return '6 mois';
     if (months === 12) return '1 an';
     return months + ' mois';
   }
 
-  function getDurationPerText(months) {
+  function durPerText(months) {
+    months = Number(months) || 12;
     if (months === 1) return '/ mois';
     if (months === 6) return '/ 6 mois';
     if (months === 12) return '/ an';
     return '/ ' + months + ' mois';
-  }
-
-  function computeOfferPrice(annualPrice, months) {
-    annualPrice = Number(annualPrice);
-    if (months === 12) return Math.round(annualPrice * 100) / 100;
-    if (months === 6) return Math.round(annualPrice * 0.55 * 100) / 100;
-    if (months === 1) return Math.max(4.99, Math.round((annualPrice / 12 * 1.35) * 100) / 100);
-    if (months < 6) return Math.max(months * 3.99, Math.round((annualPrice / 12 * 1.25 * months) * 100) / 100);
-    if (months < 12) return Math.round((annualPrice / 12 * 1.10 * months) * 100) / 100;
-    return Math.round((annualPrice / 12 * months) * 100) / 100;
   }
 
   const esc = (s) =>
@@ -58,8 +46,7 @@
   }
 
   // ---------- Commande : enregistrement en base puis redirection WhatsApp ----------
-  async function placeOrder(ids, name, affiliation, phone, durationMonths) {
-    const dur = Number(durationMonths) || currentDuration || 12;
+  async function placeOrder(ids, name, affiliation, phone) {
     let clientName = name != null && name !== '' ? name : '';
     let clientPhone = phone != null && phone !== '' ? phone : '';
     if (!clientName) {
@@ -75,7 +62,6 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           offerIds: ids,
-          durationMonths: dur,
           name: clientName,
           phone: clientPhone,
           affiliation: affiliation || '',
@@ -87,9 +73,9 @@
         if (PROMO && /code promo/i.test(data.error || '')) setPromo(null);
         throw new Error(data.error || 'La commande a échoué.');
       }
-      toast('Commande n°' + data.orderId + ' (' + getDurationLabel(dur) + ') enregistrée. Ouverture de WhatsApp…');
-      if (popup) popup.location.href = data.whatsappUrl;
-      else location.href = data.whatsappUrl;
+      toast('Commande n°' + data.orderId + ' enregistrée. Ouverture de WhatsApp…');
+      if (popup) popup.location.href = data.waLink || data.whatsappUrl;
+      else location.href = data.waLink || data.whatsappUrl;
     } catch (e) {
       if (popup) popup.close();
       toast(e.message || 'Une erreur est survenue.', true);
@@ -134,36 +120,36 @@
 
   // ---------- Catalogue ----------
   function cardHTML(o, i) {
-    const months = currentDuration;
-    const durPrice = computeOfferPrice(o.price, months);
-    const durLabel = getDurationLabel(months);
-    const perText = getDurationPerText(months);
-    const monthlyEq = Math.round((durPrice / months) * 100) / 100;
-    const msg = "Bonjour, je souhaite commander l'offre « " + o.name + " » (Durée : " + durLabel + ") à " + euro(durPrice) + "." + DEMO_TAIL;
-    const save = o.was && o.was > o.price ? Math.round((1 - o.price / o.was) * 100) : 0;
-    const priceVal = Math.round(durPrice) === durPrice ? durPrice : null;
+    const months = o.durationMonths || 12;
+    const price = Number(o.price);
+    const label = durLabel(months);
+    const per = durPerText(months);
+    const monthlyEq = months > 1 ? Math.round((price / months) * 100) / 100 : null;
+    const msg = "Bonjour, je souhaite commander l'offre « " + o.name + " » (" + label + ") à " + euro(price) + "." + DEMO_TAIL;
+    const save = o.was && o.was > price ? Math.round((1 - price / o.was) * 100) : 0;
+    const priceVal = Math.round(price) === price ? price : null;
 
     return (
       '<article class="card' + (o.isPack ? ' is-pack' : '') + '" style="--h:' + (Number(o.hue) || 330) + ';animation-delay:' + i * 60 + 'ms">' +
       '<div class="card-top">' +
         '<span class="tag">' + esc(o.tag || LABELS[o.category] || '') + '</span>' +
-        '<span class="card-dur-tag">' + esc(durLabel) + '</span>' +
-        (save && months === 12 ? '<span class="save">−' + save + ' %</span>' : '') +
+        '<span class="card-dur-tag">' + esc(label) + '</span>' +
+        (save ? '<span class="save">−' + save + ' %</span>' : '') +
       '</div>' +
       '<h3>' + esc(o.name) + '</h3>' +
       ratingHTML(o) +
       '<p class="desc">' + esc(o.description) + '</p>' +
       '<div class="price"><span class="amount">' +
-      (priceVal !== null ? '<span data-count="' + priceVal + '">' + priceVal + '</span>' : esc(num(durPrice))) +
-      ' €</span><span class="per">' + esc(perText) + '</span>' +
-      (months > 1 ? '<span class="monthly-equiv">(' + esc(euro(monthlyEq)) + '/mois)</span>' : '') +
+      (priceVal !== null ? '<span data-count="' + priceVal + '">' + priceVal + '</span>' : esc(num(price))) +
+      ' €</span><span class="per">' + esc(per) + '</span>' +
+      (monthlyEq ? '<span class="monthly-equiv">(' + esc(euro(monthlyEq)) + '/mois)</span>' : '') +
       '</div>' +
       '<ul class="feat">' + (o.features || []).map((f) => '<li>' + esc(f) + '</li>').join('') + '</ul>' +
       '<div class="affil">' +
       '<button class="affil-toggle" type="button" aria-expanded="false" aria-controls="aff-' + o.id + '">+ Affiliation</button>' +
       '<input class="affil-input" id="aff-' + o.id + '" type="text" maxlength="60" placeholder="Nom du parrain" hidden aria-label="Nom de la personne qui parraine">' +
       '</div>' +
-      '<a class="btn btn-primary order-btn" data-id="' + o.id + '" data-duration="' + months + '" href="' + waLink(msg) + '" target="_blank" rel="noopener">Commander sur WhatsApp</a>' +
+      '<a class="btn btn-primary order-btn" data-id="' + o.id + '" href="' + waLink(msg) + '" target="_blank" rel="noopener">Commander sur WhatsApp</a>' +
       '</article>'
     );
   }
@@ -291,43 +277,42 @@
   }
 
   function renderChips() {
-    const months = currentDuration;
     $('chips').innerHTML = composable()
       .map((o) => {
-        const p = computeOfferPrice(o.price, months);
+        const p = Number(o.price);
+        const d = durLabel(o.durationMonths || 12);
         return '<button class="chip' + (o.isPack ? ' chip-pack' : '') + '" type="button" data-id="' + o.id + '" aria-pressed="' + picked.has(o.id) + '">' +
-          (o.isPack ? '<em>Pack</em>' : '') + esc(o.name) + ' <small>' + esc(euro(p)) + '</small></button>';
+          (o.isPack ? '<em>Pack</em>' : '') + esc(o.name) + ' <small>' + esc(euro(p)) + ' · ' + esc(d) + '</small></button>';
       })
       .join('');
   }
 
   function updateComposer() {
-    const months = currentDuration;
-    const durLabel = getDurationLabel(months);
     const items = composable().filter((o) => picked.has(o.id));
-    const sum = items.reduce((s, o) => s + computeOfferPrice(o.price, months), 0);
+    const sum = items.reduce((s, o) => s + Number(o.price), 0);
     const discount = items.length >= CFG.discountMin && CFG.discountPct > 0;
     let t = discount ? sum * (1 - CFG.discountPct / 100) : sum;
     if (PROMO) t = t * (1 - PROMO.pct / 100);
     const total = Math.round(t * 100) / 100;
     $('rcList').innerHTML = items.length
       ? items.map((o) => {
-          const itemPrice = computeOfferPrice(o.price, months);
-          return '<li><span>' + esc(o.name) + '</span><span>' + esc(euro(itemPrice)) + '</span></li>';
+          const d = durLabel(o.durationMonths || 12);
+          return '<li><span>' + esc(o.name) + ' <small style="color:var(--muted)">(' + esc(d) + ')</small></span><span>' + esc(euro(Number(o.price))) + '</span></li>';
         }).join('')
       : '<li class="empty">Sélectionne au moins un service.</li>';
-    const parts = ['Durée : ' + durLabel];
+    const parts = [];
     if (discount) parts.push('Remise pack −' + CFG.discountPct + ' %');
     else if (items.length && CFG.discountPct > 0) parts.push('Ajoute ' + (CFG.discountMin - items.length) + ' service(s) pour la remise de ' + CFG.discountPct + ' %');
     if (PROMO && items.length) parts.push('code ' + PROMO.code + ' −' + PROMO.pct + ' %');
     $('rcDisc').textContent = parts.join(' · ') + (items.length && sum > total ? ' (−' + euro(Math.round((sum - total) * 100) / 100) + ')' : '');
     const rcTotLbl = $('rcTotalLabel');
-    if (rcTotLbl) rcTotLbl.textContent = 'Total / ' + durLabel;
+    if (rcTotLbl) rcTotLbl.textContent = 'Total commande';
     animateTotal(total);
     $('rcBtn').setAttribute('aria-disabled', items.length ? 'false' : 'true');
     const msg =
-      'Bonjour, je souhaite composer ce pack : ' + items.map((o) => o.name).join(' + ') +
-      ' (Durée : ' + durLabel + '). Total : ' + euro(total) + '.' + DEMO_TAIL;
+      'Bonjour, je souhaite composer ce pack : ' +
+      items.map((o) => o.name + ' (' + durLabel(o.durationMonths || 12) + ')').join(' + ') +
+      '. Total : ' + euro(total) + '.' + DEMO_TAIL;
     $('rcBtn').href = items.length ? waLink(msg) : '#';
   }
 
@@ -396,60 +381,7 @@
       m.dataset.count = min;
       m.textContent = min;
     }
-    $('offerWord').textContent = OFFERS.length > 1 ? 'offres annuelles' : 'offre annuelle';
-  }
-
-  function setupDurationSelector() {
-    const bar = $('durationBar');
-    if (!bar) return;
-
-    bar.addEventListener('click', (e) => {
-      const btn = e.target.closest('.dur-btn');
-      if (!btn) return;
-      const m = btn.dataset.months;
-      bar.querySelectorAll('.dur-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      const customPanel = $('customDurPanel');
-      if (m === 'custom') {
-        if (customPanel) customPanel.style.display = 'block';
-        currentDuration = customMonths;
-      } else {
-        if (customPanel) customPanel.style.display = 'none';
-        currentDuration = Number(m) || 12;
-      }
-
-      renderGrid();
-      renderChips();
-      updateComposer();
-    });
-
-    const minus = $('btnCustomMinus');
-    const plus = $('btnCustomPlus');
-    const valEl = $('customMonthsVal');
-
-    if (minus && plus && valEl) {
-      minus.addEventListener('click', () => {
-        if (customMonths > 1) {
-          customMonths--;
-          valEl.textContent = customMonths;
-          currentDuration = customMonths;
-          renderGrid();
-          renderChips();
-          updateComposer();
-        }
-      });
-      plus.addEventListener('click', () => {
-        if (customMonths < 36) {
-          customMonths++;
-          valEl.textContent = customMonths;
-          currentDuration = customMonths;
-          renderGrid();
-          renderChips();
-          updateComposer();
-        }
-      });
-    }
+    $('offerWord').textContent = OFFERS.length > 1 ? 'offres disponibles' : 'offre disponible';
   }
 
   async function init() {
@@ -468,7 +400,6 @@
     setWaLinks();
     renderStats();
     renderTicker();
-    setupDurationSelector();
     renderTabs();
     renderGrid();
     OFFERS.filter((o) => !o.isPack).slice(0, 2).forEach((o) => picked.add(o.id));
@@ -527,8 +458,7 @@
     const affil = b.closest('.card').querySelector('.affil-input').value.trim();
     const name = $('rcName') ? $('rcName').value.trim() : '';
     const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
-    const dur = Number(b.dataset.duration) || currentDuration || 12;
-    placeOrder([Number(b.dataset.id)], name, affil, phone, dur);
+    placeOrder([Number(b.dataset.id)], name, affil, phone);
   });
 
   $('chips').addEventListener('click', (e) => {
@@ -547,7 +477,7 @@
     const name = $('rcName') ? $('rcName').value.trim() : '';
     const affil = $('rcAffil') ? $('rcAffil').value.trim() : '';
     const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
-    placeOrder([...picked], name, affil, phone, currentDuration);
+    placeOrder([...picked], name, affil, phone);
   });
 
   init();
