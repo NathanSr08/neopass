@@ -697,6 +697,8 @@ app.get('/acces/:token', (req, res) => {
 });
 
 // Pages publiques supplémentaires
+app.get('/news', (req, res) => res.sendFile(path.join(__dirname, 'public', 'news.html')));
+app.get('/nouveautes', (req, res) => res.redirect(301, '/news'));
 app.get('/suivi', (req, res) => res.sendFile(path.join(__dirname, 'public', 'suivi.html')));
 app.get('/status', (req, res) => res.sendFile(path.join(__dirname, 'public', 'status.html')));
 app.get('/cgv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'cgv.html')));
