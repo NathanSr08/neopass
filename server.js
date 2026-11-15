@@ -553,10 +553,28 @@ app.post(
     const { rows } = await pool.query('SELECT * FROM offers WHERE id = ANY($1) AND active ORDER BY sort, id', [ids]);
     if (rows.length !== ids.length) throw new HttpError(400, 'Une des offres n\'est plus disponible.');
 
+    const durationMonths = Math.max(1, Math.min(60, Number(req.body.durationMonths) || 12));
+
+    function getOfferDurationPrice(annualPrice, months) {
+      annualPrice = Number(annualPrice);
+      if (months === 12) return annualPrice;
+      if (months === 6) return Math.round(annualPrice * 0.55 * 100) / 100;
+      if (months === 1) return Math.max(4.99, Math.round((annualPrice / 12 * 1.35) * 100) / 100);
+      if (months < 6) return Math.max(months * 3.99, Math.round((annualPrice / 12 * 1.25 * months) * 100) / 100);
+      if (months < 12) return Math.round((annualPrice / 12 * 1.10 * months) * 100) / 100;
+      return Math.round((annualPrice / 12 * months) * 100) / 100;
+    }
+
     const settings = await getSettings();
-    const sum = rows.reduce((s, r) => s + Number(r.price), 0);
+    const sum = rows.reduce((s, r) => s + getOfferDurationPrice(r.price, durationMonths), 0);
     const discount = rows.length >= settings.discountMin && settings.discountPct > 0;
-    const items = rows.map((r) => ({ id: r.id, name: r.name, price: Number(r.price) }));
+    const items = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      price: getOfferDurationPrice(r.price, durationMonths),
+      annualPrice: Number(r.price),
+      durationMonths
+    }));
     const name = str(req.body.name || req.body.firstName, 60);
     const lastName = str(req.body.lastName, 60);
     const phone = str(req.body.phone, 30);
@@ -582,9 +600,9 @@ app.post(
       const token = crypto.randomBytes(16).toString('hex');
       const trackingCode = generateTrackingCode();
       const ins = await client.query(
-        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct, access_token, tracking_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, access_token, tracking_code`,
-        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode]
+        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct, access_token, tracking_code, duration_months, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::int, now() + make_interval(months => $11::int)) RETURNING id, access_token, tracking_code`,
+        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode, durationMonths]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -595,10 +613,12 @@ app.post(
       client.release();
     }
 
+    const durationLabel = durationMonths === 12 ? '1 an' : (durationMonths + ' mois');
     const message =
       'Bonjour, je souhaite commander (réf. #' + orderId + ') : ' +
       items.map((i) => i.name).join(' + ') +
-      '. Total : ' + money(total) + '/an' +
+      ' (Durée : ' + durationLabel + '). ' +
+      'Total : ' + money(total) +
       (discount ? ' (remise ' + settings.discountPct + ' % incluse)' : '') +
       (promo ? ' (code ' + promo.code + ' −' + promo.pct + ' % inclus)' : '') + '.' +
       (name ? ' Prénom : ' + name + '.' : '') +
@@ -608,7 +628,8 @@ app.post(
     notifyLater(
       '🛒 Nouvelle commande #' + orderId + '\n' +
       items.map((i) => '• ' + i.name + ' — ' + money(i.price)).join('\n') + '\n' +
-      'Total : ' + money(total) + '/an' +
+      'Durée : ' + durationLabel + '\n' +
+      'Total : ' + money(total) +
       (discount ? ' · remise pack −' + settings.discountPct + ' %' : '') +
       (promo ? ' · code ' + promo.code + ' −' + promo.pct + ' %' : '') +
       (name ? '\nClient : ' + [name, lastName].filter(Boolean).join(' ') : '') +
@@ -620,6 +641,7 @@ app.post(
     res.status(201).json({
       orderId,
       total,
+      durationMonths,
       whatsappUrl: 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(message)
     });
   })

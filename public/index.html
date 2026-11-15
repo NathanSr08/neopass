@@ -34,14 +34,23 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   color-scheme: dark;
 }
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  -webkit-text-size-adjust: 100%;
+}
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
   background: var(--ink);
   color: var(--text);
   font: 400 16px/1.6 var(--font-body);
-  overflow-x: hidden;
+  overflow-x: hidden !important;
+  position: relative;
 }
 body::before {
   content: "";
@@ -56,8 +65,9 @@ a { color: inherit; }
   width: 100%;
   max-width: 1160px;
   margin-inline: auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 16px));
+  padding-right: max(16px, env(safe-area-inset-right, 16px));
+  box-sizing: border-box;
 }
 h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.1; letter-spacing: -0.02em; }
 .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
@@ -309,22 +319,219 @@ footer { border-top: 1px solid var(--line); background: #080714; padding-block: 
 }
 
 @media (max-width: 880px) {
-  .hero-grid { grid-template-columns: 1fr; }
-  .stage { height: 400px; max-width: 460px; width: 100%; margin-inline: auto; }
-  .composer { grid-template-columns: 1fr; padding: 22px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 32px; }
+  .stage { height: 360px; max-width: 100%; width: 100%; margin-inline: auto; overflow: hidden; contain: paint; }
+  .fcard { width: min(280px, 80%); padding: 14px 16px; }
+  .fc-a { left: 4px; top: 0; }
+  .fc-b { right: 4px; top: 110px; }
+  .fc-c { left: 6%; bottom: 0; }
+  .composer { grid-template-columns: 1fr !important; padding: 22px 18px !important; }
   .steps { grid-template-columns: 1fr; }
   .nav-links { display: none; }
-  section { padding-block: 60px; }
+  section { padding-block: 50px; }
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr !important; gap: 16px; }
+  .card { padding: 20px 18px; border-radius: 18px; width: 100%; box-sizing: border-box; }
+  .card h3 { font-size: 20px; }
+  .price .amount { font-size: 38px; }
+  .hero { padding-block: 30px 48px; }
+  .hero h1 { font-size: 30px; margin-top: 14px; }
+  .hero p.lead { font-size: 15px; margin: 16px 0 0; }
+  .hero-stats { gap: 18px 24px; margin-top: 24px; }
+  .stat b { font-size: 22px; }
+  .stage { height: 310px; }
+  .fcard { width: min(250px, 84%); padding: 12px 14px; border-radius: 16px; }
+  .fcard h3 { font-size: 14px; }
+  .fcard small { font-size: 11px; }
+  .fc-a { left: 0; top: 0; }
+  .fc-b { right: 0; top: 95px; }
+  .fc-c { left: 4%; bottom: 0; }
 }
 @media (max-width: 480px) {
-  .hero { padding-block: 36px 56px; }
-  .hero p.lead { font-size: 16px; }
-  .btn { padding: 12px 16px; }
-  .wa-float span { display: none; }
-  .wa-float { padding: 14px; }
+  .btn { padding: 11px 16px; font-size: 13.5px; }
+  .wa-float { padding: 12px 14px; font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Duration Selector Bar */
+.duration-bar {
+  background: linear-gradient(145deg, rgba(22, 20, 46, 0.95), rgba(15, 13, 34, 0.95));
+  border: 1px solid rgba(160, 150, 255, 0.2);
+  border-radius: 20px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+  width: 100%;
+}
+.duration-bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.duration-bar-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-transform: uppercase;
+}
+.duration-badge-savings {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #2be6ff;
+  background: rgba(43, 230, 255, 0.12);
+  border: 1px solid rgba(43, 230, 255, 0.3);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.duration-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+}
+@media (max-width: 680px) {
+  .duration-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .duration-bar {
+    padding: 14px 14px;
+  }
+}
+.dur-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 12px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(160, 150, 255, 0.15);
+  color: #a8a5cf;
+  cursor: pointer;
+  transition: all .2s ease;
+  text-align: center;
+  font-family: var(--font-body);
+  outline: none;
+  box-sizing: border-box;
+}
+.dur-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(43, 230, 255, 0.4);
+  color: #fff;
+}
+.dur-btn.active {
+  background: linear-gradient(135deg, rgba(255, 77, 148, 0.22), rgba(43, 230, 255, 0.22));
+  border-color: #2be6ff;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(43, 230, 255, 0.25);
+}
+.dur-btn .dur-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dur-btn .dur-sub {
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+.dur-btn .dur-sub.hl {
+  color: #2be6ff;
+  font-weight: 700;
+}
+.custom-dur-panel {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(160, 150, 255, 0.2);
+}
+.custom-dur-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.custom-dur-inner label {
+  font-size: 13px;
+  color: #efecff;
+  font-weight: 500;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.stepper button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(160, 150, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all .15s;
+}
+.stepper button:hover {
+  background: #2be6ff;
+  color: #0a0918;
+  border-color: #2be6ff;
+}
+.stepper-val {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: #2be6ff;
+  min-width: 24px;
+  text-align: center;
+}
+.stepper-unit {
+  font-size: 13px;
+  color: var(--muted);
+}
+.custom-dur-hint {
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}
+.card-dur-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(43, 230, 255, 0.12);
+  color: #2be6ff;
+  border: 1px solid rgba(43, 230, 255, 0.3);
+}
+.monthly-equiv {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #20e3b2;
+  font-weight: 600;
 }
 
 /* Étoiles et avis */
@@ -465,10 +672,49 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <section id="offres">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="eyebrow">Catalogue</span>
-        <h2>Des formules annuelles, sans surprise.</h2>
-        <p>Chaque offre s'active rapidement. Sélectionnez une formule : le message de commande s'ouvre pré-rempli dans WhatsApp, avec le nom de l'offre et son tarif annuel.</p>
+        <span class="eyebrow">Catalogue & Durées</span>
+        <h2>Des formules flexibles, adaptées à votre rythme.</h2>
+        <p>Sélectionnez votre durée d'engagement (1 mois, 6 mois, 1 an ou sur-mesure) : les tarifs s'ajustent instantanément et votre message de commande WhatsApp s'ouvre pré-rempli.</p>
       </div>
+
+      <!-- Duration Selector Bar -->
+      <div class="duration-bar rv" id="durationBar">
+        <div class="duration-bar-head">
+          <span class="duration-bar-title">Durée de l'abonnement</span>
+          <span class="duration-badge-savings" id="durationSavingsBadge">Économisez jusqu'à −45% en formule 12 mois</span>
+        </div>
+        <div class="duration-grid" role="radiogroup" aria-label="Choisir la durée d'abonnement">
+          <button type="button" class="dur-btn" data-months="1">
+            <span class="dur-title">1 Mois</span>
+            <span class="dur-sub">Sans engagement</span>
+          </button>
+          <button type="button" class="dur-btn" data-months="6">
+            <span class="dur-title">6 Mois</span>
+            <span class="dur-sub">Économique</span>
+          </button>
+          <button type="button" class="dur-btn active" data-months="12">
+            <span class="dur-title">12 Mois (1 an)</span>
+            <span class="dur-sub hl">Meilleur tarif</span>
+          </button>
+          <button type="button" class="dur-btn" data-months="custom">
+            <span class="dur-title">Personnaliser</span>
+            <span class="dur-sub">Sur-mesure</span>
+          </button>
+        </div>
+        <div class="custom-dur-panel" id="customDurPanel" style="display:none">
+          <div class="custom-dur-inner">
+            <label for="customMonthsVal">Sélectionnez le nombre de mois souhaité :</label>
+            <div class="stepper">
+              <button type="button" id="btnCustomMinus" aria-label="Diminuer les mois">−</button>
+              <span class="stepper-val" id="customMonthsVal">3</span>
+              <span class="stepper-unit">mois</span>
+              <button type="button" id="btnCustomPlus" aria-label="Augmenter les mois">+</button>
+            </div>
+            <div class="custom-dur-hint">Le tarif s'ajuste au prorata de la durée sélectionnée.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="tabs" role="tablist" aria-label="Filtrer les offres" id="tabs"></div>
       <div class="promo-banner" id="promoBanner" hidden></div>
       <div class="grid" id="grid"><p class="muted">Chargement du catalogue…</p></div>
@@ -481,14 +727,14 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
         <div>
           <span class="eyebrow">Sur mesure</span>
           <h2 style="font-size:clamp(24px,3.6vw,38px);margin-top:12px;font-weight:700">Composez votre pack.</h2>
-          <p style="color:var(--muted);margin:14px 0 0;max-width:50ch">Sélectionnez les services et packs de votre choix. Le total s'ajuste en temps réel et une remise s'applique automatiquement dès que votre pack réunit suffisamment de services.</p>
+          <p style="color:var(--muted);margin:14px 0 0;max-width:50ch">Sélectionnez les services et packs de votre choix. Le total s'ajuste en temps réel selon la durée choisie et une remise s'applique automatiquement dès 3 services.</p>
           <div class="chips" id="chips"></div>
         </div>
         <div class="receipt">
           <span class="eyebrow">Votre pack</span>
           <ul id="rcList"></ul>
           <hr>
-          <div class="total"><span style="color:var(--muted);font-size:14px">Total / an</span><b id="rcTotal">0 €</b></div>
+          <div class="total"><span style="color:var(--muted);font-size:14px" id="rcTotalLabel">Total / an</span><b id="rcTotal">0 €</b></div>
           <div class="disc" id="rcDisc"></div>
           <form class="promo" id="promoForm" novalidate>
             <input class="name-input" id="promoInput" type="text" maxlength="30" placeholder="Code promo" autocomplete="off" spellcheck="false" aria-label="Code promo">

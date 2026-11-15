@@ -181,11 +181,22 @@
         background: #2be6ff;
       }
 
+      /* Global Viewport & Overflow Control */
+      html, body {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        position: relative !important;
+      }
+
       /* Root / Lock scroll when drawer open */
       html.nav-drawer-open,
       body.nav-drawer-open {
         overflow: hidden !important;
         touch-action: none;
+      }
+      html.nav-drawer-open .wa-float {
+        display: none !important;
       }
 
       /* Mobile Navigation Drawer */
@@ -533,6 +544,9 @@
         .nav-burger {
           display: flex !important;
         }
+        .pwa-header-btn {
+          display: none !important;
+        }
         #navWa {
           padding: 8px 12px !important;
           font-size: 12px !important;
@@ -540,11 +554,10 @@
         #navWa span.btn-label-text {
           display: none;
         }
-        .pwa-header-btn {
-          padding: 7px 10px !important;
-        }
-        .pwa-header-btn span.btn-label-text {
-          display: none;
+      }
+      @media (max-width: 540px) {
+        #navWa {
+          display: none !important;
         }
       }
 
