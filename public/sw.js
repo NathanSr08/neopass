@@ -1,5 +1,5 @@
 // NeonPass Progressive Web App Service Worker
-const CACHE_NAME = 'neonpass-v1.1.0';
+const CACHE_NAME = 'neonpass-v1.2.0';
 
 const STATIC_ASSETS = [
   '/',
