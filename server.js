@@ -2928,7 +2928,19 @@ admin.put(
 app.use('/api/admin', admin);
 
 // ----- Fichiers statiques et erreurs -----
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    maxAge: '5m',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('sw.js')) {
+        res.setHeader('Service-Worker-Allowed', '/');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.endsWith('site.webmanifest')) {
+        res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      }
+    }
+  })
+);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Introuvable.' }));
 

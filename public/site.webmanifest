@@ -1,12 +1,74 @@
 {
-  "name": "NeonPass",
+  "name": "NeonPass — Abonnements & Divertissement",
   "short_name": "NeonPass",
-  "icons": [
-    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "/logo-512.png", "sizes": "512x512", "type": "image/png" }
-  ],
-  "theme_color": "#0a0918",
-  "background_color": "#0a0918",
+  "description": "Formules annuelles d'abonnements numériques, streaming, VPN et TV à tarif fixe.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "start_url": "/"
+  "orientation": "any",
+  "background_color": "#0a0918",
+  "theme_color": "#0a0918",
+  "categories": ["entertainment", "shopping", "utilities"],
+  "icons": [
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Retrouver mes accès",
+      "short_name": "Mes Accès",
+      "description": "Consulter vos identifiants et votre garantie active",
+      "url": "/suivi?source=pwa_shortcut",
+      "icons": [{ "src": "/logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nouveautés & Concours",
+      "short_name": "Nouveautés",
+      "description": "Découvrir les nouvelles formules et jeux concours",
+      "url": "/news?source=pwa_shortcut",
+      "icons": [{ "src": "/logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Composer mon Pack",
+      "short_name": "Composer",
+      "description": "Personnalisez votre pack sur mesure",
+      "url": "/#composer",
+      "icons": [{ "src": "/logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Statut Réseau",
+      "short_name": "Statut",
+      "description": "Vérifier l'état opérationnel des serveurs",
+      "url": "/status?source=pwa_shortcut",
+      "icons": [{ "src": "/logo-192.png", "sizes": "192x192" }]
+    }
+  ]
 }
