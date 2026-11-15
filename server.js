@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { spawn } = require('child_process');
 
 // ---------- Configuration ----------
 const PORT = Number(process.env.PORT) || 3000;
@@ -443,7 +444,12 @@ app.use((req, res, next) => {
   });
   next();
 });
-app.use(express.json({ limit: '20kb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/admin/backup/restore' || (req.url && req.url.startsWith('/api/admin/backup/restore'))) {
+    return next();
+  }
+  express.json({ limit: '50kb' })(req, res, next);
+});
 
 app.get('/healthz', async (req, res) => {
   try {
@@ -921,6 +927,281 @@ admin.get('/export/audit.csv', wrap(async (req, res) => {
   const data = rows.map((r) => [r.at_paris, r.ip, r.action, JSON.stringify(r.details || {})]);
   await audit(req, 'export.audit', { lignes: rows.length });
   sendCsv(res, 'journal-' + new Date().toISOString().slice(0, 10) + '.csv', ['Date', 'IP', 'Action', 'Détails'], data);
+}));
+
+// ---------- Sauvegarde & Restauration de la base de données ----------
+function restoreFromSql(sqlContent, databaseUrl) {
+  return new Promise((resolve, reject) => {
+    const psql = spawn('psql', [databaseUrl], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, PGCLIENTENCODING: 'UTF8' }
+    });
+    let stderr = '';
+    psql.stderr.on('data', (d) => { stderr += d.toString(); });
+    psql.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new HttpError(500, 'Erreur lors de l\'exécution du script SQL (code ' + code + '): ' + stderr.slice(-400)));
+    });
+    psql.on('error', (err) => {
+      reject(new HttpError(500, 'Échec d\'exécution de psql: ' + err.message));
+    });
+    psql.stdin.write(sqlContent);
+    psql.stdin.end();
+  });
+}
+
+async function restoreFromJson(data, pool) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tables = data.tables || data;
+    // Nettoyage dans l'ordre strict des contraintes
+    await client.query('UPDATE accounts SET replaced_by_account_id = NULL').catch(() => {});
+    await client.query('DELETE FROM accounts');
+    await client.query('DELETE FROM reviews');
+    await client.query('DELETE FROM orders');
+    await client.query('DELETE FROM clients');
+    await client.query('DELETE FROM offers');
+    await client.query('DELETE FROM settings');
+    await client.query('DELETE FROM promo_codes');
+
+    const sanitizeRow = (cols, row) => cols.map((c) => {
+      const v = row[c];
+      if (v === undefined) return null;
+      if (typeof v === 'object' && v !== null && !(v instanceof Date)) {
+        return JSON.stringify(v);
+      }
+      return v;
+    });
+
+    if (Array.isArray(tables.settings) && tables.settings.length) {
+      for (const row of tables.settings) {
+        await client.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [row.key, row.value]);
+      }
+    }
+
+    if (Array.isArray(tables.offers) && tables.offers.length) {
+      for (const row of tables.offers) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO offers (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    if (Array.isArray(tables.clients) && tables.clients.length) {
+      for (const row of tables.clients) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO clients (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    if (Array.isArray(tables.orders) && tables.orders.length) {
+      for (const row of tables.orders) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO orders (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    if (Array.isArray(tables.accounts) && tables.accounts.length) {
+      for (const row of tables.accounts) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO accounts (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    if (Array.isArray(tables.promo_codes) && tables.promo_codes.length) {
+      for (const row of tables.promo_codes) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO promo_codes (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    if (Array.isArray(tables.reviews) && tables.reviews.length) {
+      for (const row of tables.reviews) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO reviews (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    }
+
+    // Réaligner les séquences SERIAL
+    const seqs = [
+      ['offers', 'offers_id_seq'],
+      ['orders', 'orders_id_seq'],
+      ['accounts', 'accounts_id_seq'],
+      ['clients', 'clients_id_seq'],
+      ['reviews', 'reviews_id_seq']
+    ];
+    for (const [tbl, seq] of seqs) {
+      await client.query(`SELECT setval('${seq}', COALESCE((SELECT MAX(id) FROM ${tbl}), 1))`).catch(() => {});
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// État des volumes pour l'encadré de sauvegarde
+admin.get('/backup/status', wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT count(*) FROM orders)::int AS orders,
+       (SELECT count(*) FROM accounts)::int AS accounts,
+       (SELECT count(*) FROM clients)::int AS clients,
+       (SELECT count(*) FROM offers)::int AS offers,
+       (SELECT count(*) FROM promo_codes)::int AS promos,
+       (SELECT count(*) FROM reviews)::int AS reviews,
+       pg_size_pretty(pg_database_size(current_database())) AS db_size,
+       pg_database_size(current_database())::bigint AS db_bytes`
+  );
+  res.json({ ok: true, stats: rows[0] });
+}));
+
+// Export complet SQL via pg_dump
+admin.get('/backup/sql', wrap(async (req, res) => {
+  const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `neonpass-backup-${nowStr}.sql`;
+  res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const dump = spawn('pg_dump', [process.env.DATABASE_URL, '--clean', '--if-exists'], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  dump.stdout.pipe(res);
+
+  let stderr = '';
+  dump.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+  dump.on('close', async (code) => {
+    if (code === 0) {
+      await audit(req, 'backup.export_sql', { filename });
+    } else {
+      console.error('[backup] pg_dump error code ' + code + ':', stderr);
+    }
+  });
+}));
+
+// Export JSON structuré
+admin.get('/backup/json', wrap(async (req, res) => {
+  const [settings, offers, orders, clients, accounts, promos, reviews] = await Promise.all([
+    pool.query('SELECT key, value FROM settings ORDER BY key'),
+    pool.query('SELECT * FROM offers ORDER BY id'),
+    pool.query('SELECT * FROM orders ORDER BY id'),
+    pool.query('SELECT * FROM clients ORDER BY id'),
+    pool.query('SELECT * FROM accounts ORDER BY id'),
+    pool.query('SELECT * FROM promo_codes ORDER BY code'),
+    pool.query('SELECT * FROM reviews ORDER BY id')
+  ]);
+  const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `neonpass-backup-${nowStr}.json`;
+  const payload = {
+    app: 'NeonPass',
+    version: 1,
+    exported_at: new Date().toISOString(),
+    counts: {
+      settings: settings.rowCount,
+      offers: offers.rowCount,
+      orders: orders.rowCount,
+      clients: clients.rowCount,
+      accounts: accounts.rowCount,
+      promos: promos.rowCount,
+      reviews: reviews.rowCount
+    },
+    tables: {
+      settings: settings.rows,
+      offers: offers.rows,
+      orders: orders.rows,
+      clients: clients.rows,
+      accounts: accounts.rows,
+      promo_codes: promos.rows,
+      reviews: reviews.rows
+    }
+  };
+  await audit(req, 'backup.export_json', { filename, counts: payload.counts });
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(JSON.stringify(payload, null, 2));
+}));
+
+// Restauration d'une sauvegarde (SQL ou JSON)
+admin.post('/backup/restore', express.raw({ type: () => true, limit: '100mb' }), wrap(async (req, res) => {
+  if (!req.body || !req.body.length) {
+    throw new HttpError(400, 'Fichier de sauvegarde vide ou non reçu.');
+  }
+
+  const raw = req.body.toString('utf8').trim();
+  if (!raw) {
+    throw new HttpError(400, 'Le contenu du fichier de sauvegarde est vide.');
+  }
+
+  const clientFilename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename']) : 'backup';
+
+  // Sauvegarde temporaire de sécurité
+  try {
+    const safetyDump = spawn('pg_dump', [process.env.DATABASE_URL, '--clean', '--if-exists'], {
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    const safetyStream = fs.createWriteStream('/tmp/neonpass_pre_restore_backup.sql');
+    safetyDump.stdout.pipe(safetyStream);
+  } catch (e) {
+    console.warn('[backup] Copie temporaire pre-restore échouée:', e.message);
+  }
+
+  const isJson = raw.startsWith('{') && (raw.includes('"tables"') || raw.includes('"app"'));
+
+  if (isJson) {
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      throw new HttpError(400, 'Fichier JSON invalide : ' + err.message);
+    }
+    await restoreFromJson(parsed, pool);
+  } else {
+    if (!raw.includes('CREATE') && !raw.includes('INSERT') && !raw.includes('SET') && !raw.includes('ALTER')) {
+      throw new HttpError(400, 'Le fichier ne semble pas être un dump SQL PostgreSQL valide.');
+    }
+    await restoreFromSql(raw, process.env.DATABASE_URL);
+  }
+
+  // Réapplication du schéma idempotent pour synchroniser les colonnes récentes
+  try {
+    const initSql = fs.readFileSync(path.join(__dirname, 'db', 'init.sql'), 'utf8');
+    await pool.query(initSql);
+  } catch (err) {
+    console.warn('[backup] Avertissement init.sql post-restore:', err.message);
+  }
+
+  const auditDetails = { filename: clientFilename, isJson, sizeBytes: req.body.length };
+  await audit(req, 'backup.restore', auditDetails);
+
+  notify(`🚨 *Sauvegarde restaurée sur NeonPass*\n` +
+    `Fichier : \`${clientFilename}\` (${Math.round(req.body.length / 1024)} Ko)\n` +
+    `Format : ${isJson ? 'JSON Snapshot' : 'SQL Dump'}\n` +
+    `IP Admin : ${req.ip}`);
+
+  res.json({
+    ok: true,
+    message: 'Base de données restaurée avec succès.',
+    format: isJson ? 'json' : 'sql',
+    filename: clientFilename
+  });
 }));
 
 // État du système : processus Node, connexion à la base et volumes de données

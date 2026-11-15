@@ -362,6 +362,50 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <div><button class="btn" type="button" id="notifyTest">Envoyer un message de test</button></div>
     </div>
 
+    <div class="sec-block" style="background:rgba(0,242,254,.02);border:1px solid rgba(0,242,254,.3);border-radius:14px;padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <h3 style="margin:0;font-size:16px">💾 Sauvegarde & Restauration de la Base de Données</h3>
+            <span class="pill on" id="dbSizePill">PostgreSQL 16</span>
+          </div>
+          <p class="hint" style="margin:0">Sauvegardez l'ensemble de vos données (commandes, stock & comptes, clients, offres, codes promo, avis, réglages) ou restaurez une sauvegarde précédente.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn primary" type="button" id="downloadSqlBackupBtn">💾 Sauvegarder (SQL)</button>
+          <button class="btn" type="button" id="downloadJsonBackupBtn">📄 Sauvegarder (JSON)</button>
+        </div>
+      </div>
+
+      <!-- Volumes actuels de la BDD -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:16px" id="backupStatsTiles">
+        <div class="stat"><b id="backupCountOrders">—</b><span>commandes</span></div>
+        <div class="stat"><b id="backupCountAccounts">—</b><span>comptes stock</span></div>
+        <div class="stat"><b id="backupCountClients">—</b><span>clients CRM</span></div>
+        <div class="stat"><b id="backupCountOffers">—</b><span>offres</span></div>
+        <div class="stat"><b id="backupCountPromos">—</b><span>codes promo</span></div>
+        <div class="stat"><b id="backupCountReviews">—</b><span>avis clients</span></div>
+      </div>
+
+      <!-- Zone de Restauration de Sauvegarde -->
+      <div style="background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.2);border-radius:12px;padding:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <b style="color:var(--text);font-size:14px">📤 Restaurer une sauvegarde (.sql ou .json)</b>
+          <span class="pill wait" style="font-size:10px">Remplacement sécurisé</span>
+        </div>
+        <p class="hint" style="margin:0 0 14px;font-size:13px">
+          Sélectionnez un fichier de sauvegarde précédemment exporté (dump SQL ou snapshot JSON). Une copie de sécurité temporaire de la base actuelle est générée automatiquement sur le serveur avant toute restauration.
+        </p>
+
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <input type="file" id="restoreFileInput" accept=".sql,.json" style="display:none">
+          <button class="btn" type="button" id="chooseFileBtn">📁 Parcourir un fichier...</button>
+          <span id="selectedFileName" style="font-size:13px;color:var(--cyan);font-family:'JetBrains Mono', monospace;background:rgba(0,242,254,.08);padding:4px 10px;border-radius:6px">Aucun fichier sélectionné</span>
+          <button class="btn danger" type="button" id="executeRestoreBtn" disabled style="margin-left:auto">⚠️ Lancer la restauration</button>
+        </div>
+      </div>
+    </div>
+
     <div class="sec-block">
       <div class="toolbar" style="margin-bottom:12px">
         <h3 style="margin:0">État et santé du système</h3>
@@ -3507,6 +3551,126 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   }
   $('#systemRefresh').addEventListener('click', () => loadSystem().catch((e) => toast(e.message, true)));
 
+  // ----- Sauvegarde et Restauration de la Base de Données -----
+  async function downloadBackup(path, filename) {
+    const r = await fetch('/api/admin' + path, { headers: { 'X-NP-Admin': '1' }, credentials: 'same-origin' });
+    if (r.status === 401) { location.href = '/admin/login'; return; }
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      throw new Error(data.error || 'Erreur ' + r.status);
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function loadBackupStats() {
+    try {
+      const res = await api('/backup/status');
+      const s = res.stats || {};
+      if ($('#backupCountOrders')) $('#backupCountOrders').textContent = s.orders != null ? s.orders : '—';
+      if ($('#backupCountAccounts')) $('#backupCountAccounts').textContent = s.accounts != null ? s.accounts : '—';
+      if ($('#backupCountClients')) $('#backupCountClients').textContent = s.clients != null ? s.clients : '—';
+      if ($('#backupCountOffers')) $('#backupCountOffers').textContent = s.offers != null ? s.offers : '—';
+      if ($('#backupCountPromos')) $('#backupCountPromos').textContent = s.promos != null ? s.promos : '—';
+      if ($('#backupCountReviews')) $('#backupCountReviews').textContent = s.reviews != null ? s.reviews : '—';
+      if ($('#dbSizePill') && s.db_size) $('#dbSizePill').textContent = s.db_size;
+    } catch (e) {}
+  }
+
+  const sqlBackupBtn = $('#downloadSqlBackupBtn');
+  if (sqlBackupBtn) {
+    sqlBackupBtn.onclick = () => {
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+      downloadBackup('/backup/sql', 'neonpass-backup-' + ts + '.sql')
+        .then(() => toast('Sauvegarde SQL téléchargée !'))
+        .catch((e) => toast(e.message, true));
+    };
+  }
+
+  const jsonBackupBtn = $('#downloadJsonBackupBtn');
+  if (jsonBackupBtn) {
+    jsonBackupBtn.onclick = () => {
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+      downloadBackup('/backup/json', 'neonpass-backup-' + ts + '.json')
+        .then(() => toast('Sauvegarde JSON téléchargée !'))
+        .catch((e) => toast(e.message, true));
+    };
+  }
+
+  let selectedRestoreFile = null;
+  const chooseFileBtn = $('#chooseFileBtn');
+  const restoreFileInput = $('#restoreFileInput');
+  const selectedFileName = $('#selectedFileName');
+  const executeRestoreBtn = $('#executeRestoreBtn');
+
+  if (chooseFileBtn && restoreFileInput) {
+    chooseFileBtn.onclick = () => restoreFileInput.click();
+    restoreFileInput.onchange = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      selectedRestoreFile = file;
+      if (selectedFileName) selectedFileName.textContent = file.name + ' (' + fmtBytes(file.size) + ')';
+      if (executeRestoreBtn) executeRestoreBtn.disabled = false;
+    };
+  }
+
+  if (executeRestoreBtn) {
+    executeRestoreBtn.onclick = async () => {
+      if (!selectedRestoreFile) return toast('Veuillez d\'abord sélectionner un fichier de sauvegarde.', true);
+
+      const confirmed = confirm(
+        '⚠️ ATTENTION : Vous allez remplacer l\'ensemble des données actuelles par la sauvegarde « ' + selectedRestoreFile.name + ' ».\n\n' +
+        'Une copie de sécurité temporaire de la base actuelle sera créée automatiquement avant d\'appliquer la restauration.\n\n' +
+        'Êtes-vous certain de vouloir écraser les données ?'
+      );
+      if (!confirmed) return;
+
+      const prevText = executeRestoreBtn.textContent;
+      executeRestoreBtn.disabled = true;
+      executeRestoreBtn.textContent = '⏳ Restauration en cours...';
+
+      try {
+        const content = await selectedRestoreFile.text();
+        const res = await fetch('/api/admin/backup/restore', {
+          method: 'POST',
+          headers: {
+            'X-NP-Admin': '1',
+            'Content-Type': 'text/plain',
+            'X-Filename': encodeURIComponent(selectedRestoreFile.name)
+          },
+          credentials: 'same-origin',
+          body: content
+        });
+
+        if (res.status === 401) { location.href = '/admin/login'; return; }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erreur lors de la restauration');
+
+        toast('✅ ' + (data.message || 'Base de données restaurée avec succès !'));
+
+        await Promise.all([
+          loadStats(), loadOrders(), loadAccounts(), loadClients(),
+          loadRenewals(), loadOffers(), loadReviews(), loadPromos(),
+          loadSettings(), loadBackupStats(), loadSystem(), loadAudit()
+        ]);
+
+        selectedRestoreFile = null;
+        if (restoreFileInput) restoreFileInput.value = '';
+        if (selectedFileName) selectedFileName.textContent = 'Aucun fichier sélectionné';
+        executeRestoreBtn.disabled = true;
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        executeRestoreBtn.textContent = prevText;
+      }
+    };
+  }
+
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
@@ -3521,12 +3685,13 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     if (pName === 'settings') {
       loadSettings().catch(() => {});
       loadNotify().catch(() => {});
+      loadBackupStats().catch(() => {});
       loadSystem().catch(() => {});
     }
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadBackupStats(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>
