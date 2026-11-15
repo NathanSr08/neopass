@@ -514,6 +514,53 @@ header {
       renderError(err.message || 'Impossible de charger vos accès.');
     });
 
+  function parseAccountInfo(a) {
+    const fullRaw = [a.login, a.notes].filter(Boolean).join('\n');
+    const isXtream = fullRaw.includes("Codes Xtream") || fullRaw.includes("Nom d'utilisateur") || fullRaw.includes("msostvip") || fullRaw.includes("m3u");
+    if (isXtream) {
+      const userM = fullRaw.match(/(?:Nom d'utilisateur|Username|User)\s*:\s*([^\r\n]+)/i);
+      const passM = fullRaw.match(/(?:Mot de passe|Password|Pass)\s*:\s*([^\r\n]+)/i);
+      const srvM = fullRaw.match(/(?:URL du serveur \(pour la plupart des applications\)|URL du serveur|Serveur|DNS|Host)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+      const lgM = fullRaw.match(/(?:URL du serveur \(IPTV Smarters sur Samsung\/LG\)|Serveur DNS Samsung et LG|Samsung\/LG)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+      const m3uM = fullRaw.match(/(?:URL de la playlist M3U|Lien M3U|M3U)\s*:\s*(https?:\/\/[^\s\r\n]+)/i) || fullRaw.match(/(https?:\/\/[^\s\r\n]+\.php\?[^\s\r\n]+)/i);
+
+      const userVal = userM ? userM[1].split(/(?:🔑|Mot de passe|Password)/i)[0].trim() : (a.login || '');
+      const passVal = passM ? passM[1].split(/(?:🌐|URL|Serveur|DNS|Host|🔗|M3U)/i)[0].trim() : (a.password || '');
+      const srvVal = srvM ? srvM[1].trim() : '';
+      const lgVal = lgM ? lgM[1].trim() : '';
+      const m3uVal = m3uM ? (m3uM[1] || m3uM[0]).trim() : '';
+
+      return {
+        isXtream: true,
+        login: userVal,
+        password: passVal,
+        serverUrl: srvVal,
+        lgUrl: lgVal,
+        m3uUrl: m3uVal,
+        notes: ''
+      };
+    }
+
+    let cleanLogin = a.login || '';
+    let cleanPass = a.password || '';
+    if (cleanLogin.includes(':') && !cleanPass) {
+      const parts = cleanLogin.split(':');
+      cleanLogin = parts[0].trim();
+      cleanPass = parts.slice(1).join(':').trim();
+    }
+    const cleanNotes = (a.notes && a.notes.trim() !== cleanLogin && a.notes.trim() !== cleanPass && !a.notes.includes(cleanLogin)) ? a.notes.trim() : '';
+
+    return {
+      isXtream: false,
+      login: cleanLogin,
+      password: cleanPass,
+      serverUrl: '',
+      lgUrl: '',
+      m3uUrl: '',
+      notes: cleanNotes
+    };
+  }
+
   function renderError(msg) {
     app.innerHTML = `
       <div class="portal-card" style="text-align:center;padding:40px 24px">
@@ -580,44 +627,108 @@ header {
       `;
     } else {
       accCardsHtml = accs.map(a => {
+        const p = parseAccountInfo(a);
         const hue = a.hue || 260;
-        return `
-          <div class="acc-card" style="--acc-hue: ${hue}">
-            <div class="acc-header">
-              <div class="acc-svc-name">${escapeHtml(a.serviceName)}</div>
-              ${a.slotProfile ? `<div class="acc-slot-badge">👤 ${escapeHtml(a.slotProfile)}</div>` : ''}
-            </div>
+        let rows = '';
 
-            <!-- Login -->
-            <div class="cred-row">
-              <div class="cred-info">
-                <div class="cred-label">Identifiant / Email</div>
-                <div class="cred-val">${escapeHtml(a.login)}</div>
-              </div>
-              <div class="cred-actions">
-                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(a.login)}', this)">
-                  📋 Copier
-                </button>
-              </div>
+        // Login / User
+        rows += `
+          <div class="cred-row">
+            <div class="cred-info">
+              <div class="cred-label">${p.isXtream ? "Identifiant / Utilisateur Xtream" : "Identifiant / Email"}</div>
+              <div class="cred-val">${escapeHtml(p.login)}</div>
             </div>
+            <div class="cred-actions">
+              <button type="button" class="copy-btn" onclick="copyText('${escapeJs(p.login)}', this)">
+                📋 Copier
+              </button>
+            </div>
+          </div>
+        `;
 
-            <!-- Mot de passe -->
+        // Password
+        if (p.password) {
+          rows += `
             <div class="cred-row">
               <div class="cred-info">
                 <div class="cred-label">Mot de passe</div>
                 <div class="cred-val" data-masked="1">••••••••••••</div>
               </div>
               <div class="cred-actions">
-                <button type="button" class="toggle-btn" onclick="togglePassword(this, '${escapeJs(a.password)}')">
+                <button type="button" class="toggle-btn" onclick="togglePassword(this, '${escapeJs(p.password)}')">
                   👁️ Afficher
                 </button>
-                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(a.password)}', this)">
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(p.password)}', this)">
                   📋 Copier
                 </button>
               </div>
             </div>
+          `;
+        }
 
-            ${a.notes ? `<div class="acc-notes">📌 <strong>Consignes :</strong><br>${escapeHtml(a.notes)}</div>` : ''}
+        // Serveur applications
+        if (p.serverUrl) {
+          rows += `
+            <div class="cred-row">
+              <div class="cred-info">
+                <div class="cred-label">Serveur (Applications IPTV)</div>
+                <div class="cred-val" style="font-size:13px">${escapeHtml(p.serverUrl)}</div>
+              </div>
+              <div class="cred-actions">
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(p.serverUrl)}', this)">
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        // LG / Samsung DNS
+        if (p.lgUrl) {
+          rows += `
+            <div class="cred-row">
+              <div class="cred-info">
+                <div class="cred-label">Serveur DNS (Samsung / LG)</div>
+                <div class="cred-val" style="font-size:13px">${escapeHtml(p.lgUrl)}</div>
+              </div>
+              <div class="cred-actions">
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(p.lgUrl)}', this)">
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        // M3U Playlist
+        if (p.m3uUrl) {
+          rows += `
+            <div class="cred-row">
+              <div class="cred-info">
+                <div class="cred-label">Lien Playlist M3U</div>
+                <div class="cred-val" style="font-size:12px;word-break:break-all">${escapeHtml(p.m3uUrl)}</div>
+              </div>
+              <div class="cred-actions">
+                <button type="button" class="copy-btn" onclick="copyText('${escapeJs(p.m3uUrl)}', this)">
+                  📋 Copier
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        // Consignes supplémentaires si non vides
+        if (p.notes) {
+          rows += `<div class="acc-notes">📌 <strong>Consignes :</strong><br>${escapeHtml(p.notes)}</div>`;
+        }
+
+        return `
+          <div class="acc-card" style="--acc-hue: ${hue}">
+            <div class="acc-header">
+              <div class="acc-svc-name">${escapeHtml(a.serviceName)}</div>
+              ${a.slotProfile ? `<div class="acc-slot-badge">👤 ${escapeHtml(a.slotProfile)}</div>` : ''}
+            </div>
+            ${rows}
           </div>
         `;
       }).join('');

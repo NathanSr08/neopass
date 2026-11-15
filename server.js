@@ -1696,6 +1696,164 @@ admin.post(
   })
 );
 
+function formatAccountForWaServer(acc) {
+  const svcName = acc.offer_name || acc.service_name || 'Accès';
+  const fullRaw = [acc.login, acc.notes].filter(Boolean).join('\n');
+
+  const isXtream = fullRaw.includes("Codes Xtream") || fullRaw.includes("Nom d'utilisateur") || fullRaw.includes("msostvip") || fullRaw.includes("m3u");
+  if (isXtream) {
+    const userM = fullRaw.match(/(?:Nom d'utilisateur|Username|User)\s*:\s*([^\r\n]+)/i);
+    const passM = fullRaw.match(/(?:Mot de passe|Password|Pass)\s*:\s*([^\r\n]+)/i);
+    const srvM = fullRaw.match(/(?:URL du serveur \(pour la plupart des applications\)|URL du serveur|Serveur|DNS|Host)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+    const lgM = fullRaw.match(/(?:URL du serveur \(IPTV Smarters sur Samsung\/LG\)|Serveur DNS Samsung et LG|Samsung\/LG)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+    const m3uM = fullRaw.match(/(?:URL de la playlist M3U|Lien M3U|M3U)\s*:\s*(https?:\/\/[^\s\r\n]+)/i) || fullRaw.match(/(https?:\/\/[^\s\r\n]+\.php\?[^\s\r\n]+)/i);
+
+    const userVal = userM ? userM[1].split(/(?:🔑|Mot de passe|Password)/i)[0].trim() : '';
+    const passVal = passM ? passM[1].split(/(?:🌐|URL|Serveur|DNS|Host|🔗|M3U)/i)[0].trim() : '';
+    const srvVal = srvM ? srvM[1].trim() : '';
+    const lgVal = lgM ? lgM[1].trim() : '';
+    const m3uVal = m3uM ? (m3uM[1] || m3uM[0]).trim() : '';
+
+    let out = `📺 *${svcName.toUpperCase()}*\n`;
+    if (userVal) out += `👤 *Identifiant / User :* ${userVal}\n`;
+    if (passVal) out += `🔑 *Mot de passe :* ${passVal}\n`;
+    if (srvVal) out += `🌐 *Serveur (Applications) :* ${srvVal}\n`;
+    if (lgVal) out += `📺 *Serveur (Samsung / LG) :* ${lgVal}\n`;
+    if (m3uVal) out += `🔗 *Lien Playlist M3U :*\n${m3uVal}\n`;
+    return out.trim();
+  }
+
+  let cleanLogin = acc.login || '';
+  let cleanPass = acc.password || '';
+
+  if (cleanLogin.includes(':') && !cleanPass) {
+    const parts = cleanLogin.split(':');
+    cleanLogin = parts[0].trim();
+    cleanPass = parts.slice(1).join(':').trim();
+  }
+
+  let out = `📺 *${svcName}*\n`;
+  out += `👤 *Identifiant :* ${cleanLogin}\n`;
+  if (cleanPass) out += `🔑 *Mot de passe :* ${cleanPass}\n`;
+  if (acc.slot_profile) out += `📱 *Profil / Écran :* ${acc.slot_profile}\n`;
+  if (acc.notes && acc.notes.trim() !== cleanLogin && acc.notes.trim() !== cleanPass && !acc.notes.includes(cleanLogin)) {
+    out += `📌 *Consignes :* ${acc.notes.trim()}\n`;
+  }
+  return out.trim();
+}
+
+admin.post(
+  '/orders/:id/activate-sav/:accountId',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const accountId = Number(req.params.accountId) || 0;
+    const reason = str(req.body.reason, 255) || 'Signalement client / Non fonctionnel';
+
+    const ordRes = await pool.query(
+      'SELECT id, customer_name, customer_last_name, customer_phone, access_token FROM orders WHERE id = $1',
+      [orderId]
+    );
+    if (!ordRes.rowCount) throw new HttpError(404, 'Commande introuvable.');
+
+    const accRes = await pool.query(
+      'SELECT a.*, o.name AS offer_name FROM accounts a JOIN offers o ON o.id = a.offer_id WHERE a.id = $1 AND a.order_id = $2',
+      [accountId, orderId]
+    );
+    if (!accRes.rowCount) throw new HttpError(404, 'Ce compte n\'est pas associé à cette commande.');
+    const acc = accRes.rows[0];
+
+    const now = new Date();
+    const upd = await pool.query(
+      `UPDATE accounts
+       SET warranty_claim = TRUE, defect_reason = $1, defect_at = $2
+       WHERE id = $3 RETURNING *`,
+      [reason, now, accountId]
+    );
+
+    res.json({
+      ok: true,
+      account: { ...upd.rows[0], offer_name: acc.offer_name },
+      invoice: acc.private_notes || '',
+      supplier: acc.supplier || '',
+      supplierUrl: acc.supplier_url || '',
+      defectAt: now.toISOString(),
+      defectReason: reason
+    });
+  })
+);
+
+admin.post(
+  '/orders/:id/resolve-sav/:accountId',
+  wrap(async (req, res) => {
+    const orderId = Number(req.params.id) || 0;
+    const accountId = Number(req.params.accountId) || 0;
+
+    const ordRes = await pool.query(
+      'SELECT id, customer_name, customer_last_name, customer_phone, access_token FROM orders WHERE id = $1',
+      [orderId]
+    );
+    if (!ordRes.rowCount) throw new HttpError(404, 'Commande introuvable.');
+    const ord = ordRes.rows[0];
+
+    const accRes = await pool.query(
+      'SELECT a.*, o.name AS offer_name FROM accounts a JOIN offers o ON o.id = a.offer_id WHERE a.id = $1 AND a.order_id = $2',
+      [accountId, orderId]
+    );
+    if (!accRes.rowCount) throw new HttpError(404, 'Ce compte n\'est pas associé à cette commande.');
+    const acc = accRes.rows[0];
+
+    // Nouveaux identifiants reçus du fournisseur
+    const login = str(req.body.login, 500) || acc.login;
+    const password = req.body.password !== undefined ? str(req.body.password, 120) : acc.password;
+    const slotProfile = req.body.slotProfile !== undefined ? str(req.body.slotProfile, 80) : acc.slot_profile;
+    const notes = req.body.notes !== undefined ? str(req.body.notes, 2000) : acc.notes;
+    const privateNotes = req.body.privateNotes !== undefined ? str(req.body.privateNotes, 2000) : acc.private_notes;
+
+    const upd = await pool.query(
+      `UPDATE accounts
+       SET login = $1, password = $2, slot_profile = $3, notes = $4, private_notes = $5,
+           warranty_claim = FALSE, defect_at = NULL, defect_reason = ''
+       WHERE id = $6 RETURNING *`,
+      [login, password, slotProfile, notes, privateNotes, accountId]
+    );
+    const updatedAcc = { ...upd.rows[0], offer_name: acc.offer_name };
+
+    // Formatage WhatsApp retour SAV propre
+    const clientPhone = waPhone(ord.customer_phone);
+    const clientName = [ord.customer_name, ord.customer_last_name].filter(Boolean).join(' ') || 'Client';
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const accessUrl = ord.access_token ? `${baseUrl}/acces/${ord.access_token}` : '';
+
+    const formattedAccStr = formatAccountForWaServer(updatedAcc);
+
+    let msg = `✨ *NEONPASS — Remplacement sous Garantie SAV* ✨\n\n` +
+      `Bonjour *${clientName}*,\n\n` +
+      `Suite à votre signalement, votre accès pour *${updatedAcc.offer_name || updatedAcc.service_name}* a été entièrement renouvelé et vérifié par notre équipe technique sous votre garantie NeonPass.\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      formattedAccStr + '\n' +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    if (accessUrl) {
+      msg += `🔗 *VOTRE ESPACE ABONNÉ SÉCURISÉ (À jour) :*\n` +
+        `👉 ${accessUrl}\n` +
+        `_(Retrouvez vos nouveaux accès et tutoriels 24/7)_\n\n`;
+    }
+
+    msg += `Toutes nos excuses pour cette interruption de service. Votre abonnement continue normalement !\n\n` +
+      `Restant à votre entière écoute sur WhatsApp.\n` +
+      `*Bon divertissement !* 🍿🚀`;
+
+    const whatsappUrl = clientPhone ? 'https://wa.me/' + clientPhone + '?text=' + encodeURIComponent(msg) : null;
+
+    res.json({
+      ok: true,
+      account: updatedAcc,
+      message: msg,
+      whatsappUrl
+    });
+  })
+);
+
 admin.post(
   '/orders/:id/replace-account/:accountId',
   wrap(async (req, res) => {

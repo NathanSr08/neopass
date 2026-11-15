@@ -653,9 +653,13 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       </div>
     </div>
     <div class="full" id="viewAccSavBox" style="background:rgba(255,122,156,.1);border:1px solid rgba(255,122,156,.4);border-radius:12px;padding:12px" hidden>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <b style="color:var(--bad);font-size:13px">🚨 Réclamation Fournisseur / SAV en cours</b>
-        <button class="btn small" type="button" id="viewAccCloseSavBtn" style="border-color:var(--ok);color:var(--ok)">✅ Clôturer réclamation</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+        <b style="color:var(--bad);font-size:13px">🚨 SAV EN COURS (En attente fournisseur)</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn small" type="button" id="viewAccCopyInvoiceBtn" style="border-color:var(--warn);color:var(--warn)">📋 Copier Invoice</button>
+          <button class="btn small primary" type="button" id="viewAccResolveSavBtn">🔄 Retour SAV</button>
+          <button class="btn small" type="button" id="viewAccCloseSavBtn" style="border-color:var(--ok);color:var(--ok)">✅ Clôturer</button>
+        </div>
       </div>
       <div id="viewAccSavReason" style="font-size:13px;color:#fff;margin-bottom:4px"></div>
       <div id="viewAccSavMeta" style="font-size:12px;color:var(--muted)"></div>
@@ -674,7 +678,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <div style="display:flex;gap:8px">
       <button class="btn small danger" type="button" id="viewAccDelete">🗑️ Supprimer</button>
       <button class="btn small" type="button" id="viewAccUnassign" hidden>Désassigner</button>
-      <button class="btn small" type="button" id="viewAccReplaceSav" style="border-color:var(--warn);color:var(--warn)" hidden>🔄 Remplacement SAV (1-clic)</button>
+      <button class="btn small" type="button" id="viewAccActivateSavBtn" style="border-color:var(--bad);color:var(--bad)" hidden>🚨 Activer SAV Fournisseur</button>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn small" type="button" id="viewAccCopyAll">📋 Copier identifiants</button>
@@ -714,6 +718,83 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <thead><tr><th>Réf.</th><th>Date</th><th>Offres</th><th>Total</th><th>Statut</th><th>Échéance</th><th>Espace Client</th></tr></thead>
       <tbody id="clientOrdersBody"></tbody>
     </table>
+  </div>
+</dialog>
+
+<dialog id="savInvoiceDlg" style="width:min(600px, calc(100vw - 24px))">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h2 style="margin:0;color:var(--bad)">🚨 Fiche SAV Fournisseur</h2>
+        <span class="pill" style="background:rgba(255,122,156,.2);color:var(--bad)">En attente</span>
+      </div>
+      <p class="hint" id="savDlgSubtitle" style="margin:0"></p>
+    </div>
+    <button class="btn small" type="button" id="savInvoiceClose">Fermer</button>
+  </div>
+
+  <div class="grid" style="gap:12px;margin-bottom:16px">
+    <div style="background:rgba(255,122,156,.08);border:1px solid rgba(255,122,156,.3);border-radius:12px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <small style="color:var(--bad);font-weight:700">DATE & HEURE D'ACTIVATION DU SAV</small>
+        <span id="savDlgDate" class="code" style="color:#fff;font-size:13px"></span>
+      </div>
+      <div style="font-size:13px"><strong style="color:var(--muted)">Motif du problème :</strong> <span id="savDlgReason" style="color:#fff"></span></div>
+    </div>
+
+    <div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.35);border-radius:12px;padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <small style="color:var(--warn);font-weight:700">📄 INVOICE / RÉFÉRENCE FOURNISSEUR (NOTES PRIVÉES)</small>
+        <button class="btn small" type="button" id="savCopyInvoiceBtn" style="border-color:var(--warn);color:var(--warn)">📋 Copier l'Invoice</button>
+      </div>
+      <div id="savDlgInvoice" class="code" style="background:rgba(0,0,0,.35);padding:10px;border-radius:8px;font-size:13px;user-select:all;white-space:pre-wrap;word-break:break-all"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px">
+        <div><small style="color:var(--muted)">Fournisseur :</small> <b id="savDlgSupplier" style="color:var(--cyan)">—</b></div>
+        <a id="savDlgSupplierUrl" href="#" target="_blank" rel="noopener" class="pill on" style="text-decoration:none" hidden>🔗 Ouvrir site fournisseur</a>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;color:var(--muted)">
+      💡 <strong>Procédure de garantie :</strong> Ce compte est placé en SAV (non remplacé du stock). Transmettez cette Invoice à votre fournisseur. Dès qu'il vous a renvoyé les nouveaux codes, cliquez sur <strong>« Mettre à jour (Retour SAV) »</strong> ci-dessous.
+    </div>
+  </div>
+
+  <div class="dlg-actions" style="justify-content:space-between">
+    <button class="btn" type="button" id="savDlgCloseBtn">Fermer</button>
+    <button class="btn primary" type="button" id="savDlgGoResolveBtn">🔄 Mettre à jour les accès (Retour SAV)</button>
+  </div>
+</dialog>
+
+<dialog id="savResolveDlg" style="width:min(600px, calc(100vw - 24px))">
+  <form id="savResolveForm" method="dialog">
+    <h2 style="margin:0 0 6px">🔄 Mettre à jour les accès (Retour Fournisseur)</h2>
+    <p class="hint" id="savResolveSubtitle" style="margin:0 0 16px">Saisissez les nouveaux identifiants reçus de votre fournisseur pour finaliser le SAV.</p>
+
+    <div class="grid">
+      <label class="full" for="savNewLogin">Nouvel Identifiant / Login / Xtream User<input type="text" id="savNewLogin" required></label>
+      <label class="full" for="savNewPass">Nouveau Mot de passe<input type="text" id="savNewPass"></label>
+      <label class="full" for="savNewSlot">Profil / Écran / Slot (optionnel)<input type="text" id="savNewSlot"></label>
+      <label class="full" for="savNewNotes">Nouvelles Consignes / Serveur / Lien M3U<textarea id="savNewNotes" rows="3"></textarea></label>
+      <label class="full" for="savNewPrivateNotes">Note privée / Nouvelle Invoice fournisseur (optionnel)<input type="text" id="savNewPrivateNotes" placeholder="ex: invoice : 123456"></label>
+    </div>
+
+    <div class="dlg-actions" style="margin-top:18px">
+      <button class="btn" type="button" id="savResolveCancel">Annuler</button>
+      <button class="btn primary" type="submit">✅ Valider le remplacement & Préparer WhatsApp</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="savResultDlg" style="width:min(600px, calc(100vw - 24px))">
+  <h2 style="margin:0 0 6px;color:var(--ok)">✨ SAV Résolu avec Succès !</h2>
+  <p class="hint" style="margin:0 0 16px">Les accès du client ont été mis à jour. Vous pouvez lui transmettre son nouveau message en 1 clic :</p>
+  <div style="background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:12px;padding:12px;font-family:'JetBrains Mono', monospace;font-size:12px;white-space:pre-wrap;max-height:240px;overflow:auto;margin-bottom:16px" id="savResultMsgBox"></div>
+  <div class="dlg-actions" style="justify-content:space-between">
+    <button class="btn" type="button" id="savResultCopyBtn">📋 Copier message</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn" type="button" id="savResultCloseBtn">Fermer</button>
+      <a class="btn primary" id="savResultWaBtn" href="#" target="_blank" rel="noopener">💬 Envoyer sur WhatsApp</a>
+    </div>
   </div>
 </dialog>
 
@@ -970,28 +1051,18 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
               openAccountViewDialog(a);
             };
 
-            const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
-            repBtn.onclick = async () => {
-              const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
-              if (reason === null) return;
-              try {
-                const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
-                  method: 'POST',
-                  body: { reason: reason.trim() || 'Signalement client' }
-                });
-                toast('Compte remplacé sous garantie !');
-                clientDlg.close();
-                openClientDialog(clientKey);
-                loadAccounts();
-                loadOrders();
-                if (repRes.whatsappUrl && confirm('Notifier le client sur WhatsApp ?')) {
-                  window.open(repRes.whatsappUrl, '_blank');
-                }
-              } catch (err) { toast(err.message, true); }
-            };
+            const savActions = renderAccountSavButtons(a, { id: a.order_id }, clientKey, () => {
+              clientDlg.close();
+              openClientDialog(clientKey);
+            });
+
+            const savBadge = a.warranty_claim ? h('div', {
+              style: 'display:inline-flex;align-items:center;gap:6px;background:rgba(255,122,156,.18);color:var(--bad);border:1px solid var(--bad);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:4px'
+            }, '🚨 SAV EN COURS depuis le ' + (a.defect_at ? new Date(a.defect_at).toLocaleString('fr-FR') : 'récent') + (a.defect_reason ? ' (' + a.defect_reason + ')' : '')) : '';
 
             packContainer.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap' },
               h('div', {},
+                savBadge,
                 h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px' },
                   h('b', { style: 'color:var(--text);font-size:13px' }, '• ' + (a.offer_name || a.service_name || 'Service')),
                   a.supplier ? h('span', { className: 'pill', style: 'font-size:10px' }, a.supplier) : ''
@@ -1000,32 +1071,21 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
                 a.password ? h('div', { style: 'font-size:13px' }, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
                 a.slot_profile ? h('div', { style: 'color:var(--muted);font-size:12px' }, a.slot_profile) : ''
               ),
-              h('div', { style: 'display:flex;gap:8px' }, repBtn, copyBtn, viewBtn)
+              h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, savActions, copyBtn, viewBtn)
             ));
           });
 
           accBox.append(packContainer);
         } else {
           const a = g.a;
-          const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
-          repBtn.onclick = async () => {
-            const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
-            if (reason === null) return;
-            try {
-              const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
-                method: 'POST',
-                body: { reason: reason.trim() || 'Signalement client' }
-              });
-              toast('Compte remplacé sous garantie !');
-              clientDlg.close();
-              openClientDialog(clientKey);
-              loadAccounts();
-              loadOrders();
-              if (repRes.whatsappUrl && confirm('Notifier le client sur WhatsApp ?')) {
-                window.open(repRes.whatsappUrl, '_blank');
-              }
-            } catch (err) { toast(err.message, true); }
-          };
+          const savActions = renderAccountSavButtons(a, { id: a.order_id }, clientKey, () => {
+            clientDlg.close();
+            openClientDialog(clientKey);
+          });
+
+          const savBadge = a.warranty_claim ? h('div', {
+            style: 'display:inline-flex;align-items:center;gap:6px;background:rgba(255,122,156,.18);color:var(--bad);border:1px solid var(--bad);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:4px'
+          }, '🚨 SAV EN COURS depuis le ' + (a.defect_at ? new Date(a.defect_at).toLocaleString('fr-FR') : 'récent') + (a.defect_reason ? ' (' + a.defect_reason + ')' : '')) : '';
 
           const copyBtn = h('button', { className: 'btn small', type: 'button', title: 'Copier login et mot de passe' }, '📋 Copier');
           copyBtn.onclick = () => {
@@ -1041,6 +1101,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
           };
           accBox.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px' },
             h('div', {},
+              savBadge,
               h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px' },
                 h('b', { style: 'color:var(--cyan);font-size:14px' }, a.offer_name || a.service_name || 'Accès'),
                 a.supplier ? h('span', { className: 'pill', style: 'font-size:10px' }, a.supplier) : ''
@@ -1049,7 +1110,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
               a.password ? h('div', { style: 'font-size:13px' }, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
               a.slot_profile ? h('div', { style: 'color:var(--muted);font-size:12px' }, a.slot_profile) : ''
             ),
-            h('div', { style: 'display:flex;gap:8px' }, repBtn, copyBtn, viewBtn)
+            h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, savActions, copyBtn, viewBtn)
           ));
         }
       });
@@ -1198,9 +1259,236 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     }
   }
 
+  // Helper de formatage propre des identifiants (WhatsApp & Espace Client)
+  function formatAccountForWa(acc) {
+    const svcName = acc.offer_name || acc.service_name || 'Accès';
+    const fullRaw = [acc.login, acc.notes].filter(Boolean).join('\n');
+
+    const isXtream = fullRaw.includes("Codes Xtream") || fullRaw.includes("Nom d'utilisateur") || fullRaw.includes("msostvip") || fullRaw.includes("m3u");
+    if (isXtream) {
+      const userM = fullRaw.match(/(?:Nom d'utilisateur|Username|User)\s*:\s*([^\r\n]+)/i);
+      const passM = fullRaw.match(/(?:Mot de passe|Password|Pass)\s*:\s*([^\r\n]+)/i);
+      const srvM = fullRaw.match(/(?:URL du serveur \(pour la plupart des applications\)|URL du serveur|Serveur|DNS|Host)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+      const lgM = fullRaw.match(/(?:URL du serveur \(IPTV Smarters sur Samsung\/LG\)|Serveur DNS Samsung et LG|Samsung\/LG)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+      const m3uM = fullRaw.match(/(?:URL de la playlist M3U|Lien M3U|M3U)\s*:\s*(https?:\/\/[^\s\r\n]+)/i) || fullRaw.match(/(https?:\/\/[^\s\r\n]+\.php\?[^\s\r\n]+)/i);
+
+      const userVal = userM ? userM[1].split(/(?:🔑|Mot de passe|Password)/i)[0].trim() : '';
+      const passVal = passM ? passM[1].split(/(?:🌐|URL|Serveur|DNS|Host|🔗|M3U)/i)[0].trim() : '';
+      const srvVal = srvM ? srvM[1].trim() : '';
+      const lgVal = lgM ? lgM[1].trim() : '';
+      const m3uVal = m3uM ? (m3uM[1] || m3uM[0]).trim() : '';
+
+      let out = `📺 *${svcName.toUpperCase()}*\n`;
+      if (userVal) out += `👤 *Identifiant / User :* ${userVal}\n`;
+      if (passVal) out += `🔑 *Mot de passe :* ${passVal}\n`;
+      if (srvVal) out += `🌐 *Serveur (Applications) :* ${srvVal}\n`;
+      if (lgVal) out += `📺 *Serveur (Samsung / LG) :* ${lgVal}\n`;
+      if (m3uVal) out += `🔗 *Lien Playlist M3U :*\n${m3uVal}\n`;
+      return out.trim();
+    }
+
+    let cleanLogin = acc.login || '';
+    let cleanPass = acc.password || '';
+
+    if (cleanLogin.includes(':') && !cleanPass) {
+      const parts = cleanLogin.split(':');
+      cleanLogin = parts[0].trim();
+      cleanPass = parts.slice(1).join(':').trim();
+    }
+
+    let out = `📺 *${svcName}*\n`;
+    out += `👤 *Identifiant :* ${cleanLogin}\n`;
+    if (cleanPass) out += `🔑 *Mot de passe :* ${cleanPass}\n`;
+    if (acc.slot_profile) out += `📱 *Profil / Écran :* ${acc.slot_profile}\n`;
+    if (acc.notes && acc.notes.trim() !== cleanLogin && acc.notes.trim() !== cleanPass && !acc.notes.includes(cleanLogin)) {
+      out += `📌 *Consignes :* ${acc.notes.trim()}\n`;
+    }
+    return out.trim();
+  }
+
+  // Dialogues SAV
+  const savInvoiceDlg = $('#savInvoiceDlg');
+  const savResolveDlg = $('#savResolveDlg');
+  const savResultDlg = $('#savResultDlg');
+  let currentSavContext = null;
+
+  function openSavInvoiceDialog(info) {
+    currentSavContext = info;
+    $('#savDlgSubtitle').textContent = (info.serviceName || 'Service') + ' · ' + (info.customerName || 'Client') + ' (Cmd #' + info.orderId + ')';
+    const dateStr = info.defectAt ? new Date(info.defectAt).toLocaleString('fr-FR') : 'Date non renseignée';
+    $('#savDlgDate').textContent = dateStr;
+    $('#savDlgReason').textContent = info.defectReason || 'Signalement client / Non fonctionnel';
+    $('#savDlgInvoice').textContent = info.invoice || 'Aucune note privée / Invoice enregistrée pour ce compte.';
+    $('#savDlgSupplier').textContent = info.supplier || 'Non spécifié';
+
+    const supUrl = $('#savDlgSupplierUrl');
+    if (info.supplierUrl) {
+      supUrl.hidden = false;
+      supUrl.href = info.supplierUrl;
+    } else {
+      supUrl.hidden = true;
+    }
+
+    $('#savCopyInvoiceBtn').onclick = () => {
+      const txt = info.invoice || '';
+      navigator.clipboard.writeText(txt)
+        .then(() => toast('Invoice fournisseur copiée !'))
+        .catch(() => prompt('Invoice :', txt));
+    };
+
+    $('#savDlgGoResolveBtn').onclick = () => {
+      savInvoiceDlg.close();
+      openSavResolveDialog(info.account, info.order);
+    };
+
+    savInvoiceDlg.showModal();
+  }
+
+  $('#savInvoiceClose').onclick = () => savInvoiceDlg.close();
+  $('#savDlgCloseBtn').onclick = () => savInvoiceDlg.close();
+
+  function openSavResolveDialog(acc, ord, onDone) {
+    currentSavContext = { account: acc, order: ord, onDone };
+    $('#savResolveSubtitle').textContent = 'Commande #' + ord.id + ' · ' + (acc.offer_name || acc.service_name || 'Service');
+    $('#savNewLogin').value = '';
+    $('#savNewPass').value = '';
+    $('#savNewSlot').value = acc.slot_profile || '';
+    $('#savNewNotes').value = '';
+    $('#savNewPrivateNotes').value = acc.private_notes || '';
+    savResolveDlg.showModal();
+  }
+
+  $('#savResolveCancel').onclick = () => savResolveDlg.close();
+
+  $('#savResolveForm').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!currentSavContext || !currentSavContext.account || !currentSavContext.order) return;
+    const acc = currentSavContext.account;
+    const ord = currentSavContext.order;
+    const onDone = currentSavContext.onDone;
+    const payload = {
+      login: $('#savNewLogin').value.trim(),
+      password: $('#savNewPass').value,
+      slotProfile: $('#savNewSlot').value.trim(),
+      notes: $('#savNewNotes').value.trim(),
+      privateNotes: $('#savNewPrivateNotes').value.trim()
+    };
+    try {
+      const res = await api('/orders/' + ord.id + '/resolve-sav/' + acc.id, {
+        method: 'POST',
+        body: payload
+      });
+      savResolveDlg.close();
+      toast('SAV résolu avec succès ! Nouveaux accès enregistrés.');
+
+      $('#savResultMsgBox').textContent = res.message || '';
+      const waBtn = $('#savResultWaBtn');
+      if (res.whatsappUrl) {
+        waBtn.hidden = false;
+        waBtn.href = res.whatsappUrl;
+      } else {
+        waBtn.hidden = true;
+      }
+      $('#savResultCopyBtn').onclick = () => {
+        navigator.clipboard.writeText(res.message || '')
+          .then(() => toast('Message de retour SAV copié !'))
+          .catch(() => prompt('Message :', res.message));
+      };
+      savResultDlg.showModal();
+
+      loadAccounts();
+      loadOrders();
+      refreshOrderAccounts(ord);
+      if (typeof onDone === 'function') {
+        try { onDone(); } catch (_) {}
+      }
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+
+  $('#savResultCloseBtn').onclick = () => savResultDlg.close();
+
+  function renderAccountSavButtons(a, o, pKey, onDone) {
+    const actions = h('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap' });
+
+    if (a.warranty_claim) {
+      const viewInvBtn = h('button', {
+        className: 'btn small',
+        type: 'button',
+        style: 'border-color:var(--warn);color:var(--warn)',
+        title: 'Voir l\'Invoice fournisseur pour ce SAV'
+      }, '📄 Invoice SAV');
+      viewInvBtn.onclick = () => {
+        openSavInvoiceDialog({
+          orderId: o.id,
+          customerName: [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client',
+          serviceName: a.offer_name || a.service_name || 'Service',
+          defectAt: a.defect_at,
+          defectReason: a.defect_reason,
+          invoice: a.private_notes || 'Aucune note privée / Invoice enregistrée',
+          supplier: a.supplier,
+          supplierUrl: a.supplier_url,
+          account: a,
+          order: o,
+          onDone
+        });
+      };
+
+      const resolveBtn = h('button', {
+        className: 'btn small primary',
+        type: 'button',
+        title: 'Mettre à jour les accès reçus du fournisseur'
+      }, '🔄 Retour SAV');
+      resolveBtn.onclick = () => {
+        openSavResolveDialog(a, o, onDone);
+      };
+
+      actions.append(viewInvBtn, resolveBtn);
+    } else {
+      const actBtn = h('button', {
+        className: 'btn small',
+        type: 'button',
+        style: 'border-color:var(--bad);color:var(--bad)',
+        title: 'Déclencher SAV fournisseur (sans piocher dans le stock)'
+      }, '🚨 Activer SAV');
+      actBtn.onclick = async () => {
+        const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+        if (reason === null) return;
+        try {
+          const res = await api('/orders/' + o.id + '/activate-sav/' + a.id, {
+            method: 'POST',
+            body: { reason: reason.trim() || 'Signalement client' }
+          });
+          toast('SAV activé (en attente fournisseur) !');
+          if (typeof onDone === 'function') onDone();
+          loadOrders();
+          loadAccounts();
+          openSavInvoiceDialog({
+            orderId: o.id,
+            customerName: [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client',
+            serviceName: a.offer_name || a.service_name || 'Service',
+            defectAt: res.defectAt,
+            defectReason: res.defectReason,
+            invoice: res.invoice || a.private_notes || 'Aucune note privée / Invoice enregistrée',
+            supplier: res.supplier || a.supplier,
+            supplierUrl: res.supplierUrl || a.supplier_url,
+            account: a,
+            order: o,
+            onDone
+          });
+        } catch (err) { toast(err.message, true); }
+      };
+
+      actions.append(actBtn);
+    }
+
+    return actions;
+  }
+
   function formatDeliveryMessage(o, list) {
     const name = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client';
-    const expStr = o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '1 an';
+    const expStr = o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '';
     const accessUrl = o.access_token ? (location.origin + '/acces/' + o.access_token) : '';
 
     const orderItems = Array.isArray(o.items) ? o.items : [];
@@ -1211,52 +1499,57 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     orderItems.forEach((item) => {
       const fullOffer = offers.find((off) => off.id === item.id) || item;
       if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
-        let packStr = '📦 Pack ' + (fullOffer.name || item.name) + ' :\n';
+        let packStr = '📦 *Pack ' + (fullOffer.name || item.name).toUpperCase() + '*\n';
+        const subStrs = [];
         fullOffer.packItems.forEach((subId) => {
           const idx = assignedRemaining.findIndex((a) => a.offer_id === subId);
           if (idx !== -1) {
             const a = assignedRemaining.splice(idx, 1)[0];
-            packStr += '• ' + (a.offer_name || a.service_name || 'Service') + ' :\n';
-            packStr += '  - Identifiant : ' + a.login + '\n';
-            if (a.password) packStr += '  - Mot de passe : ' + a.password + '\n';
-            if (a.slot_profile) packStr += '  - Profil / Slot : ' + a.slot_profile + '\n';
-            if (a.notes) packStr += '  - Consignes : ' + a.notes + '\n';
+            subStrs.push(formatAccountForWa(a));
           }
         });
-        sections.push(packStr.trim());
+        if (subStrs.length) {
+          packStr += subStrs.join('\n───────────────\n');
+          sections.push(packStr.trim());
+        }
       } else {
         const idx = assignedRemaining.findIndex((a) => a.offer_id === item.id);
         if (idx !== -1) {
           const a = assignedRemaining.splice(idx, 1)[0];
-          let s = '📺 ' + (a.offer_name || a.service_name || item.name || 'Service') + ' :\n';
-          s += '• Identifiant : ' + a.login + '\n';
-          if (a.password) s += '• Mot de passe : ' + a.password + '\n';
-          if (a.slot_profile) s += '• Profil / Slot : ' + a.slot_profile + '\n';
-          if (a.notes) s += '• Consignes : ' + a.notes + '\n';
-          sections.push(s.trim());
+          sections.push(formatAccountForWa(a));
         }
       }
     });
 
     assignedRemaining.forEach((a) => {
-      let s = '📺 ' + (a.offer_name || a.service_name || 'Accès') + ' :\n';
-      s += '• Identifiant : ' + a.login + '\n';
-      if (a.password) s += '• Mot de passe : ' + a.password + '\n';
-      if (a.slot_profile) s += '• Profil / Slot : ' + a.slot_profile + '\n';
-      if (a.notes) s += '• Consignes : ' + a.notes + '\n';
-      sections.push(s.trim());
+      sections.push(formatAccountForWa(a));
     });
 
-    const accLines = sections.join('\n\n');
+    const accLines = sections.length ? sections.join('\n\n━━━━━━━━━━━━━━━━━━━━━\n\n') : 'Accès en cours de préparation.';
 
-    return (
-      'Bonjour ' + name + ',\n\n' +
-      'Voici vos accès NeonPass pour votre commande (réf. #' + o.id + ') :\n\n' +
-      (accLines || 'Accès en cours de préparation.\n') + '\n\n' +
-      (accessUrl ? '🔗 Votre espace abonné sécurisé : ' + accessUrl + '\n(Consultez vos codes à tout moment et suivez votre garantie 24/7)\n\n' : '') +
-      (expStr ? 'Validité jusqu\'au : ' + expStr + '\n' : '') +
-      'Bonne utilisation ! Restant à votre écoute sur WhatsApp.'
-    );
+    let msg = `✨ *NEONPASS — Vos Accès Officiels* ✨\n\n` +
+      `Bonjour *${name}*,\n\n` +
+      `Merci pour votre commande ! Voici vos identifiants pour votre abonnement (Réf. *#${o.id}*) :\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `${accLines}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    if (accessUrl) {
+      msg += `🔗 *VOTRE ESPACE ABONNÉ SÉCURISÉ (24/7) :*\n` +
+        `👉 ${accessUrl}\n` +
+        `_(Retrouvez vos codes à tout moment, consignes et garantie en direct)_\n\n`;
+    }
+
+    if (expStr) {
+      msg += `📅 *Abonnement valide jusqu'au :* ${expStr}\n\n`;
+    }
+
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💬 *Besoin d'aide ou assistance ?*\n` +
+      `Répondez simplement à ce message WhatsApp, notre équipe est à votre disposition !\n\n` +
+      `*Bon visionnage et bonne utilisation !* 🍿🚀`;
+
+    return msg;
   }
 
   async function refreshOrderAccounts(o, pKey) {
@@ -1291,25 +1584,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
             );
 
             packAccounts.forEach((a) => {
-              const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
-              repBtn.onclick = async () => {
-                const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
-                if (reason === null) return;
-                try {
-                  const repRes = await api('/orders/' + o.id + '/replace-account/' + a.id, {
-                    method: 'POST',
-                    body: { reason: reason.trim() || 'Signalement client' }
-                  });
-                  toast('Compte remplacé sous garantie ! Nouvel accès attribué.');
-                  refreshOrderAccounts(o, pKey);
-                  loadOrders();
-                  loadAccounts();
-                  if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
-                    window.open(repRes.whatsappUrl, '_blank');
-                  }
-                } catch (err) { toast(err.message, true); }
-              };
-
+              const savActions = renderAccountSavButtons(a, o, pKey, () => refreshOrderAccounts(o, pKey));
               const unassignBtn = h('button', { className: 'btn small danger', type: 'button', title: 'Désassigner ce compte' }, 'Retirer');
               unassignBtn.onclick = async () => {
                 if (!confirm('Retirer l\'accès « ' + a.login + ' » de cette commande ?')) return;
@@ -1321,14 +1596,20 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
                   loadAccounts();
                 } catch (err) { toast(err.message, true); }
               };
+
+              const savBadge = a.warranty_claim ? h('div', {
+                style: 'display:inline-flex;align-items:center;gap:6px;background:rgba(255,122,156,.18);color:var(--bad);border:1px solid var(--bad);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:4px'
+              }, '🚨 SAV EN COURS depuis le ' + (a.defect_at ? new Date(a.defect_at).toLocaleString('fr-FR') : 'récent') + (a.defect_reason ? ' (' + a.defect_reason + ')' : '')) : '';
+
               packCard.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' },
                 h('div', { style: 'font-size:13px' },
-                  h('b', { style: 'color:var(--text)' }, '• ' + (a.offer_name || a.service_name || 'Service')),
+                  savBadge,
+                  h('div', { style: 'font-weight:700;color:var(--text)' }, '• ' + (a.offer_name || a.service_name || 'Service')),
                   h('div', {}, 'Login : ', h('span', { className: 'code' }, a.login)),
                   a.password ? h('div', {}, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
                   a.slot_profile ? h('div', { style: 'color:var(--muted)' }, a.slot_profile) : ''
                 ),
-                h('div', { style: 'display:flex;gap:6px' }, repBtn, unassignBtn)
+                h('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap' }, savActions, unassignBtn)
               ));
             });
 
@@ -1339,25 +1620,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
       // Affiche les comptes individuels restants
       assignedRemaining.forEach((a) => {
-        const repBtn = h('button', { className: 'btn small', type: 'button', style: 'border-color:var(--warn);color:var(--warn)', title: 'Remplacer immédiatement ce compte sous garantie (SAV)' }, '🔄 SAV');
-        repBtn.onclick = async () => {
-          const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
-          if (reason === null) return;
-          try {
-            const repRes = await api('/orders/' + o.id + '/replace-account/' + a.id, {
-              method: 'POST',
-              body: { reason: reason.trim() || 'Signalement client' }
-            });
-            toast('Compte remplacé sous garantie ! Nouvel accès attribué.');
-            refreshOrderAccounts(o, pKey);
-            loadOrders();
-            loadAccounts();
-            if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
-              window.open(repRes.whatsappUrl, '_blank');
-            }
-          } catch (err) { toast(err.message, true); }
-        };
-
+        const savActions = renderAccountSavButtons(a, o, pKey, () => refreshOrderAccounts(o, pKey));
         const unassignBtn = h('button', { className: 'btn small danger', type: 'button', title: 'Désassigner ce compte' }, 'Retirer');
         unassignBtn.onclick = async () => {
           if (!confirm('Retirer l\'accès « ' + a.login + ' » de cette commande ?')) return;
@@ -1369,15 +1632,21 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
             loadAccounts();
           } catch (err) { toast(err.message, true); }
         };
+
+        const savBadge = a.warranty_claim ? h('div', {
+          style: 'display:inline-flex;align-items:center;gap:6px;background:rgba(255,122,156,.18);color:var(--bad);border:1px solid var(--bad);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:4px'
+        }, '🚨 SAV EN COURS depuis le ' + (a.defect_at ? new Date(a.defect_at).toLocaleString('fr-FR') : 'récent') + (a.defect_reason ? ' (' + a.defect_reason + ')' : '')) : '';
+
         box.append(h('div', { style: 'background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' },
           h('div', { style: 'font-size:13px' },
-            h('b', { style: 'color:var(--cyan)' }, a.offer_name || a.service_name || 'Service'),
+            savBadge,
+            h('div', { style: 'font-weight:700;color:var(--cyan)' }, a.offer_name || a.service_name || 'Service'),
             h('div', {}, 'Login : ', h('span', { className: 'code' }, a.login)),
             a.password ? h('div', {}, 'Passe : ', h('span', { className: 'code' }, a.password)) : '',
             a.slot_profile ? h('div', { style: 'color:var(--muted)' }, a.slot_profile) : '',
             a.notes ? h('div', { style: 'color:var(--warn);font-size:12px' }, a.notes) : ''
           ),
-          h('div', { style: 'display:flex;gap:6px' }, repBtn, unassignBtn)
+          h('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap' }, savActions, unassignBtn)
         ));
       });
     }
@@ -1875,6 +2144,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     // Section Réclamation SAV Fournisseur
     const savBox = $('#viewAccSavBox');
+    const actSavBtn = $('#viewAccActivateSavBtn');
     if (a.warranty_claim) {
       savBox.hidden = false;
       $('#viewAccSavReason').textContent = 'Motif : ' + (a.defect_reason || 'Signalement client / Non fonctionnel');
@@ -1883,6 +2153,19 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         metaStr += (metaStr ? ' · ' : '') + 'Remplacé par le compte #' + a.replaced_by_account_id;
       }
       $('#viewAccSavMeta').textContent = metaStr;
+
+      $('#viewAccCopyInvoiceBtn').onclick = () => {
+        const inv = a.private_notes || '';
+        navigator.clipboard.writeText(inv)
+          .then(() => toast('Invoice fournisseur copiée !'))
+          .catch(() => prompt('Invoice :', inv));
+      };
+
+      $('#viewAccResolveSavBtn').onclick = () => {
+        accViewDlg.close();
+        openSavResolveDialog(a, { id: a.order_id }, () => openAccountViewDialog(a));
+      };
+
       $('#viewAccCloseSavBtn').onclick = async () => {
         if (!confirm('Clôturer cette réclamation SAV auprès du fournisseur ?')) return;
         try {
@@ -1891,35 +2174,44 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
           a.warranty_claim = false;
           savBox.hidden = true;
           loadAccounts();
+          openAccountViewDialog(a);
         } catch (err) { toast(err.message, true); }
       };
+      actSavBtn.hidden = true;
     } else {
       savBox.hidden = true;
-    }
-
-    // Bouton de remplacement SAV (1-clic) si assigné à une commande
-    const repSavBtn = $('#viewAccReplaceSav');
-    if (a.status === 'assigned' && a.order_id) {
-      repSavBtn.hidden = false;
-      repSavBtn.onclick = async () => {
-        const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
-        if (reason === null) return;
-        try {
-          const repRes = await api('/orders/' + a.order_id + '/replace-account/' + a.id, {
-            method: 'POST',
-            body: { reason: reason.trim() || 'Signalement client' }
-          });
-          toast('Compte remplacé avec succès ! Nouvel accès attribué.');
-          accViewDlg.close();
-          loadAccounts();
-          loadOrders();
-          if (repRes.whatsappUrl && confirm('Souhaites-tu notifier immédiatement le client sur WhatsApp ?')) {
-            window.open(repRes.whatsappUrl, '_blank');
-          }
-        } catch (err) { toast(err.message, true); }
-      };
-    } else {
-      repSavBtn.hidden = true;
+      if (a.status === 'assigned' && a.order_id) {
+        actSavBtn.hidden = false;
+        actSavBtn.onclick = async () => {
+          const reason = prompt('Motif du problème / réclamation SAV :', 'Compte bloqué / mot de passe révoqué');
+          if (reason === null) return;
+          try {
+            const res = await api('/orders/' + a.order_id + '/activate-sav/' + a.id, {
+              method: 'POST',
+              body: { reason: reason.trim() || 'Signalement client' }
+            });
+            toast('SAV activé (en attente fournisseur) !');
+            accViewDlg.close();
+            loadAccounts();
+            loadOrders();
+            openSavInvoiceDialog({
+              orderId: a.order_id,
+              customerName: [a.customer_name, a.customer_last_name].filter(Boolean).join(' ') || 'Client',
+              serviceName: a.offer_name || a.service_name || 'Service',
+              defectAt: res.defectAt,
+              defectReason: res.defectReason,
+              invoice: res.invoice || a.private_notes || 'Aucune note privée / Invoice enregistrée',
+              supplier: res.supplier || a.supplier,
+              supplierUrl: res.supplierUrl || a.supplier_url,
+              account: a,
+              order: { id: a.order_id },
+              onDone: () => openAccountViewDialog(a)
+            });
+          } catch (err) { toast(err.message, true); }
+        };
+      } else {
+        actSavBtn.hidden = true;
+      }
     }
 
     $('#viewAccNotes').textContent = a.notes || 'Aucune consigne enregistrée.';
