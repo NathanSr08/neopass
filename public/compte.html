@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mon Espace Client · NeonPass</title>
+  <meta name="description" content="Espace client sécurisé NeonPass : retrouvez tous vos abonnements, identifiants, codes IPTV et garanties au même endroit.">
+  <meta name="theme-color" content="#090814">
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;500;600;700;800&family=Unbounded:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    :root {
+      --cyan: #2be6ff;
+      --pink: #ff4d94;
+      --violet: #8e54ff;
+      --bg: #090814;
+      --card-bg: rgba(18, 16, 38, 0.78);
+      --card-border: rgba(160, 150, 255, 0.16);
+      --input-bg: rgba(9, 8, 20, 0.7);
+      --input-border: rgba(160, 150, 255, 0.22);
+      --text: #efecff;
+      --text-muted: #9f9bb8;
+      --font-disp: 'Unbounded', system-ui, sans-serif;
+      --font-body: 'Sora', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      overflow-x: hidden !important;
+      position: relative;
+    }
+
+    /* Container */
+    .client-wrap {
+      width: 100%;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 30px 16px 80px;
+    }
+
+    /* Ambient glow */
+    .bg-aurora {
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 450px;
+      background: radial-gradient(ellipse 60% 50% at 50% 30%, rgba(43,230,255,0.12), rgba(255,77,148,0.08) 60%, transparent 100%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Top Nav */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(9, 8, 20, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(160, 150, 255, 0.12);
+    }
+    .nav-in {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-disp);
+      font-weight: 800;
+      font-size: 19px;
+      color: #fff;
+      text-decoration: none;
+    }
+    .logo span { color: var(--cyan); }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--cyan); }
+
+    /* Main Card */
+    .card {
+      position: relative;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-radius: 20px;
+      padding: 28px 24px;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+      margin-bottom: 24px;
+    }
+
+    /* Auth Box */
+    .auth-container {
+      max-width: 480px;
+      margin: 20px auto 40px;
+    }
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .auth-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .auth-tab-btn.active {
+      background: rgba(43, 230, 255, 0.14);
+      color: var(--cyan);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    /* Form Inputs */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .form-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #cfcbef;
+    }
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-ctrl {
+      width: 100%;
+      height: 46px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 11px;
+      padding: 0 14px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      color: #fff;
+      outline: none;
+      transition: all .2s;
+    }
+    .input-ctrl:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(43, 230, 255, 0.18);
+    }
+    .input-toggle-pwd {
+      position: absolute;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 13px;
+    }
+    .input-toggle-pwd:hover { color: #fff; }
+
+    /* Primary Button */
+    .btn-submit {
+      width: 100%;
+      height: 48px;
+      background: linear-gradient(100deg, var(--pink), var(--cyan));
+      border: none;
+      border-radius: 12px;
+      color: #080712;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s, filter .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-submit:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-submit:active { transform: scale(0.98); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Links */
+    .auth-links {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      font-size: 12.5px;
+    }
+    .auth-links a {
+      color: var(--cyan);
+      text-decoration: none;
+      transition: opacity .2s;
+    }
+    .auth-links a:hover { text-decoration: underline; }
+
+    /* OTP Screen */
+    .otp-box {
+      text-align: center;
+    }
+    .otp-icon-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: rgba(43, 230, 255, 0.12);
+      border: 1px solid rgba(43, 230, 255, 0.35);
+      color: var(--cyan);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+    .otp-icon-wrap.alert {
+      background: rgba(255, 77, 148, 0.14);
+      border-color: rgba(255, 77, 148, 0.4);
+      color: var(--pink);
+    }
+    .otp-input-field {
+      width: 100%;
+      max-width: 280px;
+      height: 56px;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 12px;
+      color: var(--cyan);
+      background: #110e28;
+      border: 2px solid var(--cyan);
+      border-radius: 14px;
+      margin: 18px auto 14px;
+      outline: none;
+      box-shadow: 0 0 20px rgba(43, 230, 255, 0.15);
+    }
+    .alert-banner {
+      background: rgba(255, 77, 148, 0.1);
+      border: 1px solid rgba(255, 77, 148, 0.3);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12.5px;
+      color: #ffd6e6;
+      text-align: left;
+      margin: 14px 0 16px;
+      line-height: 1.5;
+    }
+    .alert-banner b { color: #fff; }
+
+    /* Dashboard Header */
+    .dash-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(160, 150, 255, 0.12);
+    }
+    .dash-user {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .dash-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--pink), var(--cyan));
+      color: #080712;
+      font-family: var(--font-disp);
+      font-size: 20px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .dash-titles h1 {
+      font-family: var(--font-disp);
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #fff;
+    }
+    .dash-badge-email {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .badge-verified {
+      background: rgba(43, 230, 255, 0.15);
+      border: 1px solid rgba(43, 230, 255, 0.35);
+      color: var(--cyan);
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+
+    /* KPI Summary */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: rgba(14, 12, 32, 0.85);
+      border: 1px solid rgba(160, 150, 255, 0.12);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .kpi-label {
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .kpi-value {
+      font-family: var(--font-disp);
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .kpi-sub {
+      font-size: 11.5px;
+      color: #a09cb8;
+    }
+
+    /* Dashboard Navigation Tabs */
+    .dash-tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid rgba(160, 150, 255, 0.12);
+      margin-bottom: 24px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .dash-tabs::-webkit-scrollbar { display: none; }
+    .dash-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .2s;
+    }
+    .dash-tab-btn.active {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+
+    /* Product Cards */
+    .order-card {
+      background: rgba(14, 12, 32, 0.85);
+      border: 1px solid rgba(160, 150, 255, 0.16);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 20px;
+      transition: border-color .2s;
+    }
+    .order-card:hover {
+      border-color: rgba(43, 230, 255, 0.35);
+    }
+    .order-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(160, 150, 255, 0.08);
+    }
+    .order-product-name {
+      font-family: var(--font-disp);
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 4px;
+    }
+    .order-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+    }
+    .status-active { background: rgba(34, 197, 94, 0.14); border: 1px solid rgba(34, 197, 94, 0.35); color: #4ade80; }
+    .status-expired { background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171; }
+    .status-pending { background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; }
+
+    /* Vault Box for Credentials */
+    .vault-box {
+      background: rgba(8, 7, 18, 0.7);
+      border: 1px solid rgba(160, 150, 255, 0.12);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .vault-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(160, 150, 255, 0.06);
+      font-size: 13px;
+    }
+    .vault-item:last-child { border-bottom: none; }
+    .vault-label {
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      min-width: 90px;
+    }
+    .vault-val {
+      font-family: var(--font-mono);
+      color: #fff;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .btn-copy {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 7px;
+      color: var(--cyan);
+      padding: 4px 9px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all .15s;
+    }
+    .btn-copy:hover {
+      background: rgba(43, 230, 255, 0.15);
+      border-color: var(--cyan);
+    }
+    .btn-sav-claim {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 77, 148, 0.09);
+      border: 1px solid rgba(255, 77, 148, 0.32);
+      color: #ff9cc4;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-sav-claim:hover {
+      background: rgba(255, 77, 148, 0.22);
+      border-color: #ff4d94;
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 77, 148, 0.25);
+    }
+
+    .order-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(160, 150, 255, 0.2);
+      color: #fff;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-outline:hover {
+      background: rgba(43, 230, 255, 0.12);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-wa-renew {
+      background: rgba(37, 211, 102, 0.12);
+      border-color: rgba(37, 211, 102, 0.35);
+      color: #25d366;
+    }
+    .btn-wa-renew:hover {
+      background: rgba(37, 211, 102, 0.22);
+      border-color: #25d366;
+      color: #fff;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+    .empty-icon {
+      font-size: 42px;
+      margin-bottom: 12px;
+      color: var(--cyan);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #15132d;
+      border: 1px solid var(--cyan);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      font-size: 13.5px;
+      z-index: 10000;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity .3s, transform .3s;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .toast.error {
+      border-color: var(--pink);
+    }
+
+    @media (max-width: 600px) {
+      .client-wrap { padding-top: 16px; }
+      .card { padding: 20px 16px; border-radius: 16px; }
+      .vault-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+      .order-actions { flex-direction: column; }
+      .order-actions a, .order-actions button { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-aurora"></div>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="logo" href="/">
+      <img src="/logo.svg" alt="" width="30" height="30">
+      <span>Neon</span>Pass
+    </a>
+    <nav class="nav-links">
+      <a href="/#offres">Offres</a>
+      <a href="/#composer">Composer</a>
+      <a href="/news">Nouveautés</a>
+      <a href="/suivi">Suivi</a>
+      <a href="/compte" class="active">Mon Compte</a>
+    </nav>
+    <div class="nav-actions-group">
+    </div>
+  </div>
+</header>
+
+<main class="client-wrap">
+
+  <!-- ================= VUE 1 : AUTHENTIFICATION (DÉCONNECTÉ) ================= -->
+  <div id="viewAuth" class="auth-container">
+    <div class="card">
+      
+      <!-- Onglets Auth -->
+      <div class="auth-tabs" id="authTabsGroup">
+        <button type="button" class="auth-tab-btn active" id="tabBtnLogin" onclick="switchAuthTab('login')">Connexion</button>
+        <button type="button" class="auth-tab-btn" id="tabBtnRegister" onclick="switchAuthTab('register')">Créer un compte</button>
+      </div>
+
+      <!-- FORMULAIRE CONNEXION -->
+      <form id="formLogin" onsubmit="handleLogin(event)">
+        <h2 style="font-family:var(--font-disp);font-size:18px;margin:0 0 16px;color:#fff;">Connexion Espace Client</h2>
+        
+        <div class="form-group">
+          <label class="form-label" for="loginEmail">Adresse email</label>
+          <div class="input-wrap">
+            <input class="input-ctrl" type="email" id="loginEmail" required placeholder="nom@exemple.com" autocomplete="email">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loginPassword">Mot de passe</label>
+          <div class="input-wrap">
+            <input class="input-ctrl" type="password" id="loginPassword" required placeholder="••••••••" autocomplete="current-password">
+            <button type="button" class="input-toggle-pwd" onclick="togglePasswordVisibility('loginPassword', this)">Afficher</button>
+          </div>
+        </div>
+
+        <div class="auth-links">
+          <a href="#" onclick="showForgotPassword(event)">Mot de passe oublié ?</a>
+        </div>
+
+        <button type="submit" class="btn-submit" id="btnSubmitLogin">
+          <span>Se connecter</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </form>
+
+      <!-- FORMULAIRE INSCRIPTION -->
+      <form id="formRegister" style="display:none;" onsubmit="handleRegister(event)">
+        <h2 style="font-family:var(--font-disp);font-size:18px;margin:0 0 8px;color:#fff;">Créer mon Espace Client</h2>
+        <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 18px;">Retrouvez tous vos abonnements, serveurs IPTV et identifiants sécurisés.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="regFirstName">Prénom</label>
+            <input class="input-ctrl" type="text" id="regFirstName" required placeholder="Jean" autocomplete="given-name">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regLastName">Nom</label>
+            <input class="input-ctrl" type="text" id="regLastName" placeholder="Dupont" autocomplete="family-name">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regEmail">Adresse email</label>
+          <input class="input-ctrl" type="email" id="regEmail" required placeholder="jean.dupont@exemple.com" autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regPhone">Numéro WhatsApp (facultatif)</label>
+          <input class="input-ctrl" type="tel" id="regPhone" placeholder="06 12 34 56 78" autocomplete="tel">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regPassword">Mot de passe (8 caractères min.)</label>
+          <div class="input-wrap">
+            <input class="input-ctrl" type="password" id="regPassword" required minlength="8" placeholder="••••••••" autocomplete="new-password">
+            <button type="button" class="input-toggle-pwd" onclick="togglePasswordVisibility('regPassword', this)">Afficher</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="btnSubmitRegister">
+          <span>Créer mon compte</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </form>
+
+      <!-- ÉCRAN OTP SÉCURITÉ -->
+      <div id="viewOtp" class="otp-box" style="display:none;">
+        <div class="otp-icon-wrap" id="otpIcon">🔐</div>
+        <h2 id="otpTitle" style="font-family:var(--font-disp);font-size:18px;margin:0 0 8px;color:#fff;">Vérification de sécurité</h2>
+        <p id="otpDesc" style="font-size:13px;color:var(--text-muted);margin:0 auto 12px;max-width:380px;line-height:1.5;">
+          Un code de confirmation à 6 chiffres a été envoyé par email.
+        </p>
+
+        <!-- Alerte connexion suspecte si applicable -->
+        <div id="otpSuspiciousAlert" class="alert-banner" style="display:none;">
+          <b>⚠️ Alerte de sécurité :</b> Connexion depuis un nouvel appareil ou une nouvelle adresse IP.<br>
+          <span id="otpSuspiciousDetails" style="font-size:11.5px;color:#fcd0e0;"></span>
+        </div>
+
+        <form onsubmit="handleVerifyOtp(event)">
+          <input class="otp-input-field" type="text" id="otpCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code" required autofocus>
+          
+          <button type="submit" class="btn-submit" id="btnSubmitOtp">
+            <span>Valider le code</span>
+          </button>
+        </form>
+
+        <div style="margin-top:18px;font-size:12.5px;color:var(--text-muted);">
+          <span>Vous n'avez rien reçu ?</span>
+          <button type="button" id="btnResendOtp" onclick="handleResendOtp()" style="background:none;border:none;color:var(--cyan);font-weight:600;cursor:pointer;padding:0;font-size:inherit;">
+            Renvoyer un code
+          </button>
+          <div id="otpCountdown" style="font-size:11.5px;color:#7e7a9b;margin-top:4px;"></div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <a href="#" onclick="cancelOtp(event)" style="font-size:12px;color:var(--text-muted);text-decoration:none;">&larr; Retour</a>
+        </div>
+      </div>
+
+      <!-- FORMULAIRE MOT DE PASSE OUBLIÉ -->
+      <div id="viewForgotPassword" style="display:none;">
+        <h2 style="font-family:var(--font-disp);font-size:18px;margin:0 0 8px;color:#fff;">Mot de passe oublié</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;">Saisissez votre email. Nous vous enverrons un code OTP pour réinitialiser votre mot de passe.</p>
+
+        <form onsubmit="handleForgotPassword(event)">
+          <div class="form-group">
+            <label class="form-label" for="forgotEmail">Adresse email du compte</label>
+            <input class="input-ctrl" type="email" id="forgotEmail" required placeholder="nom@exemple.com">
+          </div>
+          <button type="submit" class="btn-submit" id="btnSubmitForgot">Envoyer le code</button>
+        </form>
+
+        <div style="margin-top:16px;text-align:center;">
+          <a href="#" onclick="cancelForgotPassword(event)" style="font-size:12.5px;color:var(--cyan);text-decoration:none;">&larr; Retour à la connexion</a>
+        </div>
+      </div>
+
+      <!-- NOUVEAU MOT DE PASSE APRÈS OTP -->
+      <div id="viewNewPassword" style="display:none;">
+        <h2 style="font-family:var(--font-disp);font-size:18px;margin:0 0 8px;color:#fff;">Nouveau mot de passe</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;">Définissez votre nouveau mot de passe sécurisé (8 caractères minimum).</p>
+
+        <form onsubmit="handleResetPasswordSubmit(event)">
+          <div class="form-group">
+            <label class="form-label" for="resetNewPassword">Nouveau mot de passe</label>
+            <input class="input-ctrl" type="password" id="resetNewPassword" minlength="8" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn-submit">Enregistrer et se connecter</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ================= VUE 2 : TABLEAU DE BORD CLIENT (CONNECTÉ) ================= -->
+  <div id="viewDashboard" style="display:none;">
+    
+    <!-- En-tête Utilisateur -->
+    <div class="card">
+      <div class="dash-header">
+        <div class="dash-user">
+          <div class="dash-avatar" id="dashAvatar">N</div>
+          <div class="dash-titles">
+            <h1 id="dashName">Bonjour, Client</h1>
+            <div class="dash-badge-email">
+              <span id="dashEmail">email@exemple.com</span>
+              <span class="badge-verified">✓ Vérifié</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <button type="button" class="btn-outline" onclick="handleLogout()" style="color:#ff9cc4;border-color:rgba(255,77,148,0.3);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 17l5-5-5-5M21 12H9M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/></svg>
+            <span>Déconnexion</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Payé (Abonnements)</span>
+          <span class="kpi-value" id="kpiTotalSpent" style="color:#ff7fb4;">0,00 €</span>
+          <span class="kpi-sub" id="kpiTotalOrders">0 commande(s) confirmée(s)</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Abonnements actifs</span>
+          <span class="kpi-value" id="kpiActiveCount">0</span>
+          <span class="kpi-sub">Services en cours</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Garantie & Remplacement</span>
+          <span class="kpi-value" style="color:#4ade80;">100%</span>
+          <span class="kpi-sub">Assistance SAV 7j/7</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Prochaine échéance</span>
+          <span class="kpi-value" id="kpiNearestExpiry">—</span>
+          <span class="kpi-sub" id="kpiNearestSub">Aucun abonnement</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs Dashboard -->
+      <div class="dash-tabs">
+        <button type="button" class="dash-tab-btn active" id="dtabSubs" onclick="switchDashTab('subs')">📦 Mes Abonnements & Accès</button>
+        <button type="button" class="dash-tab-btn" id="dtabReferral" onclick="switchDashTab('referral')">🎁 Parrainage (-50%)</button>
+        <button type="button" class="dash-tab-btn" id="dtabLink" onclick="switchDashTab('link')">🔗 Rattacher une commande</button>
+        <button type="button" class="dash-tab-btn" id="dtabProfile" onclick="switchDashTab('profile')">⚙️ Mon Profil & Sécurité</button>
+      </div>
+
+      <!-- CONTENU ONGLET 1 : ABONNEMENTS & ACCÈS -->
+      <div id="dashPaneSubs">
+        <div id="ordersContainer">
+          <!-- Injecté dynamiquement -->
+        </div>
+        <div id="emptyOrders" class="empty-state" style="display:none;">
+          <div class="empty-icon">📺</div>
+          <h3 style="color:#fff;margin:0 0 6px;">Aucun abonnement associé pour le moment</h3>
+          <p style="font-size:13px;max-width:440px;margin:0 auto 18px;">Vous avez passé commande sous un autre nom ou sans compte ? Rapprochez votre commande à l'aide de votre code de suivi confidentiel (NP-TRK-...).</p>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <a href="/#offres" class="btn-submit" style="width:auto;padding:0 24px;">Découvrir les offres</a>
+            <button type="button" class="btn-outline" onclick="switchDashTab('link')">Rattacher une commande</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENU ONGLET 2 : PROGRAMME DE PARRAINAGE (-50%) -->
+      <div id="dashPaneReferral" style="display:none;">
+        
+        <!-- Hero Bannière Parrainage -->
+        <div style="background:linear-gradient(135deg, rgba(255,77,148,0.12), rgba(142,84,255,0.08));border:1px solid rgba(255,77,148,0.3);border-radius:16px;padding:22px 20px;margin-bottom:20px;position:relative;overflow:hidden;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">
+            <div>
+              <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,77,148,0.2);border:1px solid #ff4d94;color:#ff9cc4;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:8px;">
+                🎁 PROGRAMME EXCLUSIF
+              </div>
+              <h2 style="font-family:var(--font-disp);font-size:20px;color:#fff;margin:0 0 6px;">5 commandes parrainées = -50% de réduction immédiate</h2>
+              <p style="font-size:13px;color:#a8a5cf;max-width:620px;margin:0;line-height:1.5;">
+                Partagez votre lien de parrainage avec vos proches. Dès que <strong>5 commandes de produits sont validées et confirmées</strong> grâce à vous, vous recevez automatiquement un code promo personnel de <strong>50% de réduction</strong> valable sur n'importe quel abonnement !
+              </p>
+            </div>
+          </div>
+
+          <!-- 3 Étapes -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin-top:18px;">
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:18px;margin-bottom:4px;">🔗</div>
+              <div style="font-size:12px;font-weight:700;color:#fff;">1. Partagez votre lien</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Envoyez votre lien unique sur WhatsApp ou les réseaux.</div>
+            </div>
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:18px;margin-bottom:4px;">🛒</div>
+              <div style="font-size:12px;font-weight:700;color:#fff;">2. Vos amis commandent</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Chaque commande validée par l'admin vous rapporte 1 point.</div>
+            </div>
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:18px;margin-bottom:4px;">🎉</div>
+              <div style="font-size:12px;font-weight:700;color:#ff9cc4;">3. Obtenez -50%</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">À 5 commandes validées, votre code -50% se débloque !</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Box Lien & Partage -->
+        <div class="card" style="margin-bottom:20px;padding:20px;">
+          <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 12px;display:flex;align-items:center;gap:8px;">
+            <span>Mon Lien de Parrainage</span>
+            <span id="refCodeBadge" style="font-family:var(--font-mono);font-size:11.5px;padding:2px 8px;border-radius:6px;background:rgba(255,77,148,0.15);border:1px solid rgba(255,77,148,0.3);color:#ff7fb4;">NP-REF-...</span>
+          </h3>
+          
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <input class="input-ctrl" type="text" id="refLinkInput" readonly style="font-family:var(--font-mono);font-size:13px;flex:1;min-width:260px;background:rgba(8,7,18,0.7);cursor:pointer;" onclick="copyRefLink()" title="Cliquer pour copier">
+            <button type="button" class="btn-submit" onclick="copyRefLink()" style="width:auto;padding:0 20px;white-space:nowrap;">📋 Copier mon lien</button>
+            <a id="refWaShareBtn" href="#" target="_blank" rel="noopener" class="btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;color:#25D366;border-color:rgba(37,211,102,0.4);white-space:nowrap;">
+              <span>💬 Partager sur WhatsApp</span>
+            </a>
+          </div>
+          <p style="font-size:12px;color:var(--text-muted);margin:0;">
+            Astuce : Tout visiteur ouvrant votre lien aura votre code mémorisé automatiquement lors de sa commande.
+          </p>
+        </div>
+
+        <!-- Box Progression & Récompenses -->
+        <div class="card" style="margin-bottom:20px;padding:20px;">
+          <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 14px;">Ma Progression vers le code -50%</h3>
+
+          <!-- Mini KPIs Parrainage -->
+          <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:16px;">
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Commandes Validées</div>
+              <div style="font-size:24px;font-weight:900;color:#4ade80;font-family:var(--font-disp);margin-top:2px;" id="refConfirmedCount">0</div>
+              <div style="font-size:11px;color:#4ade80;">Comptabilisées pour le palier</div>
+            </div>
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">En attente validation</div>
+              <div style="font-size:24px;font-weight:900;color:#facc15;font-family:var(--font-disp);margin-top:2px;" id="refPendingCount">0</div>
+              <div style="font-size:11px;color:#facc15;">Commandes reçues</div>
+            </div>
+            <div style="background:rgba(8,7,18,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Codes -50% Gagnés</div>
+              <div style="font-size:24px;font-weight:900;color:#ff7fb4;font-family:var(--font-disp);margin-top:2px;" id="refUnlockedCount">0</div>
+              <div style="font-size:11px;color:#ff7fb4;">Paliers complétés</div>
+            </div>
+          </div>
+
+          <!-- Jauge de progression -->
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
+              <span id="refProgressLabel" style="color:#efecff;font-weight:600;">Progression : 0 / 5 commandes validées</span>
+              <span style="color:#ff9cc4;font-weight:700;">Objectif : 5 commandes</span>
+            </div>
+            <div style="height:10px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.05);">
+              <div id="refProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff4d94,#ff7fb4,#8e54ff);border-radius:6px;transition:width 0.6s cubic-bezier(0.16,1,0.3,1);"></div>
+            </div>
+          </div>
+
+          <!-- Encadré Code Promo -50% Disponible -->
+          <div id="refActiveRewardBox" style="display:none;margin-top:18px;background:linear-gradient(135deg,rgba(255,77,148,0.18),rgba(142,84,255,0.14));border:2px solid #ff4d94;border-radius:14px;padding:16px 18px;box-shadow:0 0 25px rgba(255,77,148,0.25);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+              <div>
+                <span style="display:inline-block;padding:2px 8px;border-radius:6px;background:#ff4d94;color:#080712;font-size:10.5px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">🎉 CODE -50% DÉBLOQUÉ</span>
+                <div style="font-size:13px;color:#fff;margin-top:2px;">Votre réduction exclusive de 50% sur votre prochain abonnement :</div>
+                <div style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:#ff9cc4;letter-spacing:2px;margin-top:4px;" id="refActivePromoCode">PARRAIN50-...</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="btn-submit" onclick="copyRefPromoCode()" style="width:auto;padding:0 16px;font-size:13px;">📋 Copier le code</button>
+                <a href="/#offres" class="btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;padding:0 16px;font-size:13px;border-color:rgba(255,77,148,0.4);color:#ff9cc4;">🛍️ Choisir mon abonnement</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tableau des parrainages -->
+        <div class="card" style="padding:20px;">
+          <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 6px;">Tableau de mes Parrainages</h3>
+          <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 16px;">
+            Suivi en temps réel des commandes apportées par vos filleuls. Seules les commandes confirmées par l'équipe sont comptabilisées.
+          </p>
+
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;text-align:left;min-width:540px;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(160,150,255,0.15);color:var(--text-muted);font-size:11.5px;text-transform:uppercase;letter-spacing:0.5px;">
+                  <th style="padding:10px 12px;">Date</th>
+                  <th style="padding:10px 12px;">Filleul</th>
+                  <th style="padding:10px 12px;">Produit(s) commandé(s)</th>
+                  <th style="padding:10px 12px;">Montant</th>
+                  <th style="padding:10px 12px;">Statut</th>
+                </tr>
+              </thead>
+              <tbody id="refHistoryBody">
+                <!-- Injecté dynamiquement -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="refHistoryEmpty" style="display:none;padding:32px 14px;text-align:center;color:var(--text-muted);">
+            <div style="font-size:28px;margin-bottom:6px;">🤝</div>
+            <div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:4px;">Aucun parrainage enregistré pour le moment</div>
+            <div style="font-size:12px;max-width:400px;margin:0 auto 14px;">Partagez votre lien de parrainage ci-dessus à vos proches pour commencer à comptabiliser vos 5 commandes validées !</div>
+            <button type="button" class="btn-outline" onclick="copyRefLink()" style="margin:0 auto;">📋 Copier mon lien de parrainage</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CONTENU ONGLET 2 : RATTACHER UNE COMMANDE -->
+      <div id="dashPaneLink" style="display:none;max-width:540px;margin:10px auto;">
+        <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 8px;">Rattacher une commande passée sans compte</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 20px;line-height:1.5;">
+          Saisissez votre code de suivi confidentiel (reçu sur WhatsApp, ex: <code>NP-TRK-XXXX-XXXX-XXXX</code>) ou votre lien secret d'accès pour associer vos produits à votre espace client.
+        </p>
+
+        <form onsubmit="handleLinkOrder(event)">
+          <div class="form-group">
+            <label class="form-label" for="linkOrderCode">Code de suivi ou clé d'accès</label>
+            <input class="input-ctrl" type="text" id="linkOrderCode" required placeholder="NP-TRK-XXXX-XXXX-XXXX" style="font-family:var(--font-mono);text-transform:uppercase;">
+          </div>
+          <button type="submit" class="btn-submit" id="btnSubmitLink">Associer à mon compte</button>
+        </form>
+      </div>
+
+      <!-- CONTENU ONGLET 3 : MON PROFIL & SÉCURITÉ -->
+      <div id="dashPaneProfile" style="display:none;max-width:540px;margin:10px auto;">
+        <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 16px;">Mes Coordonnées</h3>
+        
+        <form onsubmit="handleUpdateProfile(event)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="profFirstName">Prénom</label>
+              <input class="input-ctrl" type="text" id="profFirstName" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profLastName">Nom</label>
+              <input class="input-ctrl" type="text" id="profLastName">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="profPhone">Téléphone WhatsApp</label>
+            <input class="input-ctrl" type="tel" id="profPhone" placeholder="06 12 34 56 78">
+          </div>
+
+          <hr style="border:none;border-top:1px solid rgba(160,150,255,0.12);margin:24px 0 20px;">
+
+          <h3 style="font-family:var(--font-disp);font-size:16px;color:#fff;margin:0 0 14px;">Modifier mon mot de passe</h3>
+          <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 14px;">Laissez vide si vous ne souhaitez pas changer de mot de passe.</p>
+
+          <div class="form-group">
+            <label class="form-label" for="profCurrentPwd">Mot de passe actuel</label>
+            <input class="input-ctrl" type="password" id="profCurrentPwd" placeholder="••••••••">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="profNewPwd">Nouveau mot de passe (8 car. min)</label>
+            <input class="input-ctrl" type="password" id="profNewPwd" minlength="8" placeholder="••••••••">
+          </div>
+
+          <button type="submit" class="btn-submit" id="btnSubmitProfile">Enregistrer les modifications</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  let currentOtpState = {
+    email: '',
+    purpose: '',
+    resetToken: ''
+  };
+
+  let resendCooldownTimer = null;
+  let resendSecondsRemaining = 0;
+
+  // Initialisation au chargement
+  document.addEventListener('DOMContentLoaded', () => {
+    handleUrlParams();
+    checkSession();
+  });
+
+  // Traitement des paramètres d'URL (Invitation WhatsApp / Rattachement direct)
+  function handleUrlParams() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('action');
+      const email = params.get('email');
+      const phone = params.get('phone');
+      const firstName = params.get('firstName') || params.get('name');
+      const trk = params.get('trk') || params.get('link') || params.get('code');
+
+      if (trk) {
+        sessionStorage.setItem('np_pending_trk', trk.trim());
+        const linkInput = document.getElementById('linkOrderCode');
+        if (linkInput) linkInput.value = trk.trim();
+      }
+      if (email) {
+        const regEmail = document.getElementById('regEmail');
+        const loginEmail = document.getElementById('loginEmail');
+        if (regEmail) regEmail.value = email.trim();
+        if (loginEmail) loginEmail.value = email.trim();
+      }
+      if (phone) {
+        const regPhone = document.getElementById('regPhone');
+        if (regPhone) regPhone.value = phone.trim();
+      }
+      if (firstName) {
+        const regFirstName = document.getElementById('regFirstName');
+        if (regFirstName) regFirstName.value = firstName.trim();
+      }
+
+      if (action === 'register') {
+        switchAuthTab('register');
+      }
+    } catch (e) {
+      console.warn('URL params error', e);
+    }
+  }
+
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(() => {
+      t.className = 'toast';
+    }, 4000);
+  }
+
+  function togglePasswordVisibility(fieldId, btn) {
+    const f = document.getElementById(fieldId);
+    if (!f) return;
+    if (f.type === 'password') {
+      f.type = 'text';
+      btn.textContent = 'Masquer';
+    } else {
+      f.type = 'password';
+      btn.textContent = 'Afficher';
+    }
+  }
+
+  function copyText(val, btn) {
+    navigator.clipboard.writeText(val).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copié !';
+      btn.style.color = '#4ade80';
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.style.color = '';
+      }, 1800);
+    }).catch(() => {
+      showToast('Impossible de copier automatiquement.', true);
+    });
+  }
+
+  function switchAuthTab(tab) {
+    const isLogin = tab === 'login';
+    document.getElementById('tabBtnLogin').classList.toggle('active', isLogin);
+    document.getElementById('tabBtnRegister').classList.toggle('active', !isLogin);
+    document.getElementById('formLogin').style.display = isLogin ? 'block' : 'none';
+    document.getElementById('formRegister').style.display = !isLogin ? 'block' : 'none';
+    document.getElementById('viewOtp').style.display = 'none';
+    document.getElementById('viewForgotPassword').style.display = 'none';
+    document.getElementById('viewNewPassword').style.display = 'none';
+    document.getElementById('authTabsGroup').style.display = 'grid';
+  }
+
+  function switchDashTab(tab) {
+    const isSubs = tab === 'subs';
+    const isRef = tab === 'referral';
+    const isLink = tab === 'link';
+    const isProf = tab === 'profile';
+
+    document.getElementById('dtabSubs').classList.toggle('active', isSubs);
+    document.getElementById('dtabReferral').classList.toggle('active', isRef);
+    document.getElementById('dtabLink').classList.toggle('active', isLink);
+    document.getElementById('dtabProfile').classList.toggle('active', isProf);
+
+    document.getElementById('dashPaneSubs').style.display = isSubs ? 'block' : 'none';
+    document.getElementById('dashPaneReferral').style.display = isRef ? 'block' : 'none';
+    document.getElementById('dashPaneLink').style.display = isLink ? 'block' : 'none';
+    document.getElementById('dashPaneProfile').style.display = isProf ? 'block' : 'none';
+  }
+
+  // Vérifier si une session client existe
+  async function checkSession() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const magicToken = urlParams.get('magic_token') || urlParams.get('auth_token');
+      if (magicToken) {
+        const mRes = await fetch('/api/client/verify-magic-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ magicToken })
+        });
+        const mData = await mRes.json();
+        if (mRes.ok && mData.ok) {
+          showToast('👁️ Connecté avec succès en Vue Client !');
+          urlParams.delete('magic_token');
+          urlParams.delete('auth_token');
+          const cleanQuery = urlParams.toString() ? '?' + urlParams.toString() : '';
+          window.history.replaceState({}, '', window.location.pathname + cleanQuery);
+        } else {
+          showToast(mData.error || 'Lien de connexion expiré.', true);
+        }
+      }
+
+      const res = await fetch('/api/client/me');
+      const data = await res.json();
+      if (res.ok && data.ok && data.user) {
+        renderDashboard(data);
+      } else {
+        renderAuth();
+      }
+    } catch (e) {
+      renderAuth();
+    }
+  }
+
+  function renderAuth() {
+    document.getElementById('viewAuth').style.display = 'block';
+    document.getElementById('viewDashboard').style.display = 'none';
+    switchAuthTab('login');
+  }
+
+  // Connexion
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitLogin');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Connexion...';
+
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+      const res = await fetch('/api/client/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Identifiants incorrects.');
+      }
+
+      if (data.step === 'otp_required') {
+        showOtpScreen({
+          email: data.email || email,
+          purpose: data.purpose || 'suspicious_login',
+          message: data.message,
+          ip: data.ip,
+          device: data.device
+        });
+        showToast(data.message || 'Code de vérification envoyé par email.');
+      } else {
+        showToast('Connexion réussie !');
+        checkSession();
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Se connecter';
+    }
+  }
+
+  // Inscription
+  async function handleRegister(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitRegister');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Création...';
+
+    const firstName = document.getElementById('regFirstName').value.trim();
+    const lastName = document.getElementById('regLastName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const phone = document.getElementById('regPhone').value.trim();
+    const password = document.getElementById('regPassword').value;
+
+    try {
+      const res = await fetch('/api/client/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, email, phone, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Erreur lors de la création du compte.');
+      }
+
+      showOtpScreen({
+        email,
+        purpose: 'register',
+        message: data.message
+      });
+      showToast(data.message || 'Code de vérification envoyé.');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Créer mon compte';
+    }
+  }
+
+  // Affichage écran OTP
+  function showOtpScreen({ email, purpose, message, ip, device }) {
+    currentOtpState.email = email;
+    currentOtpState.purpose = purpose;
+
+    document.getElementById('formLogin').style.display = 'none';
+    document.getElementById('formRegister').style.display = 'none';
+    document.getElementById('authTabsGroup').style.display = 'none';
+    document.getElementById('viewForgotPassword').style.display = 'none';
+    document.getElementById('viewNewPassword').style.display = 'none';
+    document.getElementById('viewOtp').style.display = 'block';
+
+    const iconEl = document.getElementById('otpIcon');
+    const titleEl = document.getElementById('otpTitle');
+    const descEl = document.getElementById('otpDesc');
+    const alertEl = document.getElementById('otpSuspiciousAlert');
+    const detailsEl = document.getElementById('otpSuspiciousDetails');
+
+    if (purpose === 'suspicious_login') {
+      iconEl.textContent = '⚠️';
+      iconEl.className = 'otp-icon-wrap alert';
+      titleEl.textContent = 'Alerte de Sécurité · Nouveau Terminal';
+      descEl.textContent = 'Une tentative de connexion a été détectée depuis une nouvelle IP ou un appareil non reconnu.';
+      alertEl.style.display = 'block';
+      detailsEl.textContent = `Adresse IP : ${ip || 'Inconnue'} · Terminal : ${device || 'Navigateur'}`;
+    } else if (purpose === 'reset_password') {
+      iconEl.textContent = '🔑';
+      iconEl.className = 'otp-icon-wrap';
+      titleEl.textContent = 'Réinitialisation de mot de passe';
+      descEl.textContent = `Un code de réinitialisation a été envoyé à ${email}.`;
+      alertEl.style.display = 'none';
+    } else {
+      iconEl.textContent = '🔐';
+      iconEl.className = 'otp-icon-wrap';
+      titleEl.textContent = 'Confirmez votre adresse email';
+      descEl.textContent = `Un code de vérification à 6 chiffres a été envoyé à l'adresse ${email}.`;
+      alertEl.style.display = 'none';
+    }
+
+    const input = document.getElementById('otpCode');
+    input.value = '';
+    setTimeout(() => input.focus(), 100);
+
+    startResendCooldown(60);
+  }
+
+  function cancelOtp(e) {
+    if (e) e.preventDefault();
+    switchAuthTab('login');
+  }
+
+  // Validation du code OTP
+  async function handleVerifyOtp(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitOtp');
+    btn.disabled = true;
+    btn.textContent = 'Vérification...';
+
+    const otp = document.getElementById('otpCode').value.trim();
+
+    try {
+      const res = await fetch('/api/client/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: currentOtpState.email,
+          otp,
+          purpose: currentOtpState.purpose
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Code invalide.');
+      }
+
+      if (currentOtpState.purpose === 'reset_password') {
+        currentOtpState.resetToken = data.resetToken;
+        document.getElementById('viewOtp').style.display = 'none';
+        document.getElementById('viewNewPassword').style.display = 'block';
+        showToast('Code validé. Saisissez votre nouveau mot de passe.');
+      } else {
+        showToast('Compte validé avec succès ! Bienvenue.');
+        checkSession();
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Valider le code';
+    }
+  }
+
+  // Renvoi d'un nouveau code OTP
+  async function handleResendOtp() {
+    if (resendSecondsRemaining > 0) return;
+    const btn = document.getElementById('btnResendOtp');
+    btn.textContent = 'Envoi en cours...';
+
+    try {
+      const res = await fetch('/api/client/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: currentOtpState.email,
+          purpose: currentOtpState.purpose
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur lors du renvoi.');
+
+      showToast(data.message || 'Nouveau code envoyé !');
+      startResendCooldown(60);
+    } catch (err) {
+      showToast(err.message, true);
+      btn.textContent = 'Renvoyer un code';
+    }
+  }
+
+  function startResendCooldown(seconds) {
+    if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+    resendSecondsRemaining = seconds;
+    const btn = document.getElementById('btnResendOtp');
+    const cd = document.getElementById('otpCountdown');
+
+    btn.style.opacity = '0.5';
+    btn.style.pointerEvents = 'none';
+
+    resendCooldownTimer = setInterval(() => {
+      resendSecondsRemaining--;
+      if (resendSecondsRemaining <= 0) {
+        clearInterval(resendCooldownTimer);
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+        btn.textContent = 'Renvoyer un code';
+        cd.textContent = '';
+      } else {
+        cd.textContent = `Nouveau code possible dans ${resendSecondsRemaining}s`;
+      }
+    }, 1000);
+  }
+
+  // Mot de passe oublié
+  function showForgotPassword(e) {
+    e.preventDefault();
+    document.getElementById('formLogin').style.display = 'none';
+    document.getElementById('formRegister').style.display = 'none';
+    document.getElementById('authTabsGroup').style.display = 'none';
+    document.getElementById('viewForgotPassword').style.display = 'block';
+  }
+
+  function cancelForgotPassword(e) {
+    e.preventDefault();
+    switchAuthTab('login');
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitForgot');
+    btn.disabled = true;
+    btn.textContent = 'Envoi...';
+
+    const email = document.getElementById('forgotEmail').value.trim();
+
+    try {
+      const res = await fetch('/api/client/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+
+      showOtpScreen({
+        email,
+        purpose: 'reset_password',
+        message: data.message
+      });
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Envoyer le code';
+    }
+  }
+
+  async function handleResetPasswordSubmit(e) {
+    e.preventDefault();
+    const newPassword = document.getElementById('resetNewPassword').value;
+
+    try {
+      const res = await fetch('/api/client/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: currentOtpState.email,
+          resetToken: currentOtpState.resetToken,
+          newPassword
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur lors de la modification.');
+
+      showToast(data.message || 'Mot de passe réinitialisé avec succès !');
+      switchAuthTab('login');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  // Déconnexion
+  async function handleLogout() {
+    try {
+      await fetch('/api/client/logout', { method: 'POST' });
+    } catch (e) {}
+    showToast('Vous êtes déconnecté.');
+    renderAuth();
+  }
+
+  // Affichage du Dashboard
+  function renderDashboard(data) {
+    document.getElementById('viewAuth').style.display = 'none';
+    document.getElementById('viewDashboard').style.display = 'block';
+
+    const user = data.user;
+    const summary = data.summary || {};
+    const orders = data.orders || [];
+
+    // Header info
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Client';
+    document.getElementById('dashName').textContent = `Bonjour, ${fullName}`;
+    document.getElementById('dashEmail').textContent = user.email;
+    document.getElementById('dashAvatar').textContent = (user.firstName || user.email || 'N')[0].toUpperCase();
+
+    // Profile form prefill
+    document.getElementById('profFirstName').value = user.firstName || '';
+    document.getElementById('profLastName').value = user.lastName || '';
+    document.getElementById('profPhone').value = user.phone || '';
+
+    // KPI Summary
+    const totalSpent = (summary.totalSpent !== undefined && summary.totalSpent !== null) ? summary.totalSpent : 0;
+    const kpiTotEl = document.getElementById('kpiTotalSpent');
+    if (kpiTotEl) kpiTotEl.textContent = `${totalSpent.toFixed(2).replace('.', ',')} €`;
+    const confCount = (summary.confirmedOrdersCount !== undefined && summary.confirmedOrdersCount !== null) ? summary.confirmedOrdersCount : orders.filter(o => o.status === 'confirmed').length;
+    const kpiTotOrd = document.getElementById('kpiTotalOrders');
+    if (kpiTotOrd) kpiTotOrd.textContent = `${confCount} commande${confCount > 1 ? 's' : ''} confirmée${confCount > 1 ? 's' : ''}`;
+
+    document.getElementById('kpiActiveCount').textContent = summary.activeSubscriptions || 0;
+    if (summary.nearestExpiryDays !== null && summary.nearestExpiryDays !== undefined) {
+      document.getElementById('kpiNearestExpiry').textContent = summary.nearestExpiryDays >= 0 ? `${summary.nearestExpiryDays} jours` : 'Expiré';
+      document.getElementById('kpiNearestSub').textContent = 'Renouvellement à prévoir';
+    } else {
+      document.getElementById('kpiNearestExpiry').textContent = '—';
+      document.getElementById('kpiNearestSub').textContent = 'Aucune échéance proche';
+    }
+
+    // Orders rendering
+    const container = document.getElementById('ordersContainer');
+    container.innerHTML = '';
+
+    if (!orders.length) {
+      document.getElementById('emptyOrders').style.display = 'block';
+    } else {
+      document.getElementById('emptyOrders').style.display = 'none';
+      orders.forEach(ord => {
+        container.appendChild(createOrderCard(ord, data.waNumber));
+      });
+    }
+
+    // Traitement transparent d'une commande en attente (depuis lien WhatsApp)
+    const pendingTrk = sessionStorage.getItem('np_pending_trk');
+    if (pendingTrk) {
+      sessionStorage.removeItem('np_pending_trk');
+      fetch('/api/client/link-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingCode: pendingTrk })
+      }).then(r => r.json()).then(res => {
+        if (res && res.ok) {
+          showToast('Commande ' + pendingTrk + ' rattachée à votre compte !');
+          checkSession();
+        }
+      }).catch(() => {});
+    }
+
+    // Affichage des données de Parrainage
+    if (data.referral) {
+      renderReferral(data.referral, data.waNumber);
+    }
+
+    switchDashTab('subs');
+  }
+
+  function copyRefLink() {
+    const input = document.getElementById('refLinkInput');
+    if (!input || !input.value) return;
+    navigator.clipboard.writeText(input.value).then(() => {
+      showToast('Lien de parrainage copié dans le presse-papier !');
+    }).catch(() => {
+      prompt('Votre lien de parrainage :', input.value);
+    });
+  }
+
+  function copyRefPromoCode() {
+    const el = document.getElementById('refActivePromoCode');
+    if (!el || !el.textContent) return;
+    navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+      showToast('Code promo -50% copié ! Utilisez-le lors de votre commande.');
+    }).catch(() => {
+      prompt('Votre code promo -50% :', el.textContent.trim());
+    });
+  }
+
+  function renderReferral(ref, waNumber) {
+    if (!ref) return;
+
+    // Lien & Code
+    const linkInput = document.getElementById('refLinkInput');
+    if (linkInput) linkInput.value = ref.link || '';
+    const codeBadge = document.getElementById('refCodeBadge');
+    if (codeBadge) codeBadge.textContent = ref.code || '—';
+
+    // Bouton de partage WhatsApp
+    const waShareBtn = document.getElementById('refWaShareBtn');
+    if (waShareBtn) {
+      const shareMsg = `Salut ! Je te recommande NeonPass pour tes abonnements IPTV et streaming haute qualité (Netflix, Disney+, etc.). Commande via mon lien exclusif pour découvrir leurs offres : ${ref.link || ''}`;
+      waShareBtn.href = `https://wa.me/?text=${encodeURIComponent(shareMsg)}`;
+    }
+
+    // Compteurs
+    const confOrders = ref.confirmedOrdersCount || 0;
+    const pendOrders = ref.pendingOrdersCount || 0;
+    const rewList = ref.rewards || [];
+
+    const confEl = document.getElementById('refConfirmedCount');
+    if (confEl) confEl.textContent = confOrders;
+    const pendEl = document.getElementById('refPendingCount');
+    if (pendEl) pendEl.textContent = pendOrders;
+    const unlEl = document.getElementById('refUnlockedCount');
+    if (unlEl) unlEl.textContent = rewList.length;
+
+    // Barre de progression
+    const threshold = ref.threshold || 5;
+    const progressPct = ref.progressPct !== undefined ? ref.progressPct : Math.min(100, Math.round(((confOrders % threshold) / threshold) * 100));
+    const progressBar = document.getElementById('refProgressBar');
+    if (progressBar) progressBar.style.width = `${progressPct}%`;
+
+    const progressLabel = document.getElementById('refProgressLabel');
+    if (progressLabel) {
+      const needed = ref.neededForNext !== undefined ? ref.neededForNext : (threshold - (confOrders % threshold));
+      if (confOrders > 0 && confOrders % threshold === 0) {
+        progressLabel.textContent = `🎉 Palier de ${confOrders} commandes atteint ! Un nouveau code promo -50% vous a été attribué.`;
+      } else {
+        progressLabel.textContent = `Progression : ${confOrders % threshold} / ${threshold} commande(s) validée(s) · Plus que ${needed} pour débloquer votre code -50% !`;
+      }
+    }
+
+    // Récompense active / Code promo -50% débloqué
+    const activeReward = ref.activeReward;
+    const rewardBox = document.getElementById('refActiveRewardBox');
+    if (rewardBox) {
+      if (activeReward) {
+        rewardBox.style.display = 'block';
+        const codeEl = document.getElementById('refActivePromoCode');
+        if (codeEl) codeEl.textContent = activeReward.promoCode;
+      } else {
+        rewardBox.style.display = 'none';
+      }
+    }
+
+    // Tableau de l'historique des parrainages
+    const historyBody = document.getElementById('refHistoryBody');
+    const historyEmpty = document.getElementById('refHistoryEmpty');
+    if (historyBody) {
+      historyBody.innerHTML = '';
+      const list = ref.history || [];
+      if (!list.length) {
+        if (historyEmpty) historyEmpty.style.display = 'block';
+      } else {
+        if (historyEmpty) historyEmpty.style.display = 'none';
+        list.forEach((item) => {
+          const tr = document.createElement('tr');
+          const isConf = item.status === 'confirmed';
+          const isPending = item.status === 'new';
+
+          let statusBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(255,255,255,0.06);color:var(--text-muted);">Non confirmée</span>`;
+          if (isConf) {
+            statusBadge = `<span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3);">✅ Validée (+1)</span>`;
+          } else if (isPending) {
+            statusBadge = `<span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(234,179,8,0.15);color:#facc15;border:1px solid rgba(234,179,8,0.3);">⏳ En attente validation</span>`;
+          }
+
+          tr.innerHTML = `
+            <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);border-bottom:1px solid rgba(160,150,255,0.08);">${escapeHtml(item.date || '—')}</td>
+            <td style="padding:10px 12px;font-size:13px;font-weight:600;color:#fff;border-bottom:1px solid rgba(160,150,255,0.08);">${escapeHtml(item.referralName || 'Filleul')}</td>
+            <td style="padding:10px 12px;font-size:12.5px;color:#efecff;border-bottom:1px solid rgba(160,150,255,0.08);">${escapeHtml(item.itemsSummary || 'Abonnement')}</td>
+            <td style="padding:10px 12px;font-size:12.5px;font-weight:700;color:#ff7fb4;border-bottom:1px solid rgba(160,150,255,0.08);">${item.total ? item.total.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid rgba(160,150,255,0.08);">${statusBadge}</td>
+          `;
+          historyBody.appendChild(tr);
+        });
+      }
+    }
+  }
+
+  function createOrderCard(ord, waNumber) {
+    const card = document.createElement('div');
+    card.className = 'order-card';
+
+    const itemsTitle = (ord.items || []).map(i => i.name).join(' + ') || 'Abonnement numérique';
+    let statusClass = 'status-pending';
+    let statusLabel = 'En attente';
+
+    if (ord.status === 'confirmed') {
+      if (ord.isExpired) {
+        statusClass = 'status-expired';
+        statusLabel = 'Expiré';
+      } else {
+        statusClass = 'status-active';
+        statusLabel = 'Actif';
+      }
+    } else if (ord.status === 'cancelled') {
+      statusClass = 'status-expired';
+      statusLabel = 'Annulé';
+    }
+
+    let accountsHtml = '';
+    if (ord.accounts && ord.accounts.length) {
+      accountsHtml = `
+        <div class="vault-box">
+          <div style="font-size:12px;font-family:var(--font-mono);font-weight:700;color:var(--cyan);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span>🔐 Vos identifiants & codes d'accès :</span>
+          </div>
+          ${ord.accounts.map(acc => `
+            <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed rgba(160,150,255,0.12);">
+              <div style="font-weight:700;color:#fff;font-size:13.5px;margin-bottom:6px;">${escapeHtml(acc.serviceName)}</div>
+              
+              <div class="vault-item">
+                <span class="vault-label">Identifiant :</span>
+                <span class="vault-val">${escapeHtml(acc.login)}</span>
+                <button type="button" class="btn-copy" onclick="copyText('${escapeHtml(acc.login)}', this)">Copier</button>
+              </div>
+
+              ${acc.password ? `
+              <div class="vault-item">
+                <span class="vault-label">Mot de passe :</span>
+                <span class="vault-val" id="pwd_${acc.id}">••••••••</span>
+                <div style="display:flex;gap:6px;">
+                  <button type="button" class="btn-copy" onclick="toggleSecretVisibility('pwd_${acc.id}', '${escapeHtml(acc.password)}', this)">Voir</button>
+                  <button type="button" class="btn-copy" onclick="copyText('${escapeHtml(acc.password)}', this)">Copier</button>
+                </div>
+              </div>` : ''}
+
+              ${acc.slotProfile ? `
+              <div class="vault-item">
+                <span class="vault-label">Profil / PIN :</span>
+                <span class="vault-val">${escapeHtml(acc.slotProfile)}</span>
+                <button type="button" class="btn-copy" onclick="copyText('${escapeHtml(acc.slotProfile)}', this)">Copier</button>
+              </div>` : ''}
+
+              ${acc.notes ? `
+              <div class="vault-item">
+                <span class="vault-label">Serveur / Note :</span>
+                <span class="vault-val" style="font-size:12px;">${escapeHtml(acc.notes)}</span>
+                <button type="button" class="btn-copy" onclick="copyText('${escapeHtml(acc.notes)}', this)">Copier</button>
+              </div>` : ''}
+
+              ${acc.warrantyClaim ? `
+                <div style="background:rgba(255,77,148,0.12);border:1px solid rgba(255,77,148,0.35);border-radius:9px;padding:9px 12px;margin-top:10px;font-size:12px;color:#ffd6e6;display:flex;align-items:flex-start;gap:8px;">
+                  <span style="font-size:15px;line-height:1;">🚨</span>
+                  <div>
+                    <strong>Demande SAV en cours de traitement :</strong><br>
+                    <span style="color:#d8d4f0;">${escapeHtml(acc.defectReason || 'Vérification et réactivation en cours par nos équipes.')}</span>
+                  </div>
+                </div>
+              ` : `
+                <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+                  <button type="button" class="btn-sav-claim" onclick="openSavModal(${ord.id}, ${acc.id}, '${escapeHtml(acc.serviceName)}')">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                    <span>Signaler un problème (SAV)</span>
+                  </button>
+                </div>
+              `}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      accountsHtml = `
+        <div class="vault-box" style="text-align:center;padding:18px;color:var(--text-muted);font-size:12.5px;">
+          ⏳ Vos identifiants sont en cours de préparation par l'équipe support. Vous les recevrez également par message direct.
+        </div>
+      `;
+    }
+
+    const renewMsg = encodeURIComponent(`Bonjour, je souhaite renouveler mon abonnement ${itemsTitle} (Commande #${ord.id}, code ${ord.trackingCode}).`);
+    const waRenewUrl = waNumber ? `https://wa.me/${waNumber}?text=${renewMsg}` : '#';
+
+    card.innerHTML = `
+      <div class="order-header">
+        <div>
+          <div class="order-product-name">${escapeHtml(itemsTitle)}</div>
+          <div class="order-meta">
+            Commande #${ord.id} · Suivi : <strong style="color:#fff;">${escapeHtml(ord.trackingCode || '—')}</strong>
+            ${ord.durationMonths ? `· Formule ${ord.durationMonths} mois` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <span class="status-pill ${statusClass}">${statusLabel}</span>
+          ${ord.expiresAt ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">Échéance : <strong>${ord.expiresAt}</strong></div>` : ''}
+        </div>
+      </div>
+
+      ${accountsHtml}
+
+      <div class="order-actions">
+        ${ord.accessToken ? `
+          <a href="${ord.accessUrl}" class="btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z"/></svg>
+            <span>Fiche d'accès complète</span>
+          </a>
+        ` : ''}
+        <a href="${waRenewUrl}" target="_blank" rel="noopener" class="btn-outline btn-wa-renew">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2z"/></svg>
+          <span>Renouveler sur WhatsApp</span>
+        </a>
+      </div>
+    `;
+
+    return card;
+  }
+
+  function toggleSecretVisibility(elementId, realVal, btn) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (el.textContent === '••••••••') {
+      el.textContent = realVal;
+      btn.textContent = 'Masquer';
+    } else {
+      el.textContent = '••••••••';
+      btn.textContent = 'Voir';
+    }
+  }
+
+  // Rattacher une commande
+  async function handleLinkOrder(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitLink');
+    btn.disabled = true;
+    btn.textContent = 'Rattachement...';
+
+    const code = document.getElementById('linkOrderCode').value.trim();
+
+    try {
+      const res = await fetch('/api/client/link-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur lors du rattachement.');
+
+      showToast(data.message || 'Commande associée avec succès !');
+      document.getElementById('linkOrderCode').value = '';
+      checkSession();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Associer à mon compte';
+    }
+  }
+
+  // Mise à jour profil
+  async function handleUpdateProfile(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitProfile');
+    btn.disabled = true;
+    btn.textContent = 'Enregistrement...';
+
+    const firstName = document.getElementById('profFirstName').value.trim();
+    const lastName = document.getElementById('profLastName').value.trim();
+    const phone = document.getElementById('profPhone').value.trim();
+    const currentPassword = document.getElementById('profCurrentPwd').value;
+    const newPassword = document.getElementById('profNewPwd').value;
+
+    try {
+      const res = await fetch('/api/client/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, phone, currentPassword, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur lors de la mise à jour.');
+
+      showToast(data.message || 'Profil mis à jour !');
+      document.getElementById('profCurrentPwd').value = '';
+      document.getElementById('profNewPwd').value = '';
+      checkSession();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer les modifications';
+    }
+  }
+
+  // Modale SAV
+  function openSavModal(orderId, accountId, serviceName) {
+    document.getElementById('savOrderId').value = orderId;
+    document.getElementById('savAccountId').value = accountId;
+    document.getElementById('savServiceName').value = serviceName || 'Abonnement';
+    document.getElementById('savReason').selectedIndex = 0;
+    document.getElementById('savComment').value = '';
+    const modal = document.getElementById('savModal');
+    if (modal.showModal) modal.showModal();
+    else modal.style.display = 'block';
+  }
+
+  async function submitSavModal(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitSav');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Transmission en cours...';
+
+    const orderId = Number(document.getElementById('savOrderId').value);
+    const accountId = Number(document.getElementById('savAccountId').value);
+    const reason = document.getElementById('savReason').value;
+    const comment = document.getElementById('savComment').value.trim();
+
+    try {
+      const res = await fetch('/api/client/request-sav', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, accountId, reason, comment })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur lors de la demande SAV.');
+
+      const modal = document.getElementById('savModal');
+      if (modal.close) modal.close();
+      else modal.style.display = 'none';
+
+      showToast(data.message || 'Demande SAV transmise !');
+      checkSession();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Transmettre ma demande SAV';
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+</script>
+
+<!-- Modale de Demande SAV -->
+<dialog id="savModal" style="background:rgba(18,16,38,0.98);border:1px solid rgba(255,77,148,0.35);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,0.85);max-width:480px;width:92%;padding:26px;color:#fff;backdrop-filter:blur(20px);">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+    <div>
+      <div style="font-family:var(--font-disp);font-size:17px;font-weight:700;color:#fff;">🚨 Demande de remplacement SAV</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Garantie totale NeonPass 7j/7</div>
+    </div>
+    <button type="button" onclick="document.getElementById('savModal').close()" style="background:none;border:none;color:#a09cb8;font-size:22px;cursor:pointer;line-height:1;padding:0;">&times;</button>
+  </div>
+  <p style="font-size:12.5px;color:#a8a5cf;line-height:1.5;margin-bottom:18px;">
+    Vos accès ne fonctionnent plus ? Indiquez-nous la situation pour que notre assistance vous réattribue de nouveaux identifiants fonctionnels immédiatement.
+  </p>
+  <form id="formSavModal" onsubmit="submitSavModal(event)">
+    <input type="hidden" id="savOrderId">
+    <input type="hidden" id="savAccountId">
+    <div class="form-group">
+      <label class="form-label">Service concerné</label>
+      <input type="text" id="savServiceName" class="input-ctrl" readonly style="opacity:0.85;cursor:not-allowed;">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motif du problème</label>
+      <select id="savReason" class="input-ctrl" style="background:#090814;color:#fff;" required>
+        <option value="Identifiants invalides (login/mot de passe refusé)">Identifiants invalides (login ou mot de passe refusé)</option>
+        <option value="Compte bloqué ou suspendu">Compte bloqué ou suspendu</option>
+        <option value="Profil ou écran saturé">Profil ou écran saturé</option>
+        <option value="Abonnement expiré avant terme">Abonnement expiré avant terme</option>
+        <option value="Autre problème technique">Autre problème technique</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Précisions utiles (optionnel)</label>
+      <textarea id="savComment" class="input-ctrl" style="height:70px;padding-top:10px;resize:none;" placeholder="Ex: message d'erreur affiché sur l'application..."></textarea>
+    </div>
+    <button type="submit" class="btn-submit" id="btnSubmitSav" style="margin-top:12px;">
+      <span>Transmettre ma demande SAV</span>
+    </button>
+  </form>
+</dialog>
+
+<script src="/pwa.js?v=2.1.0" defer></script>
+</body>
+</html>

@@ -671,9 +671,12 @@
         .nav-burger {
           display: flex !important;
         }
-        #navWa {
+        #navWa, #navLogin {
           padding: 8px 12px !important;
           font-size: 12px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
         }
         #navWa span.btn-label-text {
           display: none;
@@ -682,6 +685,10 @@
       @media (max-width: 540px) {
         #navWa {
           display: none !important;
+        }
+        #navLogin {
+          padding: 6px 10px !important;
+          font-size: 11px !important;
         }
         .pwa-header-btn {
           padding: 6px 10px;
@@ -926,8 +933,8 @@
       actionsGroup = document.createElement('div');
       actionsGroup.className = 'nav-actions-group';
 
-      // Move WhatsApp button into actions group if present
-      const waBtn = navIn.querySelector('#navWa') || navIn.querySelector('.btn-primary');
+      // Move Login or WhatsApp button into actions group if present
+      const waBtn = navIn.querySelector('#navLogin') || navIn.querySelector('#navWa') || navIn.querySelector('.btn-primary');
       if (waBtn) {
         // Wrap text in span so on mobile it hides gracefully and keeps icon
         if (!waBtn.querySelector('.btn-label-text')) {
@@ -996,6 +1003,14 @@
                   <span class="drawer-pill-badge badge-contest">Concours Instagram</span>
                 </div>
                 <span class="drawer-desc">DAZN, Google One AI Pro et tirage au sort</span>
+              </div>
+              <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </a>
+
+            <a href="/compte" class="nav-drawer-item">
+              <div class="drawer-text">
+                <span class="drawer-title">Mon Espace Client</span>
+                <span class="drawer-desc">Connexion, mes abonnements et accès</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
             </a>
@@ -1145,7 +1160,7 @@
     const path = window.location.pathname;
     const isHome = path === '/' || path === '';
     const isNews = path === '/news' || path === '/nouveautes';
-    const isSuivi = path === '/suivi';
+    const isCompte = path === '/compte' || path === '/client';
 
     nav.innerHTML = `
       <a href="/#offres" class="pwa-nav-item ${isHome ? 'active' : ''}">
@@ -1160,9 +1175,9 @@
         <svg viewBox="0 0 24 24"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
         <span>Nouveautés</span>
       </a>
-      <a href="/suivi" class="pwa-nav-item ${isSuivi ? 'active' : ''}">
-        <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-        <span>Mes Accès</span>
+      <a href="/compte" class="pwa-nav-item ${isCompte ? 'active' : ''}">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <span>Mon Compte</span>
       </a>
       <a href="#" class="pwa-nav-item" id="pwaNavWa">
         <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.7 11.7 0 0 0 4.5 4c1.7.7 2.4.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>

@@ -1,9 +1,8 @@
 // NeonPass Progressive Web App Service Worker
-const CACHE_NAME = 'neonpass-v1.4.0';
+const CACHE_NAME = 'neonpass-v2.1.0';
 
 const STATIC_ASSETS = [
   '/',
-  '/app.js',
   '/logo.svg',
   '/favicon.svg',
   '/favicon.ico',
@@ -37,7 +36,10 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Network-first for navigation, Cache-first for static assets, Network-only for API
+// Fetch handler:
+// - API and Admin: Network-only
+// - HTML & JavaScript (.js): Network-first with cache fallback (ensures immediate updates)
+// - Static assets (images, icons, fonts): Cache-first with network fallback
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -50,20 +52,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML Navigation: Network-first with cache fallback
-  if (req.mode === 'navigate') {
+  // Scripts (.js) and HTML Navigation: Network-first with cache fallback
+  const isCodeOrNav = req.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.html');
+  if (isCodeOrNav) {
     event.respondWith(
-      fetch(req).catch(() => caches.match(req).then((cached) => cached || caches.match('/')))
+      fetch(req)
+        .then((res) => {
+          if (res.status === 200 && url.origin === self.location.origin) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('/') : null)))
     );
     return;
   }
 
-  // Static Assets: Cache-first, fallback to network
+  // Static Media / Assets: Cache-first, fallback to network
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
-        // Cache successful local GET responses
         if (res.status === 200 && url.origin === self.location.origin) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));

@@ -112,6 +112,29 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 .client-link:hover { color: var(--cyan); text-decoration-color: var(--cyan); }
 .search-inp { background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; color: var(--text); font-size: 13px; min-width: 220px; transition: border-color .2s; }
 .search-inp:focus { border-color: var(--cyan); outline: none; }
+/* Communication panel & Rich Text Editor */
+.comm-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.comm-subnav-btn { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+.comm-subnav-btn.active { background: var(--cyan); color: var(--ink); border-color: var(--cyan); }
+.comm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .comm-grid { grid-template-columns: 1fr; } }
+.comm-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+.comm-toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 10px 10px 0 0; border-bottom: none; align-items: center; }
+.comm-tool-btn { background: rgba(255, 255, 255, .05); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; font-weight: 600; transition: all .15s; }
+.comm-tool-btn:hover { background: rgba(255, 255, 255, .15); color: var(--cyan); border-color: var(--cyan); }
+.comm-tool-select { background: rgba(255, 255, 255, .05); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+.comm-editor-content { min-height: 280px; max-height: 520px; overflow-y: auto; background: rgba(0, 0, 0, .25); border: 1px solid var(--line); border-radius: 0 0 10px 10px; padding: 16px; color: #efecff; line-height: 1.6; outline: none; }
+.comm-editor-content:focus { border-color: rgba(160, 150, 255, .5); }
+.comm-editor-content h1 { font-size: 22px; color: #fff; margin: 0 0 10px; font-family: 'Unbounded', sans-serif; }
+.comm-editor-content h2 { font-size: 18px; color: var(--cyan); margin: 14px 0 8px; }
+.comm-editor-content h3 { font-size: 15px; color: var(--pink); margin: 12px 0 6px; }
+.comm-editor-content p { margin: 0 0 10px; }
+.comm-editor-content a { color: var(--cyan); text-decoration: underline; }
+.comm-editor-html { width: 100%; min-height: 280px; max-height: 520px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #0b0918; color: #5eead4; border: 1px solid var(--line); border-radius: 0 0 10px 10px; padding: 14px; box-sizing: border-box; }
+.comm-preview-frame { border: 1px solid var(--line); border-radius: 14px; background: #080712; padding: 20px; max-height: 600px; overflow-y: auto; color: #efecff; }
+.comm-wa-bubble { background: #0b201a; border: 1px solid rgba(37, 211, 102, .3); border-radius: 14px; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #dcfce7; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.comm-tag-btn { display: inline-flex; align-items: center; gap: 4px; background: rgba(94, 234, 212, .12); border: 1px solid rgba(94, 234, 212, .3); color: var(--cyan); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all .15s; }
+.comm-tag-btn:hover { background: rgba(94, 234, 212, .25); border-color: var(--cyan); }
 @media (max-width: 560px) { form .grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -132,6 +155,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="tab" role="tab" data-panel="renewals" aria-selected="false" id="renewalsTab">Échéances</button>
     <button class="tab" role="tab" data-panel="accounts" aria-selected="false" id="accountsTab">Stock & Comptes</button>
     <button class="tab" role="tab" data-panel="clients" aria-selected="false" id="clientsTab">Clients</button>
+    <button class="tab" role="tab" data-panel="communication" aria-selected="false" id="communicationTab">Communication</button>
     <button class="tab" role="tab" data-panel="offers" aria-selected="false">Offres</button>
     <button class="tab" role="tab" data-panel="reviews" aria-selected="false" id="reviewsTab">Avis</button>
     <button class="tab" role="tab" data-panel="promos" aria-selected="false">Codes promo</button>
@@ -253,6 +277,247 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       </table>
     </div>
     <p class="empty" id="clientsEmpty" hidden>Aucun client trouvé.</p>
+  </section>
+
+  <section class="panel" id="panel-communication" hidden>
+    <div class="toolbar">
+      <h2 style="margin:0">Communication & Campagnes Marketing</h2>
+      <div class="inline">
+        <span class="pill on" id="commSmtpStatus">SMTP Gmail SSL Actif</span>
+      </div>
+    </div>
+
+    <!-- Sous-onglets Communication -->
+    <div class="comm-subnav">
+      <button type="button" class="comm-subnav-btn active" id="btnCommSubEmail">📧 Campagnes & Mails Marketing</button>
+      <button type="button" class="comm-subnav-btn" id="btnCommSubWa">💬 Assistant WhatsApp (Création de compte & Rattachement)</button>
+      <button type="button" class="comm-subnav-btn" id="btnCommSubLogs">📋 Journal des Emails (Logs)</button>
+    </div>
+
+    <!-- ================= VOLET 1 : EMAIL MARKETING ================= -->
+    <div id="commViewEmail">
+      <!-- Audiences & KPI -->
+      <div class="stats" id="commAudienceStats" style="margin-bottom:18px">
+        <div class="stat"><b id="commStatAll" style="color:var(--cyan)">—</b><span>Tous les contacts uniques</span></div>
+        <div class="stat"><b id="commStatAccounts" style="color:var(--neon)">—</b><span>Comptes Web vérifiés</span></div>
+        <div class="stat"><b id="commStatActive" style="color:var(--ok)">—</b><span>Abonnements actifs</span></div>
+        <div class="stat"><b id="commStatExpiring" style="color:var(--warn)">—</b><span>Échéances sous 7 jours</span></div>
+      </div>
+
+      <div class="comm-grid">
+        <!-- Colonne Gauche : Paramètres & Éditeur -->
+        <div class="comm-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <h3 style="margin:0;font-size:15px;font-family:'Unbounded',sans-serif">1. Rédacteur de Campagne</h3>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn small" type="button" id="btnTemplatePromo">🏷️ Promo</button>
+              <button class="btn small" type="button" id="btnTemplateAccount">⚡ Espace Client</button>
+              <button class="btn small" type="button" id="btnTemplateEvent">🎬 Événement</button>
+              <button class="btn small" type="button" id="btnTemplateRenew">⏳ Relance</button>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:12px;margin-bottom:14px">
+            <label>
+              Audience Cible
+              <select id="commTargetSelect" style="width:100%">
+                <option value="all">Tous les clients (anciens et récents avec email)</option>
+                <option value="accounts">Comptes inscrits sur l'Espace Client uniquement</option>
+                <option value="active">Clients avec abonnements actuellement actifs</option>
+                <option value="expiring">Clients dont l'abonnement expire bientôt (&le; 7 jours)</option>
+              </select>
+            </label>
+
+            <label>
+              Objet de l'email (Sujet percutant)
+              <input type="text" id="commSubject" placeholder="ex: ⚡ Offre Privilège : -30% sur votre abonnement annuel">
+            </label>
+
+            <label>
+              Pré-en-tête (Texte d'aperçu dans la boîte de réception)
+              <input type="text" id="commPreviewText" placeholder="ex: Profitez de 48h exclusives pour booster votre formule...">
+            </label>
+          </div>
+
+          <!-- Barre d'outils du Vrai Éditeur -->
+          <div style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">Contenu du message :</span>
+            <div style="display:flex;gap:4px">
+              <button type="button" class="btn small" id="commToggleMode" style="font-size:11px;padding:3px 8px">Mode HTML &lt;/&gt;</button>
+            </div>
+          </div>
+
+          <div class="comm-toolbar" id="commEditorToolbar">
+            <select class="comm-tool-select" id="commFormatBlock" title="Format de texte">
+              <option value="p">Paragraphe</option>
+              <option value="h1">Titre 1 (H1)</option>
+              <option value="h2">Titre 2 (H2)</option>
+              <option value="h3">Titre 3 (H3)</option>
+            </select>
+            <button type="button" class="comm-tool-btn" data-cmd="bold" title="Gras"><b>B</b></button>
+            <button type="button" class="comm-tool-btn" data-cmd="italic" title="Italique"><i>I</i></button>
+            <button type="button" class="comm-tool-btn" data-cmd="underline" title="Souligné"><u>U</u></button>
+            <button type="button" class="comm-tool-btn" data-cmd="strikeThrough" title="Barré"><s>S</s></button>
+            <button type="button" class="comm-tool-btn" data-cmd="justifyLeft" title="Aligner à gauche">⇤</button>
+            <button type="button" class="comm-tool-btn" data-cmd="justifyCenter" title="Centrer">☰</button>
+            <button type="button" class="comm-tool-btn" data-cmd="justifyRight" title="Aligner à droite">⇥</button>
+            <button type="button" class="comm-tool-btn" data-cmd="insertUnorderedList" title="Liste à puces">• Liste</button>
+            <button type="button" class="comm-tool-btn" data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button>
+            <button type="button" class="comm-tool-btn" id="commBtnInsertLink" title="Insérer un lien">🔗 Lien</button>
+            <button type="button" class="comm-tool-btn" id="commBtnInsertBtn" title="Insérer un bouton d'action" style="color:var(--pink);border-color:rgba(255,77,148,0.4)">🔘 Bouton CTA</button>
+            <button type="button" class="comm-tool-btn" id="commBtnInsertImage" title="Insérer une image">🖼️ Image</button>
+            <button type="button" class="comm-tool-btn" data-cmd="insertHorizontalRule" title="Séparateur">➖ Divider</button>
+          </div>
+
+          <!-- Zone éditable visuelle (WYSIWYG) -->
+          <div id="commVisualEditor" class="comm-editor-content" contenteditable="true" spellcheck="false"></div>
+          <!-- Zone brute HTML -->
+          <textarea id="commHtmlEditor" class="comm-editor-html" style="display:none" spellcheck="false"></textarea>
+
+          <!-- Insertion de balises personnalisées -->
+          <div style="margin-top:10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+            <span style="font-size:11px;color:var(--muted)">Insérer une variable :</span>
+            <button type="button" class="comm-tag-btn" data-tag="{PRENOM}">+ {PRENOM}</button>
+            <button type="button" class="comm-tag-btn" data-tag="{NOM}">+ {NOM}</button>
+            <button type="button" class="comm-tag-btn" data-tag="{EMAIL}">+ {EMAIL}</button>
+            <button type="button" class="comm-tag-btn" data-tag="{TRACKING_CODE}">+ {TRACKING_CODE}</button>
+            <button type="button" class="comm-tag-btn" data-tag="{LIEN_COMPTE}">+ {LIEN_COMPTE}</button>
+            <button type="button" class="comm-tag-btn" data-tag="{SITE_URL}">+ {SITE_URL}</button>
+          </div>
+        </div>
+
+        <!-- Colonne Droite : Prévisualisation en direct & Envoi -->
+        <div class="comm-card" style="display:flex;flex-direction:column;justify-content:space-between">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+              <h3 style="margin:0;font-size:15px;font-family:'Unbounded',sans-serif">2. Aperçu Boîte de Réception</h3>
+              <div style="display:flex;gap:6px">
+                <button type="button" class="btn small" id="commPrevDesktopBtn" style="font-weight:700">Desktop</button>
+                <button type="button" class="btn small" id="commPrevMobileBtn">Mobile</button>
+              </div>
+            </div>
+
+            <!-- Conteneur d'aperçu dynamique -->
+            <div id="commPreviewFrame" class="comm-preview-frame">
+              <div style="text-align:center;padding:12px 0 16px;border-bottom:1px solid rgba(160,150,255,0.15)">
+                <span style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:20px;color:#fff">
+                  <span style="color:#ff4d94">Neon</span>Pass
+                </span>
+                <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#2be6ff;margin-top:4px">ABONNEMENTS &amp; LICENCES NUMÉRIQUES 24/7</div>
+              </div>
+              <div id="commPreviewRender" style="padding:20px 8px;line-height:1.7;color:#e2defc;font-size:14px"></div>
+              <div style="text-align:center;padding-top:16px;border-top:1px solid rgba(160,150,255,0.1);font-size:11px;color:#8580a6">
+                <p style="margin:0 0 6px">NeonPass · Espace Client Sécurisé 24/7 · Support 7j/7</p>
+                <p style="margin:0;color:#6b678c">Email envoyé via NeonPass SMTP SSL Gmail</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Envois (Test & Campagne) -->
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);display:grid;gap:12px">
+            <!-- Envoi de test -->
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="email" id="commTestEmail" placeholder="Votre email pour test..." style="flex:1">
+              <button class="btn" type="button" id="commBtnSendTest" style="white-space:nowrap">📧 Envoyer le test</button>
+            </div>
+
+            <!-- Lancement de campagne -->
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,77,148,0.06);border:1px solid rgba(255,77,148,0.25);border-radius:12px;padding:12px 16px;flex-wrap:wrap;gap:10px">
+              <div>
+                <b style="color:#ff9cc4;display:block">Prêt à diffuser ?</b>
+                <small style="color:var(--muted)" id="commTargetSummary">Audience sélectionnée : Tous les clients</small>
+              </div>
+              <button class="btn primary" type="button" id="commBtnSendCampaign" style="padding:10px 22px">🚀 Envoyer la Campagne</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= VOLET 2 : ASSISTANT WHATSAPP CLIENTS EXISTANTS ================= -->
+    <div id="commViewWa" style="display:none">
+      <div class="comm-card" style="margin-bottom:20px">
+        <h3 style="margin:0 0 8px;font-size:16px;font-family:'Unbounded',sans-serif">⚡ Invitation Personnalisée à l'Espace Client & Rattachement</h3>
+        <p style="color:var(--muted);font-size:13.5px;line-height:1.6;margin:0 0 16px">
+          Permet d'envoyer un message pré-rempli à un client existant afin qu'il crée son compte en 30 secondes. Grâce à son lien personnalisé ou son code de suivi (<code>NP-TRK-...</code>), son compte et ses abonnements passés sont automatiquement rattachés sans friction !
+        </p>
+
+        <!-- Recherche et sélection client -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+          <div>
+            <label>
+              Sélectionner un client existant (Recherche directe)
+              <input type="search" id="waClientSearchInp" placeholder="🔍 Taper un nom, numéro de tel ou code de suivi..." style="margin-top:4px">
+            </label>
+            <div id="waClientPickerList" style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;margin-top:6px;background:rgba(0,0,0,0.2);display:none"></div>
+          </div>
+          <div>
+            <label>
+              Client sélectionné
+              <input type="text" id="waSelectedClientSummary" readonly value="Aucun client sélectionné" style="margin-top:4px;color:var(--cyan);font-weight:700">
+            </label>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <span class="pill off" id="waClientHasAccountBadge">Compte non créé</span>
+              <span class="pill off" id="waClientTrkBadge">Code : —</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="comm-grid">
+          <!-- Personnalisation message -->
+          <div>
+            <h4 style="margin:0 0 10px;font-size:14px;color:var(--cyan)">Message WhatsApp Généré</h4>
+            <div class="comm-wa-bubble" id="waMessagePreview">Sélectionnez un client ci-dessus pour générer automatiquement son invitation WhatsApp personnalisée.</div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+              <button class="btn primary" type="button" id="waBtnCopyMsg">📋 Copier le message</button>
+              <a class="btn" id="waBtnDirectOpen" href="#" target="_blank" rel="noopener" style="background:#25d366;color:#052e16;border-color:transparent;font-weight:700">💬 Ouvrir WhatsApp Direct</a>
+              <button class="btn" type="button" id="waBtnCopyLink">🔗 Copier le lien d'accès</button>
+            </div>
+          </div>
+
+          <!-- Modèle de diffusion générale (Broadcast) -->
+          <div>
+            <h4 style="margin:0 0 10px;font-size:14px;color:var(--pink)">Modèle de Diffusion Générale (Broadcast / Statut)</h4>
+            <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">À envoyer à vos contacts ou à poster en statut pour inciter tous vos clients à créer leur compte :</p>
+            <div class="comm-wa-bubble" id="waBroadcastPreview" style="background:#131d27;border-color:rgba(43,230,255,0.3);color:#e0f2fe"></div>
+            <div style="margin-top:14px">
+              <button class="btn" type="button" id="waBtnCopyBroadcast">📋 Copier le message de diffusion</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= VOLET 3 : JOURNAL DES EMAILS (LOGS SMTP) ================= -->
+    <div id="commViewLogs" style="display:none">
+      <div class="comm-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div>
+            <h3 style="margin:0;font-size:15px;font-family:'Unbounded',sans-serif">📋 Historique & Logs des Emails envoyés (SMTP)</h3>
+            <p style="color:var(--muted);font-size:12.5px;margin:4px 0 0">Chaque email expédié (Test, OTP Inscription, Connexion suspecte, Campagne) enregistre ici son récépissé serveur avec code retour SMTP (ex: 250 OK).</p>
+          </div>
+          <button class="btn small" type="button" id="commBtnRefreshLogs">🔄 Rafraîchir les logs</button>
+        </div>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Date & Heure</th>
+                <th>Type</th>
+                <th>Destinataire</th>
+                <th>Objet</th>
+                <th>Statut</th>
+                <th>Récépissé SMTP / Message-ID</th>
+              </tr>
+            </thead>
+            <tbody id="commLogsBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="commLogsEmpty" hidden>Aucun log d'envoi d'email pour le moment.</p>
+      </div>
+    </div>
   </section>
 
   <section class="panel" id="panel-offers" hidden>
@@ -382,8 +647,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         <div class="stat"><b id="backupCountOrders">—</b><span>commandes</span></div>
         <div class="stat"><b id="backupCountAccounts">—</b><span>comptes stock</span></div>
         <div class="stat"><b id="backupCountClients">—</b><span>clients CRM</span></div>
+        <div class="stat"><b id="backupCountCustomerAccounts">—</b><span>comptes web</span></div>
         <div class="stat"><b id="backupCountOffers">—</b><span>offres</span></div>
         <div class="stat"><b id="backupCountPromos">—</b><span>codes promo</span></div>
+        <div class="stat"><b id="backupCountReferrals">—</b><span>récompenses parrain</span></div>
+        <div class="stat"><b id="backupCountEmailLogs">—</b><span>emails tracés</span></div>
         <div class="stat"><b id="backupCountReviews">—</b><span>avis clients</span></div>
       </div>
 
@@ -921,11 +1189,33 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="btn small" type="button" id="clientDlgClose">Fermer</button>
   </div>
   <div class="stats" id="clientStats" style="margin-bottom:16px"></div>
+
+  <!-- Encadré Compte Web & Gestion Client (Vue Client & Reset MDP) -->
+  <div id="clientDlgWebAccountBox" style="background:rgba(255,77,148,0.08);border:1px solid rgba(255,77,148,0.3);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#ff9cc4;display:flex;align-items:center;gap:6px">
+        <span>👤 Espace Client Web :</span>
+        <span id="clientWebStatusBadge" class="pill on">Actif</span>
+      </div>
+      <div id="clientWebEmail" style="font-size:13px;color:#fff;font-family:'JetBrains Mono',monospace;margin-top:3px">—</div>
+      <div id="clientWebLoginInfo" style="font-size:11.5px;color:var(--muted);margin-top:2px">Dernière connexion : —</div>
+      <div id="clientWebReferralInfo" style="font-size:11.5px;color:#ff9cc4;margin-top:3px" hidden></div>
+      <div id="clientWebOrdersAssignMsg" style="font-size:12px;color:var(--cyan);margin-top:4px;font-weight:600" hidden></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn small" type="button" id="clientAssignOrdersBtn" style="background:linear-gradient(135deg,#00f2fe,#4facfe);color:#080712;border:none;font-weight:700" hidden title="Assigner automatiquement toutes ses commandes à son compte client web">⚡ Assigner les commandes au compte</button>
+      <button class="btn small" type="button" id="clientMagicLinkBtn" style="background:linear-gradient(135deg,#ff4d94,#ff7fb4);color:#080712;border:none;font-weight:700" title="Accéder au compte en vue client sans mot de passe">👁️ Accéder (Vue Client)</button>
+      <button class="btn small" type="button" id="clientResetPwdBtn" style="color:var(--cyan);border-color:rgba(43,230,255,0.4)">🔑 Réinitialiser MDP</button>
+    </div>
+  </div>
+
   <div style="margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap">
     <a class="btn primary small" id="clientWaLink" href="#" target="_blank" rel="noopener" hidden>💬 Ouvrir sur WhatsApp</a>
+    <button class="btn small" type="button" id="clientInviteAccountBtn" style="color:var(--cyan);border-color:rgba(43,230,255,0.4)">⚡ Inviter Espace Client (WhatsApp)</button>
     <button class="btn small" type="button" id="clientCopyInfo">📋 Copier récap client</button>
     <button class="btn small" type="button" id="clientEditBtn">✏️ Modifier profil</button>
     <button class="btn small" type="button" id="clientNewOrder">➕ Nouvelle commande pour ce client</button>
+    <button class="btn small danger" type="button" id="clientDlgDeleteBtn">🗑️ Supprimer client</button>
   </div>
 
   <!-- Section Accès et comptes attribués -->
@@ -936,10 +1226,13 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </div>
 
   <!-- Section Historique des commandes -->
-  <h3 style="font:600 13px 'Unbounded', sans-serif;margin:16px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Historique des commandes</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px;flex-wrap:wrap;gap:8px">
+    <h3 style="font:600 13px 'Unbounded', sans-serif;margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Historique des commandes</h3>
+    <button class="btn small" type="button" id="clientOrdersQuickAssignBtn" style="background:linear-gradient(135deg,#00f2fe,#4facfe);color:#080712;border:none;font-weight:700;font-size:11px;padding:3px 10px" hidden title="Assigner les commandes au compte client web">⚡ Assigner les commandes au compte</button>
+  </div>
   <div class="scroll">
     <table>
-      <thead><tr><th>Réf.</th><th>Date</th><th>Offres</th><th>Total</th><th>Statut</th><th>Échéance</th><th>Espace Client</th></tr></thead>
+      <thead><tr><th>Réf.</th><th>Date</th><th>Offres</th><th>Total</th><th>Statut</th><th>Échéance</th><th>Compte Web</th><th>Fiche Accès</th></tr></thead>
       <tbody id="clientOrdersBody"></tbody>
     </table>
   </div>
@@ -1169,6 +1462,156 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       wa.hidden = true;
     }
 
+    // Gestion du compte web client (Vue Client & Reset MDP)
+    const webBox = $('#clientDlgWebAccountBox');
+    const ca = data && data.customerAccount;
+    if (ca) {
+      webBox.hidden = false;
+      $('#clientWebStatusBadge').className = 'pill ' + (ca.is_verified ? 'on' : 'wait');
+      $('#clientWebStatusBadge').textContent = ca.is_verified ? 'Vérifié & Actif' : 'En attente validation OTP';
+      $('#clientWebEmail').textContent = ca.email;
+      $('#clientWebLoginInfo').textContent = 'Dernière connexion : ' + (ca.last_login_at ? new Date(ca.last_login_at).toLocaleString('fr-FR') : 'Jamais connecté') + (ca.last_login_ip ? ' (IP: ' + ca.last_login_ip + ')' : '');
+
+      const refInfo = data && data.referralInfo;
+      const refEl = $('#clientWebReferralInfo');
+      if (refEl) {
+        if (refInfo && refInfo.code) {
+          refEl.textContent = `🤝 Code Parrain : ${refInfo.code} · ${refInfo.confirmedOrdersCount} commande(s) validée(s) (${refInfo.rewardsCount} code(s) -50% débloqué(s))`;
+          refEl.hidden = false;
+        } else {
+          refEl.hidden = true;
+        }
+      }
+
+      $('#clientMagicLinkBtn').hidden = false;
+      $('#clientMagicLinkBtn').onclick = async () => {
+        try {
+          const res = await api('/clients/magic-token', {
+            method: 'POST',
+            body: { customerAccountId: ca.id, email: ca.email }
+          });
+          if (res.magicUrl) {
+            window.open(res.magicUrl, '_blank');
+            toast('Lien Vue Client généré et ouvert dans un nouvel onglet !');
+          }
+        } catch (e) {
+          toast(e.message || 'Erreur génération lien Vue Client.', true);
+        }
+      };
+
+      $('#clientResetPwdBtn').hidden = false;
+      $('#clientResetPwdBtn').onclick = async () => {
+        const customPwd = prompt('Définir un nouveau mot de passe pour ' + ca.email + ' (laisser vide pour générer un mot de passe temporaire automatique) :');
+        if (customPwd === null) return;
+        try {
+          const res = await api('/clients/reset-password', {
+            method: 'POST',
+            body: { customerAccountId: ca.id, email: ca.email, newPassword: customPwd.trim(), sendEmail: true }
+          });
+          toast(res.message || 'Mot de passe réinitialisé avec succès !');
+          prompt('Nouveau mot de passe client (également envoyé par email) :', res.newPassword);
+        } catch (e) {
+          toast(e.message || 'Erreur réinitialisation.', true);
+        }
+      };
+
+      // Détection des commandes non rattachées au compte client web
+      const unassignedOrders = clientOrders.filter((o) => !o.customer_account_id || o.customer_account_id !== ca.id);
+      const assignBtn = $('#clientAssignOrdersBtn');
+      const quickAssignBtn = $('#clientOrdersQuickAssignBtn');
+      const assignMsg = $('#clientWebOrdersAssignMsg');
+
+      window._handleAssignClientOrders = async (specificOrderIds = null) => {
+        try {
+          if (assignBtn) { assignBtn.disabled = true; assignBtn.textContent = 'Assignation…'; }
+          if (quickAssignBtn) { quickAssignBtn.disabled = true; quickAssignBtn.textContent = 'Assignation…'; }
+          const targetIds = specificOrderIds || clientOrders.map((o) => o.id);
+          const res = await api('/clients/assign-orders', {
+            method: 'POST',
+            body: {
+              customerAccountId: ca.id,
+              orderIds: targetIds,
+              email: ca.email
+            }
+          });
+          toast(res.message || 'Commandes assignées au compte client avec succès !');
+          clientDlg.close();
+          openClientDialog(clientKey);
+        } catch (err) {
+          toast(err.message || 'Erreur lors de l\'assignation.', true);
+          if (assignBtn) { assignBtn.disabled = false; assignBtn.textContent = '⚡ Assigner les commandes au compte'; }
+          if (quickAssignBtn) { quickAssignBtn.disabled = false; quickAssignBtn.textContent = '⚡ Assigner les commandes au compte'; }
+        }
+      };
+
+      if (unassignedOrders.length > 0) {
+        if (assignBtn) {
+          assignBtn.hidden = false;
+          assignBtn.disabled = false;
+          assignBtn.textContent = `⚡ Assigner ${unassignedOrders.length} commande(s) au compte`;
+          assignBtn.onclick = () => window._handleAssignClientOrders();
+        }
+        if (quickAssignBtn) {
+          quickAssignBtn.hidden = false;
+          quickAssignBtn.disabled = false;
+          quickAssignBtn.textContent = `⚡ Assigner ${unassignedOrders.length} commande(s) au compte`;
+          quickAssignBtn.onclick = () => window._handleAssignClientOrders();
+        }
+        if (assignMsg) {
+          assignMsg.hidden = false;
+          if (ca.is_verified) {
+            assignMsg.innerHTML = `✨ <b>Compte validé par email</b> : ${unassignedOrders.length} commande(s) prête(s) à être assignée(s) en 1 clic.`;
+          } else {
+            assignMsg.innerHTML = `⚠️ <b>${unassignedOrders.length} commande(s)</b> non encore rattachée(s) au compte web.`;
+          }
+        }
+      } else {
+        if (assignBtn) assignBtn.hidden = true;
+        if (quickAssignBtn) quickAssignBtn.hidden = true;
+        if (assignMsg) {
+          assignMsg.hidden = false;
+          assignMsg.innerHTML = clientOrders.length > 0
+            ? `<span style="color:#00e5a3">✅ Toutes les commandes (${clientOrders.length}) sont assignées au compte client.</span>`
+            : '';
+        }
+      }
+    } else {
+      window._handleAssignClientOrders = null;
+      if ($('#clientAssignOrdersBtn')) $('#clientAssignOrdersBtn').hidden = true;
+      if ($('#clientOrdersQuickAssignBtn')) $('#clientOrdersQuickAssignBtn').hidden = true;
+      if ($('#clientWebOrdersAssignMsg')) $('#clientWebOrdersAssignMsg').hidden = true;
+      $('#clientWebStatusBadge').className = 'pill wait';
+      $('#clientWebStatusBadge').textContent = 'Non inscrit';
+      const firstOrd = clientOrders[0] || {};
+      const knownEmail = firstOrd.customer_email || (cleanKey.includes('@') ? cleanKey : '');
+      $('#clientWebEmail').textContent = knownEmail ? knownEmail + ' (pas de mot de passe défini)' : 'Aucun compte web associé';
+      $('#clientWebLoginInfo').textContent = 'Ce client n\'a pas encore activé son compte sur /compte.';
+      $('#clientMagicLinkBtn').hidden = true;
+      $('#clientResetPwdBtn').hidden = true;
+    }
+
+    $('#clientInviteAccountBtn').onclick = () => {
+      clientDlg.close();
+      const firstOrd = clientOrders[0] || {};
+      const targetPhone = directPhoneKey || waPhone(firstOrd.customer_phone) || '';
+      const clientName = client.name || fullName || 'Client';
+      const trk = firstOrd.tracking_code || '';
+      const email = firstOrd.customer_email || client.email || '';
+
+      const commTab = document.getElementById('communicationTab');
+      if (commTab) commTab.click();
+      const btnWa = document.getElementById('btnCommSubWa');
+      if (btnWa) btnWa.click();
+
+      selectWaClient({
+        name: clientName,
+        phone: targetPhone,
+        email: email,
+        tracking_code: trk,
+        offer_name: (firstOrd.items || []).map((i) => i.name).join(' + ') || ''
+      });
+    };
+
     $('#clientNewOrder').onclick = () => {
       clientDlg.close();
       openOrderDialog(null, { firstName: client.name || first.customer_name || '', lastName: first.customer_last_name || '', phone: phone || '' });
@@ -1177,6 +1620,36 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     $('#clientEditBtn').onclick = () => {
       clientDlg.close();
       openClientEditDialog(client);
+    };
+
+    $('#clientDlgDeleteBtn').onclick = async () => {
+      const clientLabel = (client.name || fullName || phone || cleanKey || 'ce client').trim();
+      const hasOrders = clientOrders.length > 0;
+      let confirmMsg = 'Supprimer définitivement le client "' + clientLabel + '" ?';
+      if (hasOrders) {
+        confirmMsg += '\n\n⚠️ Ce client a ' + clientOrders.length + ' commande(s) associée(s). Ses commandes et identifiants associés seront également supprimés.';
+      }
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const targetKey = client.id || (ca ? ca.id : null) || encodeURIComponent(cleanKey || phone);
+        await api('/clients/' + targetKey, {
+          method: 'DELETE',
+          body: {
+            clientId: client.id || null,
+            customerAccountId: ca ? ca.id : null,
+            phone: phone || null,
+            email: (ca ? ca.email : null) || client.email || (cleanKey.includes('@') ? cleanKey : null),
+            name: client.name || fullName || null,
+            deleteOrders: true
+          }
+        });
+        toast('Client supprimé avec succès.');
+        clientDlg.close();
+        loadClients();
+      } catch (err) {
+        toast(err.message || 'Erreur lors de la suppression.', true);
+      }
     };
 
     // Groupement des comptes par Pack ou par Service pour l'affichage client
@@ -1367,6 +1840,33 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         accessCell.textContent = '—';
       }
 
+      const webAccountCell = h('td', {});
+      if (ca) {
+        const isLinked = o.customer_account_id === ca.id;
+        if (isLinked) {
+          webAccountCell.append(h('span', { className: 'pill on', style: 'font-size:10.5px' }, '✅ Rattachée'));
+        } else {
+          const assignSingleBtn = h('button', {
+            className: 'btn small',
+            type: 'button',
+            style: 'padding:2px 7px;font-size:10px;background:linear-gradient(135deg,#00f2fe,#4facfe);color:#080712;border:none;font-weight:700',
+            title: 'Assigner cette commande #' + o.id + ' au compte client web'
+          }, '⚡ Lier');
+          assignSingleBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            if (window._handleAssignClientOrders) {
+              await window._handleAssignClientOrders([o.id]);
+            }
+          };
+          webAccountCell.append(h('div', { style: 'display:flex;align-items:center;gap:6px' },
+            h('span', { className: 'pill wait', style: 'font-size:10px' }, 'Non liée'),
+            assignSingleBtn
+          ));
+        }
+      } else {
+        webAccountCell.append(h('span', { style: 'color:var(--muted);font-size:11px' }, '—'));
+      }
+
       const tr = h('tr', { style: 'cursor:pointer' },
         h('td', { className: 'num' }, '#' + o.id),
         h('td', { className: 'num' }, new Date(o.created_at).toLocaleDateString('fr-FR')),
@@ -1374,6 +1874,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', { className: 'num' }, fmt(o.total)),
         h('td', {}, h('span', { className: 'pill ' + (o.status === 'confirmed' ? 'on' : o.status === 'cancelled' ? 'late' : 'wait') }, STATUS_LABEL[o.status] || o.status)),
         h('td', { className: 'num' }, o.expires_at ? new Date(o.expires_at).toLocaleDateString('fr-FR') : '—'),
+        webAccountCell,
         accessCell
       );
       tr.addEventListener('click', (e) => {
@@ -1403,9 +1904,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       const notesStr = (o.notes || '').toLowerCase();
       const promoStr = (o.promo_code || '').toLowerCase();
       const trkStr = (o.tracking_code || '').toLowerCase();
+      const refStr = (o.referral_code || '').toLowerCase();
       const payStr = (PAY_LABEL[o.payment_method] || o.payment_method || '').toLowerCase();
       return idStr.includes(q) || String(o.id) === q || fullName.includes(q) || phone.includes(q) ||
-             itemsStr.includes(q) || notesStr.includes(q) || promoStr.includes(q) || trkStr.includes(q) || payStr.includes(q);
+             itemsStr.includes(q) || notesStr.includes(q) || promoStr.includes(q) || trkStr.includes(q) || refStr.includes(q) || payStr.includes(q);
     });
     $('#ordersEmpty').hidden = rows.length > 0;
     rows.forEach((o) => {
@@ -1447,17 +1949,24 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       }
 
       const when = new Date(o.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      const savBadge = o.sav_claims_count > 0
+        ? h('span', { className: 'pill', style: 'background:rgba(255,122,156,.28);color:var(--bad);border:1px solid var(--bad);font-weight:700', title: o.sav_claims_count + ' réclamation(s) SAV en attente' }, '🚨 SAV (' + o.sav_claims_count + ')')
+        : '';
       const accBadge = o.status === 'confirmed'
         ? (o.assigned_accounts_count > 0
             ? h('span', { className: 'pill on', title: o.assigned_accounts_count + ' compte(s) attribué(s)' }, '🔐 ' + o.assigned_accounts_count)
             : h('span', { className: 'pill wait', title: 'Aucun compte attribué' }, '⚠️ sans accès'))
         : '';
-      const tr = h('tr', { style: 'cursor:pointer' },
-        h('td', { className: 'num' }, '#' + o.id, o.source === 'admin' ? h('span', { className: 'pill src', title: 'Saisie dans l\'admin' }, 'admin') : ''),
+      const refBadge = o.referral_code
+        ? h('div', { style: 'margin-top:2px' }, h('span', { className: 'pill', style: 'background:rgba(255,77,148,0.15);color:#ff9cc4;border:1px solid rgba(255,77,148,0.35);font-size:10px;font-weight:700', title: 'Parrainé par : ' + (o.referrer_name || o.referrer_email || o.referral_code) }, '🤝 ' + o.referral_code))
+        : '';
+      const tr = h('tr', { style: 'cursor:pointer' + (o.sav_claims_count > 0 ? ';background:rgba(255,122,156,0.06)' : '') },
+        h('td', { className: 'num' }, '#' + o.id, o.source === 'admin' ? h('span', { className: 'pill src', title: 'Saisie dans l\'admin' }, 'admin') : '', savBadge ? h('div', { style: 'margin-top:2px' }, savBadge) : ''),
         h('td', { className: 'num' }, when),
         h('td', {}, clientEl,
           o.notes ? h('span', { className: 'note-dot', title: o.notes }, '●') : '',
-          o.customer_phone ? h('small', { className: 'sub' }, o.customer_phone) : ''),
+          o.customer_phone ? h('small', { className: 'sub' }, o.customer_phone) : '',
+          refBadge),
         h('td', {}, (o.items || []).map((i) => i.name).join(' + ')),
         h('td', { className: 'num' }, fmt(o.total) + (o.discount ? ' (remise)' : ''),
           o.promo_code ? h('small', { style: 'display:block;color:var(--cyan)' }, o.promo_code + ' −' + o.promo_pct + ' %') : ''),
@@ -3090,20 +3599,41 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         className: 'client-link',
         type: 'button',
         title: 'Voir la fiche client détaillée'
-      }, c.name || 'Client sans nom');
-      nameEl.addEventListener('click', () => openClientDialog(c.phone || c.name));
+      }, c.name || c.email || 'Client sans nom');
+      nameEl.addEventListener('click', () => openClientDialog(c.phone || c.email || c.name));
 
       const editBtn = h('button', { className: 'btn small', type: 'button' }, 'Modifier');
       editBtn.addEventListener('click', () => openClientEditDialog(c));
 
       const delBtn = h('button', { className: 'btn small danger', type: 'button' }, 'Supprimer');
       delBtn.addEventListener('click', async () => {
-        if (!confirm('Supprimer ce client (' + (c.name || c.phone) + ') ?')) return;
+        const clientLabel = (c.name || c.phone || c.email || 'ce client').trim();
+        const hasOrders = (c.orders_count || 0) > 0;
+        let confirmMsg = 'Supprimer définitivement le client "' + clientLabel + '" ?';
+        if (hasOrders) {
+          confirmMsg += '\n\n⚠️ Ce client a ' + c.orders_count + ' commande(s) associée(s). Ses commandes et accès associés seront également supprimés.';
+        }
+        if (!confirm(confirmMsg)) return;
+
         try {
-          if (c.id) await api('/clients/' + c.id, { method: 'DELETE' });
-          toast('Client supprimé.');
+          const targetKey = c.id || c.customer_account_id || encodeURIComponent(c.match_key || c.phone || c.email || c.name || 'target');
+          await api('/clients/' + targetKey, {
+            method: 'DELETE',
+            body: {
+              clientId: c.id || null,
+              customerAccountId: c.customer_account_id || null,
+              matchKey: c.match_key || null,
+              phone: c.phone || null,
+              email: c.email || null,
+              name: c.name || null,
+              deleteOrders: true
+            }
+          });
+          toast('Client supprimé avec succès.');
           loadClients();
-        } catch (e) { toast(e.message, true); }
+        } catch (e) {
+          toast(e.message || 'Erreur lors de la suppression.', true);
+        }
       });
 
       const lastDate = c.last_order_at
@@ -3704,8 +4234,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       if ($('#backupCountOrders')) $('#backupCountOrders').textContent = s.orders != null ? s.orders : '—';
       if ($('#backupCountAccounts')) $('#backupCountAccounts').textContent = s.accounts != null ? s.accounts : '—';
       if ($('#backupCountClients')) $('#backupCountClients').textContent = s.clients != null ? s.clients : '—';
+      if ($('#backupCountCustomerAccounts')) $('#backupCountCustomerAccounts').textContent = s.customer_accounts != null ? s.customer_accounts : '—';
       if ($('#backupCountOffers')) $('#backupCountOffers').textContent = s.offers != null ? s.offers : '—';
       if ($('#backupCountPromos')) $('#backupCountPromos').textContent = s.promos != null ? s.promos : '—';
+      if ($('#backupCountReferrals')) $('#backupCountReferrals').textContent = s.referral_rewards != null ? s.referral_rewards : '—';
+      if ($('#backupCountEmailLogs')) $('#backupCountEmailLogs').textContent = s.email_logs != null ? s.email_logs : '—';
       if ($('#backupCountReviews')) $('#backupCountReviews').textContent = s.reviews != null ? s.reviews : '—';
       if ($('#dbSizePill') && s.db_size) $('#dbSizePill').textContent = s.db_size;
     } catch (e) {}
@@ -3800,14 +4333,535 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     };
   }
 
+  // ==========================================
+  // ----- Communication & Campagnes Marketing -----
+  // ==========================================
+  let commVisualMode = true;
+  let allWaClients = [];
+  let selectedWaClient = null;
+
+  // Sous-onglets Email vs WhatsApp vs Logs
+  $('#btnCommSubEmail').addEventListener('click', () => {
+    $('#btnCommSubEmail').classList.add('active');
+    $('#btnCommSubWa').classList.remove('active');
+    $('#btnCommSubLogs').classList.remove('active');
+    $('#commViewEmail').style.display = 'block';
+    $('#commViewWa').style.display = 'none';
+    $('#commViewLogs').style.display = 'none';
+  });
+
+  $('#btnCommSubWa').addEventListener('click', () => {
+    $('#btnCommSubWa').classList.add('active');
+    $('#btnCommSubEmail').classList.remove('active');
+    $('#btnCommSubLogs').classList.remove('active');
+    $('#commViewEmail').style.display = 'none';
+    $('#commViewWa').style.display = 'block';
+    $('#commViewLogs').style.display = 'none';
+  });
+
+  $('#btnCommSubLogs').addEventListener('click', () => {
+    $('#btnCommSubLogs').classList.add('active');
+    $('#btnCommSubEmail').classList.remove('active');
+    $('#btnCommSubWa').classList.remove('active');
+    $('#commViewEmail').style.display = 'none';
+    $('#commViewWa').style.display = 'none';
+    $('#commViewLogs').style.display = 'block';
+    loadEmailLogs();
+  });
+
+  $('#commBtnRefreshLogs').addEventListener('click', () => loadEmailLogs());
+
+  async function loadEmailLogs() {
+    try {
+      const data = await api('/communication/email-logs');
+      const rows = data.logs || [];
+      const body = $('#commLogsBody');
+      body.textContent = '';
+      $('#commLogsEmpty').hidden = rows.length > 0;
+
+      rows.forEach((l) => {
+        const dt = new Date(l.created_at).toLocaleString('fr-FR', {
+          dateStyle: 'short',
+          timeStyle: 'medium'
+        });
+
+        let typeLabel = l.type;
+        let typePill = 'wait';
+        if (l.type === 'test_email') {
+          typeLabel = '📧 Test Email';
+          typePill = 'on';
+        } else if (l.type === 'campaign') {
+          typeLabel = '🚀 Campagne';
+          typePill = 'on';
+        } else if (l.type && l.type.startsWith('otp_')) {
+          typeLabel = '🔐 ' + l.type.replace('otp_', 'OTP ');
+          typePill = 'src';
+        }
+
+        const statusPill = l.status === 'sent'
+          ? h('span', { className: 'pill on' }, '✅ Délivré')
+          : h('span', { className: 'pill late' }, '❌ Échec');
+
+        const respInfo = l.status === 'sent'
+          ? (l.smtp_response || '250 OK') + (l.message_id ? ' (' + l.message_id.slice(0, 25) + '...)' : '')
+          : (l.error_message || 'Erreur inconnue');
+
+        body.append(h('tr', {},
+          h('td', { className: 'num', style: 'font-size:12px' }, dt),
+          h('td', {}, h('span', { className: 'pill ' + typePill }, typeLabel)),
+          h('td', { style: 'font-weight:600' }, l.recipient),
+          h('td', { style: 'font-size:13px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, l.subject),
+          h('td', {}, statusPill),
+          h('td', { className: 'num', style: 'font-size:11.5px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: l.smtp_response || l.error_message || '' }, respInfo)
+        ));
+      });
+    } catch (e) {
+      toast('Erreur chargement logs email : ' + e.message, true);
+    }
+  }
+
+  // Chargement des données Communication
+  async function loadCommunication() {
+    try {
+      const data = await api('/communication/audiences');
+      const a = data.audiences || {};
+      $('#commStatAll').textContent = a.all || 0;
+      $('#commStatAccounts').textContent = a.accounts || 0;
+      $('#commStatActive').textContent = a.active || 0;
+      $('#commStatExpiring').textContent = a.expiring || 0;
+      updateTargetSummary();
+    } catch (e) {
+      console.warn('[comm] audiences load error', e);
+    }
+
+    try {
+      const waData = await api('/communication/whatsapp-clients');
+      allWaClients = waData.clients || [];
+      renderWaBroadcastTemplate();
+      if (!selectedWaClient && allWaClients.length > 0) {
+        selectWaClient(allWaClients[0]);
+      }
+    } catch (e) {
+      console.warn('[comm] whatsapp clients load error', e);
+    }
+  }
+
+  function updateTargetSummary() {
+    const sel = $('#commTargetSelect');
+    const txt = sel.options[sel.selectedIndex].text;
+    $('#commTargetSummary').textContent = 'Audience sélectionnée : ' + txt;
+  }
+  $('#commTargetSelect').addEventListener('change', updateTargetSummary);
+
+  // Éditeur Visuel (WYSIWYG)
+  const visualEditor = $('#commVisualEditor');
+  const htmlEditor = $('#commHtmlEditor');
+
+  function getEditorContent() {
+    return commVisualMode ? visualEditor.innerHTML : htmlEditor.value;
+  }
+
+  function setEditorContent(html) {
+    visualEditor.innerHTML = html;
+    htmlEditor.value = html;
+    updateCommPreview();
+  }
+
+  function updateCommPreview() {
+    const raw = getEditorContent();
+    const rendered = raw
+      .replace(/{PRENOM}/g, '<span style="color:#2be6ff;font-weight:700">Alexandre</span>')
+      .replace(/{NOM}/g, '<span style="color:#2be6ff;font-weight:700">Dupont</span>')
+      .replace(/{EMAIL}/g, '<span style="color:#2be6ff">alexandre.dupont@email.com</span>')
+      .replace(/{TRACKING_CODE}/g, '<code style="background:rgba(255,77,148,0.15);color:#ff9cc4;padding:2px 6px;border-radius:4px">NP-TRK-7B89E2</code>')
+      .replace(/{LIEN_COMPTE}/g, 'https://' + location.host + '/compte?trk=NP-TRK-7B89E2')
+      .replace(/{SITE_URL}/g, 'https://' + location.host);
+
+    $('#commPreviewRender').innerHTML = rendered || '<p style="color:var(--muted);text-align:center;font-style:italic">Commencez à rédiger votre contenu pour visualiser le rendu...</p>';
+  }
+
+  visualEditor.addEventListener('input', () => {
+    htmlEditor.value = visualEditor.innerHTML;
+    updateCommPreview();
+  });
+  htmlEditor.addEventListener('input', () => {
+    visualEditor.innerHTML = htmlEditor.value;
+    updateCommPreview();
+  });
+
+  // Outils de formatage
+  $('#commEditorToolbar').querySelectorAll('button[data-cmd]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      visualEditor.focus();
+      document.execCommand(btn.dataset.cmd, false, null);
+      htmlEditor.value = visualEditor.innerHTML;
+      updateCommPreview();
+    });
+  });
+
+  $('#commFormatBlock').addEventListener('change', (e) => {
+    visualEditor.focus();
+    document.execCommand('formatBlock', false, e.target.value);
+    htmlEditor.value = visualEditor.innerHTML;
+    updateCommPreview();
+  });
+
+  // Insérer un Lien
+  $('#commBtnInsertLink').addEventListener('click', () => {
+    const url = prompt('URL du lien (ex: https://...) :');
+    if (url) {
+      visualEditor.focus();
+      document.execCommand('createLink', false, url);
+      htmlEditor.value = visualEditor.innerHTML;
+      updateCommPreview();
+    }
+  });
+
+  // Insérer un Bouton d'action (CTA)
+  $('#commBtnInsertBtn').addEventListener('click', () => {
+    const text = prompt('Texte du bouton :', 'Découvrir nos offres');
+    if (!text) return;
+    const url = prompt('Lien de redirection du bouton :', 'https://' + location.host + '/compte');
+    if (!url) return;
+    const btnHtml = `<p style="text-align:center;margin:26px 0;"><a href="${escapeHtml(url)}" style="display:inline-block;background:linear-gradient(100deg,#ff4d94,#ff7fb4);color:#0a0915;font-weight:bold;text-decoration:none;padding:12px 30px;border-radius:30px;font-size:15px;box-shadow:0 6px 20px rgba(255,77,148,0.45);">${escapeHtml(text)}</a></p>`;
+    visualEditor.focus();
+    document.execCommand('insertHTML', false, btnHtml);
+    htmlEditor.value = visualEditor.innerHTML;
+    updateCommPreview();
+  });
+
+  // Insérer une image
+  $('#commBtnInsertImage').addEventListener('click', () => {
+    const url = prompt('URL publique de l\'image (https://...) :');
+    if (url) {
+      const imgHtml = `<p style="text-align:center;margin:18px 0;"><img src="${escapeHtml(url)}" alt="Visuel" style="max-width:100%;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);"></p>`;
+      visualEditor.focus();
+      document.execCommand('insertHTML', false, imgHtml);
+      htmlEditor.value = visualEditor.innerHTML;
+      updateCommPreview();
+    }
+  });
+
+  // Bascule Mode HTML / Visuel
+  $('#commToggleMode').addEventListener('click', () => {
+    commVisualMode = !commVisualMode;
+    if (commVisualMode) {
+      visualEditor.innerHTML = htmlEditor.value;
+      visualEditor.style.display = 'block';
+      htmlEditor.style.display = 'none';
+      $('#commToggleMode').textContent = 'Mode HTML </> ';
+    } else {
+      htmlEditor.value = visualEditor.innerHTML;
+      visualEditor.style.display = 'none';
+      htmlEditor.style.display = 'block';
+      $('#commToggleMode').textContent = 'Mode Visuel 👁️';
+    }
+    updateCommPreview();
+  });
+
+  // Insertion de balises dynamiques
+  document.querySelectorAll('.comm-tag-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tag = btn.dataset.tag;
+      if (commVisualMode) {
+        visualEditor.focus();
+        document.execCommand('insertText', false, tag);
+        htmlEditor.value = visualEditor.innerHTML;
+      } else {
+        const start = htmlEditor.selectionStart || htmlEditor.value.length;
+        const end = htmlEditor.selectionEnd || htmlEditor.value.length;
+        htmlEditor.value = htmlEditor.value.substring(0, start) + tag + htmlEditor.value.substring(end);
+        visualEditor.innerHTML = htmlEditor.value;
+      }
+      updateCommPreview();
+    });
+  });
+
+  // Aperçu Desktop / Mobile
+  $('#commPrevDesktopBtn').addEventListener('click', () => {
+    $('#commPrevDesktopBtn').classList.add('active');
+    $('#commPrevMobileBtn').classList.remove('active');
+    $('#commPreviewFrame').style.maxWidth = '100%';
+    $('#commPreviewFrame').style.margin = '0 auto';
+  });
+  $('#commPrevMobileBtn').addEventListener('click', () => {
+    $('#commPrevMobileBtn').classList.add('active');
+    $('#commPrevDesktopBtn').classList.remove('active');
+    $('#commPreviewFrame').style.maxWidth = '375px';
+    $('#commPreviewFrame').style.margin = '0 auto';
+  });
+
+  // Modèles prédéfinis
+  $('#btnTemplatePromo').addEventListener('click', () => {
+    $('#commSubject').value = '⚡ Vente Privilège NeonPass : -30% immédiat sur votre abonnement';
+    $('#commPreviewText').value = 'Code promo exclusif PRIVILEGE30 valable 48 heures sur tout notre catalogue...';
+    setEditorContent(`<p>Bonjour {PRENOM},</p>
+<p>Pour vous remercier de votre fidélité, nous vous offrons aujourd'hui une remise exceptionnelle de <strong>-30% immédiate</strong> sur l'ensemble de notre catalogue d'abonnements numériques.</p>
+<div style="background:rgba(255,77,148,0.1);border:1px dashed #ff4d94;border-radius:12px;padding:16px;text-align:center;margin:20px 0;">
+  <div style="font-size:12px;color:#ff9cc4;font-weight:bold;letter-spacing:1px;text-transform:uppercase;">Votre code promo exclusif</div>
+  <div style="font-size:24px;font-weight:900;color:#ffffff;letter-spacing:3px;margin:6px 0;font-family:monospace;">PRIVILEGE30</div>
+  <div style="font-size:12px;color:#d8d4f0;">Valable sur toutes les formules annuelles pendant 48 heures.</div>
+</div>
+<p style="text-align:center;margin:26px 0;"><a href="{SITE_URL}/?promo=PRIVILEGE30" style="display:inline-block;background:linear-gradient(100deg,#ff4d94,#ff7fb4);color:#0a0915;font-weight:bold;text-decoration:none;padding:12px 30px;border-radius:30px;font-size:15px;box-shadow:0 6px 20px rgba(255,77,148,0.45);">Activer ma réduction immédiate</a></p>
+<p>Besoin d'aide ou d'un conseil ? Notre équipe reste à votre écoute sur WhatsApp 7j/7.</p>`);
+    toast('Modèle Promo Flash chargé !');
+  });
+
+  $('#btnTemplateAccount').addEventListener('click', () => {
+    $('#commSubject').value = '🔐 NOUVEAUTÉ : Votre Espace Client Sécurisé NeonPass est en ligne !';
+    $('#commPreviewText').value = 'Consultez vos codes, mots de passe et abonnements 24h/24 en toute sécurité...';
+    setEditorContent(`<p>Bonjour {PRENOM},</p>
+<p>Nous avons le plaisir de vous annoncer le lancement officiel de votre <strong>Espace Client Sécurisé NeonPass</strong> !</p>
+<p>Désormais, plus besoin de chercher vos accès dans vos conversations : tout est centralisé au même endroit, 24h/24 et 7j/7.</p>
+<ul style="padding-left:20px;margin:16px 0;">
+  <li><strong>Coffre-fort d'identifiants</strong> : retrouvez vos identifiants, mots de passe et liens en 1 clic.</li>
+  <li><strong>Sécurité renforcée</strong> : validation de vos connexions par code de sécurité OTP envoyé sur votre email.</li>
+  <li><strong>Suivi de vos garanties</strong> : consultez en direct la durée restante de vos abonnements.</li>
+</ul>
+<p style="text-align:center;margin:26px 0;"><a href="{LIEN_COMPTE}" style="display:inline-block;background:linear-gradient(100deg,#00f2fe,#4facfe);color:#0a0915;font-weight:bold;text-decoration:none;padding:12px 30px;border-radius:30px;font-size:15px;box-shadow:0 6px 20px rgba(0,242,254,0.4);">Accéder à mon Espace Client</a></p>
+<p style="font-size:13px;color:#a096ff;"><em>Astuce : Votre référence de commande est <strong>{TRACKING_CODE}</strong>. Vous pouvez l'utiliser à tout moment pour rattacher vos commandes antérieures.</em></p>`);
+    toast('Modèle Espace Client chargé !');
+  });
+
+  $('#btnTemplateEvent').addEventListener('click', () => {
+    $('#commSubject').value = '🏆 Soirée Événement : Ne manquez aucun choc en direct avec NeonPass';
+    $('#commPreviewText').value = 'Formule 1, Champions League, UFC, Séries exclusives en qualité 4K UHD...';
+    setEditorContent(`<p>Bonjour {PRENOM},</p>
+<p>La saison des grands événements bat son plein ! Préparez-vous à vivre 100% des plus grandes rencontres sportives en direct et en très haute définition (4K UHD) sans la moindre coupure.</p>
+<p>Bénéficiez de la stabilité éprouvée de nos flux avec une garantie de fonctionnement 12 mois assurée par notre équipe technique.</p>
+<p style="text-align:center;margin:26px 0;"><a href="{SITE_URL}/#offres" style="display:inline-block;background:linear-gradient(100deg,#ff4d94,#ff7fb4);color:#0a0915;font-weight:bold;text-decoration:none;padding:12px 30px;border-radius:30px;font-size:15px;box-shadow:0 6px 20px rgba(255,77,148,0.45);">Découvrir les offres disponibles</a></p>
+<p>Des questions sur un service ou un bouquet spécifique ? Écrivez-nous directement sur WhatsApp pour une réponse en moins de 15 minutes.</p>`);
+    toast('Modèle Événement chargé !');
+  });
+
+  $('#btnTemplateRenew').addEventListener('click', () => {
+    $('#commSubject').value = '⏳ Rappel : Votre abonnement NeonPass arrive bientôt à échéance';
+    $('#commPreviewText').value = 'Renouvelez dès aujourd\'hui pour conserver vos accès sans la moindre coupure...';
+    setEditorContent(`<p>Bonjour {PRENOM},</p>
+<p>Votre abonnement arrive prochainement à son terme. Afin d'éviter toute interruption de vos accès et de conserver vos réglages actuels, nous vous invitons à procéder à votre renouvellement dès aujourd'hui.</p>
+<p>En tant qu'abonné fidèle, votre garantie 100% est prolongée automatiquement sans frais d'activation.</p>
+<p style="text-align:center;margin:26px 0;"><a href="{LIEN_COMPTE}" style="display:inline-block;background:linear-gradient(100deg,#ff4d94,#ff7fb4);color:#0a0915;font-weight:bold;text-decoration:none;padding:12px 30px;border-radius:30px;font-size:15px;box-shadow:0 6px 20px rgba(255,77,148,0.45);">Renouveler mon abonnement</a></p>
+<p>Une question ou un changement de formule souhaité ? Répondez simplement sur WhatsApp à ce message pour être pris en charge immédiatement.</p>`);
+    toast('Modèle Relance Expiration chargé !');
+  });
+
+  // Initialisation avec le modèle Espace Client par défaut
+  $('#btnTemplateAccount').click();
+
+  // Envoi email de test
+  $('#commBtnSendTest').addEventListener('click', async () => {
+    const testEmail = ($('#commTestEmail').value || '').trim();
+    const subject = ($('#commSubject').value || '').trim();
+    const previewText = ($('#commPreviewText').value || '').trim();
+    const contentHtml = getEditorContent().trim();
+
+    if (!testEmail) return toast('Veuillez renseigner un email de test.', true);
+    if (!subject) return toast('Veuillez renseigner l\'objet de l\'email.', true);
+    if (!contentHtml) return toast('Le contenu du message est vide.', true);
+
+    const btn = $('#commBtnSendTest');
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Envoi en cours...';
+
+    try {
+      const res = await api('/communication/test-email', {
+        method: 'POST',
+        body: { testEmail, subject, previewText, contentHtml }
+      });
+      toast(res.message || 'Email de test envoyé avec succès !');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  });
+
+  // Lancement de campagne
+  $('#commBtnSendCampaign').addEventListener('click', async () => {
+    const target = $('#commTargetSelect').value;
+    const targetText = $('#commTargetSelect').options[$('#commTargetSelect').selectedIndex].text;
+    const subject = ($('#commSubject').value || '').trim();
+    const previewText = ($('#commPreviewText').value || '').trim();
+    const contentHtml = getEditorContent().trim();
+
+    if (!subject) return toast('Veuillez renseigner l\'objet de la campagne.', true);
+    if (!contentHtml) return toast('Le contenu de la campagne est vide.', true);
+
+    if (!confirm(`🚀 Êtes-vous sûr de vouloir envoyer cette campagne email ?\n\nAudience : ${targetText}\nObjet : "${subject}"\n\nCette action va expédier les emails par lots via le serveur SMTP.`)) {
+      return;
+    }
+
+    const btn = $('#commBtnSendCampaign');
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Campagne en cours de diffusion...';
+
+    try {
+      const res = await api('/communication/send-campaign', {
+        method: 'POST',
+        body: { target, subject, previewText, contentHtml }
+      });
+      toast(res.message || 'Campagne diffusée avec succès !');
+      loadCommunication();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  });
+
+  // ================= ASSISTANT WHATSAPP CLIENTS EXISTANTS =================
+  function renderWaBroadcastTemplate() {
+    const msg = `⚡ *NEONPASS - Votre Espace Client Sécurisé est en ligne !*
+
+Bonjour,
+
+Tous vos abonnements et codes d'accès sont désormais centralisés 24h/24 dans votre nouvel Espace Client officiel NeonPass !
+
+👉 *Retrouvez vos identifiants, mots de passe et liens en 1 clic*
+👉 *Protection renforcée par validation sécurisée email (OTP)*
+👉 *Suivi de vos garanties et échéances en temps réel*
+
+👉 *Créez votre compte en 30 secondes :*
+https://${location.host}/compte
+
+🔑 *Vous avez déjà passé commande ?*
+Rattachez simplement votre référence de suivi (format NP-TRK-...) dans l'onglet "Rattacher une commande" pour faire apparaître immédiatement tous vos accès !
+
+Besoin d'aide ou de votre code de suivi ? Répondez directement à ce message.
+L'équipe NeonPass ⚡`;
+
+    $('#waBroadcastPreview').textContent = msg;
+  }
+
+  $('#waBtnCopyBroadcast').addEventListener('click', () => {
+    const text = $('#waBroadcastPreview').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      toast('Message de diffusion copié !');
+    }).catch(() => prompt('Copier le texte :', text));
+  });
+
+  function selectWaClient(c) {
+    selectedWaClient = c;
+    const name = c.name || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Client';
+    const phone = waPhone(c.phone || '');
+    const trk = c.tracking_code || '';
+    const email = c.email || '';
+    const offer = c.offer_name || 'Abonnement numérique';
+
+    $('#waSelectedClientSummary').value = `${name} (${phone ? '+' + phone : 'Sans numéro'}) · ${offer}`;
+    
+    const badgeAcc = $('#waClientHasAccountBadge');
+    badgeAcc.className = 'pill ' + (c.has_account ? 'on' : 'wait');
+    badgeAcc.textContent = c.has_account ? 'Compte Espace Client Actif' : 'Compte non créé';
+
+    const badgeTrk = $('#waClientTrkBadge');
+    badgeTrk.className = 'pill ' + (trk ? 'on' : 'off');
+    badgeTrk.textContent = trk ? `Code : ${trk}` : 'Sans code de suivi';
+
+    const activationUrl = `https://${location.host}/compte?action=register`
+      + (email ? `&email=${encodeURIComponent(email)}` : '')
+      + (phone ? `&phone=${encodeURIComponent(phone)}` : '')
+      + (c.first_name || name ? `&firstName=${encodeURIComponent(c.first_name || name)}` : '')
+      + (trk ? `&trk=${encodeURIComponent(trk)}` : '');
+
+    const firstName = c.first_name || name.split(' ')[0] || 'Client';
+    const message = `⚡ *NEONPASS - Votre Espace Client Sécurisé est disponible !*
+
+Bonjour ${firstName},
+
+Pour vous offrir un service toujours plus rapide et sécurisé, tous vos abonnements et codes d'accès sont désormais centralisés 24h/24 dans votre nouvel Espace Client NeonPass.
+
+👉 *Vos identifiants & mots de passe en 1 clic*
+👉 *Validation sécurisée par code de sécurité email*
+👉 *Suivi de vos garanties et échéances 24/7*
+
+👉 *Pour activer votre compte en 30 secondes :*
+${activationUrl}
+
+${trk ? `Votre référence de commande :\n🔑 Code de suivi : *${trk}*\n\n(Si vous avez déjà créé votre compte, collez simplement ce code dans l'onglet "Rattacher une commande").` : ''}
+
+Besoin d'aide ? Notre support reste disponible ici même sur WhatsApp.
+L'équipe NeonPass ⚡`;
+
+    $('#waMessagePreview').textContent = message;
+
+    const directWaBtn = $('#waBtnDirectOpen');
+    if (phone) {
+      directWaBtn.hidden = false;
+      directWaBtn.href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    } else {
+      directWaBtn.hidden = true;
+    }
+
+    $('#waBtnCopyLink').onclick = () => {
+      navigator.clipboard.writeText(activationUrl).then(() => {
+        toast('Lien direct d\'activation copié !');
+      }).catch(() => prompt('Lien direct :', activationUrl));
+    };
+
+    $('#waBtnCopyMsg').onclick = () => {
+      navigator.clipboard.writeText(message).then(() => {
+        toast('Message WhatsApp personnalisé copié !');
+      }).catch(() => prompt('Message WhatsApp :', message));
+    };
+  }
+
+  // Recherche dynamique de clients pour l'assistant WhatsApp
+  const waSearchInp = $('#waClientSearchInp');
+  const waPickerList = $('#waClientPickerList');
+
+  waSearchInp.addEventListener('input', () => {
+    const q = waSearchInp.value.trim().toLowerCase();
+    if (!q) {
+      waPickerList.style.display = 'none';
+      return;
+    }
+    const filtered = allWaClients.filter((c) => {
+      const name = (c.name || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const trk = (c.tracking_code || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q) || trk.includes(q);
+    });
+
+    waPickerList.textContent = '';
+    if (!filtered.length) {
+      waPickerList.innerHTML = '<div style="padding:10px;font-size:12px;color:var(--muted)">Aucun client correspondant.</div>';
+    } else {
+      filtered.slice(0, 15).forEach((c) => {
+        const item = document.createElement('div');
+        item.style.padding = '8px 12px';
+        item.style.cursor = 'pointer';
+        item.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+        item.style.fontSize = '12px';
+        item.innerHTML = `<strong style="color:#fff">${escapeHtml(c.name || 'Client')}</strong> <span style="color:var(--cyan)">${escapeHtml(c.phone || '')}</span> <span style="color:var(--muted)">${escapeHtml(c.tracking_code || '')}</span>`;
+        item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.08)'; });
+        item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+        item.addEventListener('click', () => {
+          selectWaClient(c);
+          waPickerList.style.display = 'none';
+          waSearchInp.value = c.name || c.phone || '';
+        });
+        waPickerList.appendChild(item);
+      });
+    }
+    waPickerList.style.display = 'block';
+  });
+
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
     const pName = t.dataset.panel;
-    ['orders', 'renewals', 'accounts', 'clients', 'offers', 'reviews', 'promos', 'sales', 'settings', 'security', 'audit'].forEach((p) => {
+    ['orders', 'renewals', 'accounts', 'clients', 'communication', 'offers', 'reviews', 'promos', 'sales', 'settings', 'security', 'audit'].forEach((p) => {
       const el = $('#panel-' + p);
       if (el) el.hidden = p !== pName;
     });
+    if (pName === 'communication') loadCommunication().catch((e) => toast(e.message, true));
     if (pName === 'accounts') loadAccounts().catch((e) => toast(e.message, true));
     if (pName === 'clients') loadClients().catch((e) => toast(e.message, true));
     if (pName === 'sales') loadSales().catch((e) => toast(e.message, true));
@@ -3820,7 +4874,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadBackupStats(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadCommunication(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadBackupStats(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>

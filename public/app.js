@@ -34,6 +34,22 @@
   const euro = (n) => num(n) + ' €';
   const waLink = (msg) => 'https://wa.me/' + CFG.waNumber + '?text=' + encodeURIComponent(msg);
 
+  // ---------- Parrainage : Détection automatique (?ref=... ou ?parrain=...) ----------
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref') || urlParams.get('parrain');
+    if (refCode) {
+      const cleanRef = String(refCode).trim().toUpperCase();
+      if (cleanRef.length >= 4 && cleanRef.length <= 32) {
+        localStorage.setItem('np_ref', cleanRef);
+        sessionStorage.setItem('np_ref', cleanRef);
+        setTimeout(() => {
+          toast('🎁 Parrainage activé (' + cleanRef + ') ! Bienvenue sur NeonPass.');
+        }, 800);
+      }
+    }
+  } catch (e) {}
+
   // ---------- Toast ----------
   let toastTimer;
   function toast(msg, isError) {
@@ -55,6 +71,11 @@
     if (!clientPhone) {
       try { clientPhone = sessionStorage.getItem('np_phone') || ''; } catch (e) {}
     }
+    let refCode = '';
+    try {
+      refCode = localStorage.getItem('np_ref') || sessionStorage.getItem('np_ref') || '';
+    } catch (e) {}
+
     const popup = window.open('', '_blank'); // ouvert tout de suite pour éviter le blocage
     try {
       const r = await fetch('/api/orders', {
@@ -65,6 +86,7 @@
           name: clientName,
           phone: clientPhone,
           affiliation: affiliation || '',
+          referralCode: refCode,
           promoCode: PROMO ? PROMO.code : ''
         })
       });
@@ -198,37 +220,40 @@
     }
   }
 
-  $('rvClose').addEventListener('click', () => $('rvDlg').close());
-  $('rvDlg').addEventListener('click', (e) => { if (e.target === $('rvDlg')) $('rvDlg').close(); });
+  if ($('rvClose')) $('rvClose').addEventListener('click', () => $('rvDlg') && $('rvDlg').close());
+  if ($('rvDlg')) $('rvDlg').addEventListener('click', (e) => { if (e.target === $('rvDlg')) $('rvDlg').close(); });
 
-  $('rvForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!rvOffer) return;
-    const checked = $('rvForm').querySelector('input[name="rating"]:checked');
-    const body = { rating: checked ? Number(checked.value) : 0, author: $('rvAuthor').value, comment: $('rvComment').value };
-    if (!body.rating) return toast('Choisis une note en cliquant sur les étoiles.', true);
-    const btn = $('rvSubmit');
-    btn.setAttribute('aria-disabled', 'true');
-    try {
-      const r = await fetch('/api/offers/' + rvOffer.id + '/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || "L'envoi a échoué.");
-      $('rvDlg').close();
-      toast(data.message || 'Merci pour ton avis !');
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      btn.removeAttribute('aria-disabled');
-    }
-  });
+  if ($('rvForm')) {
+    $('rvForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!rvOffer) return;
+      const checked = $('rvForm').querySelector('input[name="rating"]:checked');
+      const body = { rating: checked ? Number(checked.value) : 0, author: $('rvAuthor') ? $('rvAuthor').value : '', comment: $('rvComment') ? $('rvComment').value : '' };
+      if (!body.rating) return toast('Choisis une note en cliquant sur les étoiles.', true);
+      const btn = $('rvSubmit');
+      if (btn) btn.setAttribute('aria-disabled', 'true');
+      try {
+        const r = await fetch('/api/offers/' + rvOffer.id + '/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "L'envoi a échoué.");
+        if ($('rvDlg')) $('rvDlg').close();
+        toast(data.message || 'Merci pour ton avis !');
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        if (btn) btn.removeAttribute('aria-disabled');
+      }
+    });
+  }
 
   function renderGrid() {
-    const list = OFFERS.filter((o) => current === 'all' || o.category === current);
     const grid = $('grid');
+    if (!grid) return;
+    const list = OFFERS.filter((o) => current === 'all' || o.category === current);
     if (!list.length) {
       grid.innerHTML = '<p class="muted">Aucune offre dans cette catégorie pour le moment.</p>';
       return;
@@ -245,9 +270,11 @@
   }
 
   function renderTabs() {
+    const el = $('tabs');
+    if (!el) return;
     const cats = Object.keys(LABELS).filter((k) => OFFERS.some((o) => o.category === k));
     const tabs = [['all', 'Tout']].concat(cats.map((k) => [k, LABELS[k]]));
-    $('tabs').innerHTML = tabs
+    el.innerHTML = tabs
       .map(([k, label]) => '<button class="tab" role="tab" type="button" data-k="' + k + '" aria-selected="' + (k === current) + '">' + esc(label) + '</button>')
       .join('');
   }
@@ -257,6 +284,7 @@
   let raf = 0;
   function animateTotal(to) {
     const el = $('rcTotal');
+    if (!el) return;
     cancelAnimationFrame(raf);
     if (reduceMotion) { el.textContent = euro(to); shown = to; return; }
     const from = shown;
@@ -277,7 +305,9 @@
   }
 
   function renderChips() {
-    $('chips').innerHTML = composable()
+    const el = $('chips');
+    if (!el) return;
+    el.innerHTML = composable()
       .map((o) => {
         const p = Number(o.price);
         const d = durLabel(o.durationMonths || 12);
@@ -288,43 +318,49 @@
   }
 
   function updateComposer() {
+    const rcList = $('rcList');
+    if (!rcList) return;
     const items = composable().filter((o) => picked.has(o.id));
     const sum = items.reduce((s, o) => s + Number(o.price), 0);
-    const discount = items.length >= CFG.discountMin && CFG.discountPct > 0;
-    let t = discount ? sum * (1 - CFG.discountPct / 100) : sum;
+    const dMin = CFG.discountMin || 3;
+    const dPct = CFG.discountPct || 10;
+    const discount = items.length >= dMin && dPct > 0;
+    let t = discount ? sum * (1 - dPct / 100) : sum;
     if (PROMO) t = t * (1 - PROMO.pct / 100);
     const total = Math.round(t * 100) / 100;
-    $('rcList').innerHTML = items.length
+    rcList.innerHTML = items.length
       ? items.map((o) => {
           const d = durLabel(o.durationMonths || 12);
           return '<li><span>' + esc(o.name) + ' <small style="color:var(--muted)">(' + esc(d) + ')</small></span><span>' + esc(euro(Number(o.price))) + '</span></li>';
         }).join('')
       : '<li class="empty">Sélectionne au moins un service.</li>';
     const parts = [];
-    if (discount) parts.push('Remise pack −' + CFG.discountPct + ' %');
-    else if (items.length && CFG.discountPct > 0) parts.push('Ajoute ' + (CFG.discountMin - items.length) + ' service(s) pour la remise de ' + CFG.discountPct + ' %');
+    if (discount) parts.push('Remise pack −' + dPct + ' %');
+    else if (items.length && dPct > 0) parts.push('Ajoute ' + (dMin - items.length) + ' service(s) pour la remise de ' + dPct + ' %');
     if (PROMO && items.length) parts.push('code ' + PROMO.code + ' −' + PROMO.pct + ' %');
-    $('rcDisc').textContent = parts.join(' · ') + (items.length && sum > total ? ' (−' + euro(Math.round((sum - total) * 100) / 100) + ')' : '');
+    if ($('rcDisc')) $('rcDisc').textContent = parts.join(' · ') + (items.length && sum > total ? ' (−' + euro(Math.round((sum - total) * 100) / 100) + ')' : '');
     const rcTotLbl = $('rcTotalLabel');
     if (rcTotLbl) rcTotLbl.textContent = 'Total commande';
     animateTotal(total);
-    $('rcBtn').setAttribute('aria-disabled', items.length ? 'false' : 'true');
-    const msg =
-      'Bonjour, je souhaite composer ce pack : ' +
-      items.map((o) => o.name + ' (' + durLabel(o.durationMonths || 12) + ')').join(' + ') +
-      '. Total : ' + euro(total) + '.' + DEMO_TAIL;
-    $('rcBtn').href = items.length ? waLink(msg) : '#';
+    if ($('rcBtn')) {
+      $('rcBtn').setAttribute('aria-disabled', items.length ? 'false' : 'true');
+      const msg =
+        'Bonjour, je souhaite composer ce pack : ' +
+        items.map((o) => o.name + ' (' + durLabel(o.durationMonths || 12) + ')').join(' + ') +
+        '. Total : ' + euro(total) + '.' + DEMO_TAIL;
+      $('rcBtn').href = items.length ? waLink(msg) : '#';
+    }
   }
 
   // ---------- Code promo ----------
   function setPromo(p) {
     PROMO = p;
-    $('promoForm').hidden = !!p;
-    $('promoOk').hidden = !p;
-    $('promoBanner').hidden = !p;
+    if ($('promoForm')) $('promoForm').hidden = !!p;
+    if ($('promoOk')) $('promoOk').hidden = !p;
+    if ($('promoBanner')) $('promoBanner').hidden = !p;
     if (p) {
-      $('promoOkText').textContent = '✓ ' + p.code + ' : −' + p.pct + ' %';
-      $('promoBanner').textContent = '✓ Code ' + p.code + ' actif : −' + p.pct + ' % sur ta commande';
+      if ($('promoOkText')) $('promoOkText').textContent = '✓ ' + p.code + ' : −' + p.pct + ' %';
+      if ($('promoBanner')) $('promoBanner').textContent = '✓ Code ' + p.code + ' actif : −' + p.pct + ' % sur ta commande';
     }
     try { p ? sessionStorage.setItem('np_promo', p.code) : sessionStorage.removeItem('np_promo'); } catch (e) {}
     updateComposer();
@@ -347,41 +383,50 @@
     }
   }
 
-  $('promoForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const code = $('promoInput').value.trim();
-    if (!code) return toast('Saisis un code promo.', true);
-    checkPromo(code, false);
-  });
-  $('promoRemove').addEventListener('click', () => {
-    $('promoInput').value = '';
-    setPromo(null);
-    // Retire ?promo=… de l'URL pour qu'il ne revienne pas au rechargement
-    try {
-      const u = new URL(location.href);
-      if (u.searchParams.has('promo')) { u.searchParams.delete('promo'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
-    } catch (e) {}
-    toast('Code promo retiré.');
-  });
+  if ($('promoForm')) {
+    $('promoForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const code = $('promoInput') ? $('promoInput').value.trim() : '';
+      if (!code) return toast('Saisis un code promo.', true);
+      checkPromo(code, false);
+    });
+  }
+  if ($('promoRemove')) {
+    $('promoRemove').addEventListener('click', () => {
+      if ($('promoInput')) $('promoInput').value = '';
+      setPromo(null);
+      // Retire ?promo=… de l'URL pour qu'il ne revienne pas au rechargement
+      try {
+        const u = new URL(location.href);
+        if (u.searchParams.has('promo')) { u.searchParams.delete('promo'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
+      } catch (e) {}
+      toast('Code promo retiré.');
+    });
+  }
 
   // ---------- Initialisation ----------
   function setWaLinks() {
     const href = waLink('Bonjour, j\'ai une question sur vos offres.' + DEMO_TAIL);
-    $('navWa').href = href;
-    $('floatWa').href = href;
+    if ($('navWa')) $('navWa').href = href;
+    if ($('floatWa')) $('floatWa').href = href;
   }
 
   function renderStats() {
     const cnt = $('statCount');
-    cnt.dataset.count = OFFERS.length;
-    cnt.textContent = OFFERS.length;
+    if (cnt) {
+      cnt.dataset.count = OFFERS.length;
+      cnt.textContent = OFFERS.length;
+    }
     if (OFFERS.length) {
       const min = Math.floor(Math.min(...OFFERS.map((o) => o.price)));
       const m = $('statMin');
-      m.dataset.count = min;
-      m.textContent = min;
+      if (m) {
+        m.dataset.count = min;
+        m.textContent = min;
+      }
     }
-    $('offerWord').textContent = OFFERS.length > 1 ? 'offres disponibles' : 'offre disponible';
+    const ow = $('offerWord');
+    if (ow) ow.textContent = OFFERS.length > 1 ? 'offres disponibles' : 'offre disponible';
   }
 
   async function init() {
@@ -390,23 +435,29 @@
         fetch('/api/config').then((r) => r.json()),
         fetch('/api/offers').then((r) => r.json())
       ]);
-      CFG = cfg;
-      OFFERS = offers;
+      CFG = cfg || {};
+      OFFERS = Array.isArray(offers) ? offers : [];
     } catch (e) {
-      $('grid').innerHTML = '<p class="muted">Le catalogue est momentanément indisponible. Réessaie dans un instant.</p>';
+      console.error('Erreur chargement catalogue:', e);
+      if ($('grid')) $('grid').innerHTML = '<div style="text-align:center;padding:30px;"><p class="muted">Le catalogue est momentanément indisponible. Réessaie dans un instant.</p><button type="button" class="btn btn-outline" style="margin-top:12px;" onclick="location.reload()">Réessayer</button></div>';
       toast('Impossible de charger le catalogue.', true);
       return;
     }
-    setWaLinks();
-    renderStats();
-    renderTicker();
-    renderTabs();
-    renderGrid();
-    OFFERS.filter((o) => !o.isPack).slice(0, 2).forEach((o) => picked.add(o.id));
-    renderChips();
-    $('rcTotal').textContent = euro(0);
-    updateComposer();
-    setupCounters();
+
+    try { setWaLinks(); } catch (e) { console.error('setWaLinks', e); }
+    try { renderStats(); } catch (e) { console.error('renderStats', e); }
+    try { renderTicker(); } catch (e) { console.error('renderTicker', e); }
+    try { renderTabs(); } catch (e) { console.error('renderTabs', e); }
+    try { renderGrid(); } catch (e) { console.error('renderGrid', e); }
+
+    try {
+      OFFERS.filter((o) => !o.isPack).slice(0, 2).forEach((o) => picked.add(o.id));
+      renderChips();
+      if ($('rcTotal')) $('rcTotal').textContent = euro(0);
+      updateComposer();
+      setupCounters();
+    } catch (e) { console.error('composer setup', e); }
+
     // Restauration nom et téléphone saisis
     try {
       const savedName = sessionStorage.getItem('np_name');
@@ -425,60 +476,72 @@
       });
     }
     // Code promo : depuis l'URL (?promo=CODE) ou conservé pendant la session
-    let saved = new URLSearchParams(location.search).get('promo');
-    if (!saved) { try { saved = sessionStorage.getItem('np_promo'); } catch (e) {} }
-    if (saved) checkPromo(saved, !new URLSearchParams(location.search).get('promo'));
+    try {
+      let saved = new URLSearchParams(location.search).get('promo');
+      if (!saved) { try { saved = sessionStorage.getItem('np_promo'); } catch (e) {} }
+      if (saved) checkPromo(saved, !new URLSearchParams(location.search).get('promo'));
+    } catch (e) {}
   }
 
   // ---------- Événements ----------
-  $('tabs').addEventListener('click', (e) => {
-    const b = e.target.closest('.tab');
-    if (!b) return;
-    current = b.dataset.k;
-    $('tabs').querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', t === b));
-    renderGrid();
-  });
+  if ($('tabs')) {
+    $('tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('.tab');
+      if (!b) return;
+      current = b.dataset.k;
+      $('tabs').querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', t === b));
+      renderGrid();
+    });
+  }
 
-  $('grid').addEventListener('click', (e) => {
-    const rvb = e.target.closest('.rating-row');
-    if (rvb) { openReviews(Number(rvb.dataset.reviews)); return; }
-    const t = e.target.closest('.affil-toggle');
-    if (t) {
-      const inp = document.getElementById(t.getAttribute('aria-controls'));
-      const open = inp.hidden;
-      inp.hidden = !open;
-      t.setAttribute('aria-expanded', String(open));
-      t.textContent = open ? '− Affiliation' : '+ Affiliation';
-      if (open) inp.focus();
-      return;
-    }
-    const b = e.target.closest('.order-btn');
-    if (!b) return;
-    e.preventDefault();
-    const affil = b.closest('.card').querySelector('.affil-input').value.trim();
-    const name = $('rcName') ? $('rcName').value.trim() : '';
-    const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
-    placeOrder([Number(b.dataset.id)], name, affil, phone);
-  });
+  if ($('grid')) {
+    $('grid').addEventListener('click', (e) => {
+      const rvb = e.target.closest('.rating-row');
+      if (rvb) { openReviews(Number(rvb.dataset.reviews)); return; }
+      const t = e.target.closest('.affil-toggle');
+      if (t) {
+        const inp = document.getElementById(t.getAttribute('aria-controls'));
+        if (!inp) return;
+        const open = inp.hidden;
+        inp.hidden = !open;
+        t.setAttribute('aria-expanded', String(open));
+        t.textContent = open ? '− Affiliation' : '+ Affiliation';
+        if (open) inp.focus();
+        return;
+      }
+      const b = e.target.closest('.order-btn');
+      if (!b) return;
+      e.preventDefault();
+      const card = b.closest('.card');
+      const affil = (card && card.querySelector('.affil-input')) ? card.querySelector('.affil-input').value.trim() : '';
+      const name = $('rcName') ? $('rcName').value.trim() : '';
+      const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
+      placeOrder([Number(b.dataset.id)], name, affil, phone);
+    });
+  }
 
-  $('chips').addEventListener('click', (e) => {
-    const b = e.target.closest('.chip');
-    if (!b) return;
-    const id = Number(b.dataset.id);
-    if (picked.has(id)) picked.delete(id);
-    else picked.add(id);
-    b.setAttribute('aria-pressed', picked.has(id));
-    updateComposer();
-  });
+  if ($('chips')) {
+    $('chips').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip');
+      if (!b) return;
+      const id = Number(b.dataset.id);
+      if (picked.has(id)) picked.delete(id);
+      else picked.add(id);
+      b.setAttribute('aria-pressed', picked.has(id));
+      updateComposer();
+    });
+  }
 
-  $('rcBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    if ($('rcBtn').getAttribute('aria-disabled') === 'true') return;
-    const name = $('rcName') ? $('rcName').value.trim() : '';
-    const affil = $('rcAffil') ? $('rcAffil').value.trim() : '';
-    const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
-    placeOrder([...picked], name, affil, phone);
-  });
+  if ($('rcBtn')) {
+    $('rcBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if ($('rcBtn').getAttribute('aria-disabled') === 'true') return;
+      const name = $('rcName') ? $('rcName').value.trim() : '';
+      const affil = $('rcAffil') ? $('rcAffil').value.trim() : '';
+      const phone = $('rcPhone') ? $('rcPhone').value.trim() : '';
+      placeOrder([...picked], name, affil, phone);
+    });
+  }
 
   init();
 })();

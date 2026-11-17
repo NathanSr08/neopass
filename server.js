@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 const { spawn } = require('child_process');
+const nodemailer = require('nodemailer');
 
 // ---------- Configuration ----------
 const PORT = Number(process.env.PORT) || 3000;
@@ -18,7 +19,16 @@ const PAYMENT_METHODS = ['', 'revolut', 'usdt', 'btc', 'eth', 'especes', 'vireme
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
-const SITE_URL = 'https://' + (process.env.DOMAIN || 'neonpass.uned.live');
+const DOMAIN = process.env.DOMAIN || 'neonpass.uned.live';
+const SITE_URL = 'https://' + DOMAIN;
+
+// Configuration SMTP (Emails transactionnels & OTP)
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 465;
+const SMTP_SECURE = process.env.SMTP_SECURE !== 'false';
+const SMTP_USER = process.env.SMTP_USER || 'neonpass.officiel@gmail.com';
+const SMTP_PASS = process.env.SMTP_PASS || 'mrsbklwwfjmmiuvq';
+const SMTP_FROM = process.env.SMTP_FROM || '"NeonPass" <neonpass.officiel@gmail.com>';
 
 function fatal(msg) {
   console.error('[config] ' + msg);
@@ -63,6 +73,11 @@ function generateTrackingCode(prefix = 'NP-TRK') {
 function generateClientCode() {
   const bytes = crypto.randomBytes(6).toString('hex').toUpperCase();
   return `NP-CLI-${bytes.slice(0, 4)}-${bytes.slice(4, 8)}-${bytes.slice(8, 12)}`;
+}
+
+function generateReferralCode() {
+  const bytes = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `NP-REF-${bytes}`;
 }
 
 // ---------- Notifications admin (Telegram / Discord) ----------
@@ -182,6 +197,535 @@ function readCookieValue(req, name) {
 function setAdminCookie(res, token, maxAgeSec) {
   res.append('Set-Cookie', ADMIN_COOKIE + '=' + encodeURIComponent(token) +
     '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=' + maxAgeSec);
+}
+
+// ---------- Sécurité Client & Espace Mon Compte ----------
+const CLIENT_COOKIE = 'np_client_session';
+const CLIENT_DEVICE_COOKIE = 'np_device_id';
+const CLIENT_SESSION_DAYS = 30;
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normEmail(val) {
+  return String(val || '').trim().toLowerCase();
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return `${salt}:${derived}`;
+}
+
+function verifyPassword(password, storedHash) {
+  if (!storedHash || typeof storedHash !== 'string' || !storedHash.includes(':')) return false;
+  const [salt, key] = storedHash.split(':');
+  if (!salt || !key) return false;
+  try {
+    const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(derived, 'hex'), Buffer.from(key, 'hex'));
+  } catch (e) {
+    return false;
+  }
+}
+
+function generateOtpCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtpCode(code) {
+  return crypto.createHash('sha256').update(String(code).trim()).digest('hex');
+}
+
+function setClientSessionCookie(res, token, maxAgeSec = CLIENT_SESSION_DAYS * 86400) {
+  res.append('Set-Cookie', `${CLIENT_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeSec}`);
+}
+
+function clearClientSessionCookie(res) {
+  res.append('Set-Cookie', `${CLIENT_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+}
+
+function getOrSetDeviceId(req, res) {
+  let deviceId = readCookieValue(req, CLIENT_DEVICE_COOKIE);
+  if (!deviceId || deviceId.length < 16) {
+    deviceId = crypto.randomBytes(24).toString('hex');
+    res.append('Set-Cookie', `${CLIENT_DEVICE_COOKIE}=${encodeURIComponent(deviceId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${365 * 86400}`);
+  }
+  return deviceId;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const parts = String(forwarded).split(',');
+    if (parts.length && parts[0].trim()) return parts[0].trim();
+  }
+  return req.ip || (req.connection && req.connection.remoteAddress) || '127.0.0.1';
+}
+
+function getClientDeviceInfo(userAgent) {
+  const ua = String(userAgent || '');
+  let os = 'Appareil';
+  if (/windows/i.test(ua)) os = 'Windows PC';
+  else if (/macintosh|mac os x/i.test(ua)) os = 'Mac';
+  else if (/iphone/i.test(ua)) os = 'iPhone';
+  else if (/ipad/i.test(ua)) os = 'iPad';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  let browser = 'Navigateur web';
+  if (/chrome|crios/i.test(ua) && !/edg/i.test(ua)) browser = 'Chrome';
+  else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
+  else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+  else if (/edg/i.test(ua)) browser = 'Edge';
+
+  return `${browser} (${os})`;
+}
+
+const mailTransporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_SECURE,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS
+  },
+  pool: true,
+  maxConnections: 3,
+  timeout: 15000
+});
+
+async function logEmailSent({ type, recipient, subject, status, messageId, smtpResponse, errorMessage }) {
+  const ts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    dateStyle: 'short',
+    timeStyle: 'medium'
+  }).format(new Date());
+
+  console.log(`[mail-log] ${ts} | status=${status} | type=${type} | to=${recipient} | subject="${subject}" | resp="${smtpResponse || ''}" | id=${messageId || ''}`);
+  try {
+    await pool.query(
+      `INSERT INTO email_logs (type, recipient, subject, status, message_id, smtp_response, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [type || 'generic', recipient || '', subject || '', status || 'sent', messageId || '', smtpResponse || '', errorMessage || '']
+    );
+  } catch (err) {
+    console.error('[email_logs error]', err.message);
+  }
+}
+
+async function sendOtpEmail({ email, code, purpose, ip, userAgent, firstName }) {
+  let subject = '';
+  let title = '';
+  let description = '';
+  let extraHtml = '';
+  const greeting = firstName ? `Bonjour ${escapeHtml(firstName)},` : 'Bonjour,';
+
+  if (purpose === 'register') {
+    subject = `🔐 Code de confirmation NeonPass : ${code}`;
+    title = 'Activation de votre compte client';
+    description = `${greeting}<br><br>Bienvenue sur <strong>NeonPass</strong> ! Pour finaliser la création de votre compte client et sécuriser vos accès, veuillez saisir votre code de confirmation :`;
+  } else if (purpose === 'suspicious_login') {
+    subject = `⚠️ Sécurité NeonPass : Code de validation de connexion (${code})`;
+    title = 'Nouvel appareil ou connexion inhabituelle';
+    const deviceInfo = getClientDeviceInfo(userAgent);
+    const dateFormatted = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris',
+      dateStyle: 'long',
+      timeStyle: 'medium'
+    }).format(new Date());
+
+    description = `${greeting}<br><br>Nous avons détecté une tentative de connexion à votre compte client depuis un nouvel appareil ou une adresse IP non reconnue.`;
+    extraHtml = `
+      <div style="background:rgba(255,77,148,0.08);border:1px solid rgba(255,77,148,0.25);border-radius:12px;padding:14px 16px;margin:18px 0 20px;text-align:left;font-size:12.5px;color:#d8d4f0;line-height:1.6;">
+        <div style="font-weight:700;color:#ff9cc4;margin-bottom:6px;">⚠️ Détails de la connexion :</div>
+        <div>• <strong>Date & Heure</strong> : ${dateFormatted} (Paris)</div>
+        <div>• <strong>Adresse IP</strong> : <code style="font-family:monospace;color:#ff7fb4;background:rgba(255,77,148,0.14);padding:2px 6px;border-radius:4px;">${escapeHtml(ip || 'Inconnue')}</code></div>
+        <div>• <strong>Terminal détecté</strong> : ${escapeHtml(deviceInfo)}</div>
+      </div>
+      <p style="margin:0 0 16px;font-size:13.5px;color:#efecff;line-height:1.5;">Pour autoriser cette connexion et sécuriser votre compte, saisissez le code suivant :</p>
+    `;
+  } else if (purpose === 'reset_password') {
+    subject = `🔑 Réinitialisation de votre mot de passe NeonPass : ${code}`;
+    title = 'Réinitialisation de mot de passe';
+    description = `${greeting}<br><br>Une demande de réinitialisation de mot de passe a été effectuée pour votre compte client. Saisissez ce code pour définir votre nouveau mot de passe :`;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080712;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;background:#121026;border:1px solid rgba(255,77,148,0.3);border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,0.65);">
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#ff4d94,#ff7fb4,#8e54ff);"></td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 24px 20px;border-bottom:1px solid rgba(160,150,255,0.12);">
+              <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;font-family:'Unbounded',system-ui,sans-serif;">Neon<span style="color:#ff4d94;font-weight:900;">Pass</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 28px 24px;color:#efecff;text-align:center;">
+              <h1 style="margin:0 0 14px;font-size:20px;font-weight:700;color:#ffffff;line-height:1.3;">${title}</h1>
+              <div style="font-size:14px;line-height:1.6;color:#a8a5cf;text-align:left;">
+                ${description}
+              </div>
+              ${extraHtml}
+              <div style="background:linear-gradient(135deg, rgba(255,77,148,0.12), rgba(142,84,255,0.08));border:2px solid #ff4d94;border-radius:14px;padding:18px 12px;margin:22px 0;text-align:center;box-shadow:0 0 25px rgba(255,77,148,0.22);">
+                <span style="font-family:Consolas,'Liberation Mono',Menlo,Courier,monospace;font-size:36px;font-weight:800;letter-spacing:12px;color:#ff4d94;text-shadow:0 0 14px rgba(255,77,148,0.45);display:inline-block;padding-left:12px;">${code}</span>
+              </div>
+              <p style="margin:0 0 12px;font-size:12.5px;color:#8f8ba8;line-height:1.5;">
+                Ce code expire dans <strong>10 minutes</strong> et ne doit jamais être communiqué à un tiers.
+              </p>
+              ${purpose === 'suspicious_login' ? '<p style="margin:0;font-size:12px;color:#ff9cc4;line-height:1.4;">Si vous n\'avez pas tenté de vous connecter, nous vous conseillons de changer votre mot de passe sans attendre.</p>' : ''}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 24px;border-top:1px solid rgba(160,150,255,0.1);background:#0d0b1c;font-size:11.5px;color:#7a7698;line-height:1.6;">
+              NeonPass · Vos abonnements numériques en toute sérénité<br>
+              <a href="${SITE_URL}" style="color:#ff7fb4;text-decoration:none;font-weight:600;">${escapeHtml(DOMAIN)}</a> · <a href="${SITE_URL}/compte" style="color:#ff7fb4;text-decoration:none;font-weight:600;">Mon Espace Client</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+NeonPass - ${title}
+
+${description.replace(/<br>/g, '\n').replace(/<[^>]+>/g, '')}
+
+VOTRE CODE DE SÉCURITÉ : ${code}
+(Valable pendant 10 minutes)
+
+NeonPass · Plateforme sécurisée d'abonnements numériques
+${SITE_URL}
+  `.trim();
+
+  try {
+    const info = await mailTransporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      text,
+      html
+    });
+    console.log(`[mail] Code OTP envoyé avec succès à ${email} (motif: ${purpose}, id: ${info.messageId})`);
+    await logEmailSent({
+      type: 'otp_' + purpose,
+      recipient: email,
+      subject,
+      status: 'sent',
+      messageId: info.messageId,
+      smtpResponse: info.response
+    });
+  } catch (err) {
+    console.error(`[mail] Échec envoi OTP à ${email}:`, err.message);
+    await logEmailSent({
+      type: 'otp_' + purpose,
+      recipient: email,
+      subject,
+      status: 'failed',
+      errorMessage: err.message
+    });
+    throw new HttpError(500, 'Impossible d\'envoyer le code par email pour le moment. Veuillez réessayer dans quelques instants.');
+  }
+}
+
+async function sendReferralRewardEmail({ email, name, promoCode, confirmedCount }) {
+  const subject = `🎁 Félicitations ! Votre code promo -50% NeonPass est débloqué : ${promoCode}`;
+  const greeting = name ? `Bonjour ${escapeHtml(name)},` : 'Bonjour,';
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080712;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;background:#121026;border:1px solid rgba(255,77,148,0.3);border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,0.65);">
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#ff4d94,#ff7fb4,#8e54ff);"></td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 24px 20px;border-bottom:1px solid rgba(160,150,255,0.12);">
+              <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;font-family:'Unbounded',system-ui,sans-serif;">Neon<span style="color:#ff4d94;font-weight:900;">Pass</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 28px 24px;color:#efecff;text-align:center;">
+              <div style="display:inline-block;padding:6px 14px;border-radius:20px;background:rgba(255,77,148,0.15);border:1px solid #ff4d94;color:#ff9cc4;font-size:12px;font-weight:700;margin-bottom:14px;">
+                🎉 PROGRAMME DE PARRAINAGE RÉCOMPENSÉ
+              </div>
+              <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;color:#ffffff;line-height:1.3;">Bravo ! Vous avez atteint 5 commandes validées !</h1>
+              <div style="font-size:14px;line-height:1.6;color:#a8a5cf;text-align:left;margin-bottom:20px;">
+                ${greeting}<br><br>
+                Grâce à votre lien de parrainage, <strong>${confirmedCount} commande(s) d'abonnements</strong> ont été validées avec succès sur NeonPass.<br><br>
+                Pour vous remercier de votre recommandation, voici votre <strong>code promo exclusif de -50%</strong> valable sur n'importe quel produit du catalogue :
+              </div>
+              <div style="background:linear-gradient(135deg, rgba(255,77,148,0.15), rgba(142,84,255,0.12));border:2px solid #ff4d94;border-radius:14px;padding:18px 12px;margin:22px 0;text-align:center;box-shadow:0 0 30px rgba(255,77,148,0.3);">
+                <div style="font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#ff9cc4;font-weight:700;margin-bottom:6px;">VOTRE CODE PROMO EXCLUSIF -50%</div>
+                <span style="font-family:Consolas,'Liberation Mono',Menlo,Courier,monospace;font-size:30px;font-weight:800;letter-spacing:4px;color:#ff4d94;text-shadow:0 0 14px rgba(255,77,148,0.5);">${escapeHtml(promoCode)}</span>
+              </div>
+              <div style="margin-top:24px;">
+                <a href="${SITE_URL}/#offres" style="display:inline-block;padding:14px 30px;background:linear-gradient(135deg,#ff4d94,#ff7fb4);color:#080712;font-weight:800;text-decoration:none;border-radius:30px;font-size:14px;box-shadow:0 6px 20px rgba(255,77,148,0.4);">
+                  🛍️ Utiliser mes -50% sur la boutique
+                </a>
+              </div>
+              <p style="margin:20px 0 0;font-size:12px;color:#8f8ba8;line-height:1.5;">
+                Retrouvez également ce code et l'historique complet de vos filleuls à tout moment dans votre <a href="${SITE_URL}/compte" style="color:#ff7fb4;text-decoration:none;">Espace Client</a>.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 24px;border-top:1px solid rgba(160,150,255,0.1);background:#0d0b1c;font-size:11.5px;color:#7a7698;line-height:1.6;">
+              NeonPass · Vos abonnements numériques en toute sérénité<br>
+              <a href="${SITE_URL}" style="color:#ff7fb4;text-decoration:none;font-weight:600;">${escapeHtml(DOMAIN)}</a> · <a href="${SITE_URL}/compte" style="color:#ff7fb4;text-decoration:none;font-weight:600;">Mon Espace Client</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+NeonPass - Félicitations ! Votre code promo de -50% est disponible
+
+${greeting}
+
+Vous avez parrainé 5 commandes validées sur NeonPass !
+Voici votre code promo personnel de -50% valable sur n'importe quel abonnement du catalogue :
+
+CODE PROMO : ${promoCode} (-50%)
+
+Utilisez-le dès maintenant sur ${SITE_URL}/#offres ou retrouvez-le dans votre espace client sur ${SITE_URL}/compte.
+
+L'équipe NeonPass
+  `.trim();
+
+  try {
+    const info = await mailTransporter.sendMail({
+      from: SMTP_FROM,
+      to: email,
+      subject,
+      text,
+      html
+    });
+    console.log(`[mail] Récompense parrainage envoyée à ${email} (code: ${promoCode}, id: ${info.messageId})`);
+    await logEmailSent({
+      type: 'referral_reward_50',
+      recipient: email,
+      subject,
+      status: 'sent',
+      messageId: info.messageId,
+      smtpResponse: info.response
+    });
+  } catch (err) {
+    console.error(`[mail] Échec envoi récompense parrainage à ${email}:`, err.message);
+    await logEmailSent({
+      type: 'referral_reward_50',
+      recipient: email,
+      subject,
+      status: 'failed',
+      errorMessage: err.message
+    });
+  }
+}
+
+async function checkAndAwardReferralRewards(orderId) {
+  try {
+    const ordRes = await pool.query(
+      `SELECT id, status, referrer_customer_account_id, referral_code FROM orders WHERE id = $1`,
+      [orderId]
+    );
+    if (!ordRes.rows.length) return;
+    const ord = ordRes.rows[0];
+    if (ord.status !== 'confirmed' || !ord.referrer_customer_account_id) return;
+
+    const referrerId = ord.referrer_customer_account_id;
+
+    // Compter les commandes validées ('confirmed') apportées par ce parrain
+    const countRes = await pool.query(
+      `SELECT count(*)::int AS count FROM orders WHERE referrer_customer_account_id = $1 AND status = 'confirmed'`,
+      [referrerId]
+    );
+    const confirmedCount = countRes.rows[0].count;
+
+    // Chaque palier de 5 commandes validées débloque un code promo -50%
+    const eligibleTiers = Math.floor(confirmedCount / 5);
+    if (eligibleTiers <= 0) return;
+
+    // Vérifier combien de récompenses ont déjà été attribuées
+    const rewardsRes = await pool.query(
+      `SELECT count(*)::int AS count FROM customer_referral_rewards WHERE customer_account_id = $1`,
+      [referrerId]
+    );
+    const alreadyAwarded = rewardsRes.rows[0].count;
+
+    if (eligibleTiers > alreadyAwarded) {
+      const neededToCreate = eligibleTiers - alreadyAwarded;
+      for (let i = 0; i < neededToCreate; i++) {
+        const tierNumber = alreadyAwarded + i + 1;
+        const promoCode = 'PARRAIN50-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+
+        // 1. Créer le code promo de -50% (1 seule utilisation)
+        await pool.query(
+          `INSERT INTO promo_codes (code, pct, max_uses, active) VALUES ($1, 50, 1, TRUE)
+           ON CONFLICT (code) DO NOTHING`,
+          [promoCode]
+        );
+
+        // 2. Enregistrer la récompense pour le client
+        await pool.query(
+          `INSERT INTO customer_referral_rewards (customer_account_id, promo_code, pct, tier)
+           VALUES ($1, $2, 50, $3)`,
+          [referrerId, promoCode, tierNumber]
+        );
+
+        // 3. Récupérer les informations du parrain pour lui envoyer un email
+        const userRes = await pool.query(
+          `SELECT email, first_name, last_name FROM customer_accounts WHERE id = $1`,
+          [referrerId]
+        );
+        if (userRes.rows.length) {
+          const user = userRes.rows[0];
+          const userName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Cher client';
+
+          sendReferralRewardEmail({
+            email: user.email,
+            name: userName,
+            promoCode,
+            confirmedCount
+          }).catch((err) => console.error('[email] Erreur envoi récompense parrainage:', err.message));
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[referral] Erreur checkAndAwardReferralRewards:', err);
+  }
+}
+
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .trim();
+}
+
+function renderMarketingEmailHtml({ subject, previewText, contentHtml }) {
+  const preview = previewText ? escapeHtml(previewText) : '';
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject || 'NeonPass')}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:#efecff;">
+  ${preview ? `<div style="display:none;font-size:1px;color:#080712;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${preview}</div>` : ''}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080712;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#121026;border:1px solid #28244c;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,0.65);">
+          <!-- En-tête avec Logo -->
+          <tr>
+            <td align="center" style="padding:28px 24px 20px;border-bottom:1px solid rgba(160,150,255,0.12);background:linear-gradient(180deg, rgba(255,77,148,0.06), transparent);">
+              <a href="${SITE_URL}" style="text-decoration:none;display:inline-block;">
+                <span style="font-size:24px;font-weight:900;letter-spacing:-0.5px;color:#ffffff;font-family:'Unbounded',-apple-system,BlinkMacSystemFont,sans-serif;">
+                  <span style="color:#ff4d94;">Neon</span>Pass
+                </span>
+              </a>
+              <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#2be6ff;margin-top:6px;">Abonnements & Licences Numériques 24/7</div>
+            </td>
+          </tr>
+          <!-- Corps de l'email -->
+          <tr>
+            <td style="padding:32px 28px 36px;font-size:14.5px;line-height:1.7;color:#e2defc;">
+              ${contentHtml}
+            </td>
+          </tr>
+          <!-- Pied de page -->
+          <tr>
+            <td style="padding:22px 24px;background:#0d0b1c;border-top:1px solid rgba(160,150,255,0.08);text-align:center;font-size:12px;color:#8580a6;line-height:1.6;">
+              <p style="margin:0 0 10px;">
+                <a href="${SITE_URL}" style="color:#2be6ff;text-decoration:none;font-weight:600;">Visiter la boutique</a>
+                &nbsp;·&nbsp;
+                <a href="${SITE_URL}/compte" style="color:#ff9cc4;text-decoration:none;font-weight:600;">Mon Espace Client</a>
+                &nbsp;·&nbsp;
+                <a href="${SITE_URL}/suivi" style="color:#2be6ff;text-decoration:none;font-weight:600;">Suivi de commande</a>
+              </p>
+              <p style="margin:0;font-size:11px;color:#6b678c;">
+                Vous recevez cet email car vous êtes client ou possédez un compte sur NeonPass.<br>
+                Service garanti & support réactif 7j/7 · © ${new Date().getFullYear()} NeonPass
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+async function customerAuthMiddleware(req, res, next) {
+  req.customerAccount = null;
+  const token = readCookieValue(req, CLIENT_COOKIE);
+  if (!token) return next();
+
+  const tokenHash = sha256hex(token);
+  try {
+    const { rows } = await pool.query(
+      `SELECT cs.token_hash, ca.id, ca.email, ca.first_name, ca.last_name, ca.phone, ca.status, ca.referral_code
+       FROM customer_sessions cs
+       JOIN customer_accounts ca ON ca.id = cs.customer_account_id
+       WHERE cs.token_hash = $1 AND cs.expires_at > now() AND ca.status = 'active'`,
+      [tokenHash]
+    );
+    if (rows.length) {
+      req.customerAccount = rows[0];
+    }
+  } catch (err) {
+    console.error('[customerAuth] error:', err.message);
+  }
+  next();
+}
+
+function requireCustomerAuth(req, res, next) {
+  if (!req.customerAccount) {
+    throw new HttpError(401, 'Veuillez vous connecter à votre compte client pour accéder à cet espace.');
+  }
+  next();
 }
 
 async function audit(req, action, details) {
@@ -463,6 +1007,7 @@ app.use((req, res, next) => {
   }
   express.json({ limit: '50kb' })(req, res, next);
 });
+app.use(customerAuthMiddleware);
 
 app.get('/healthz', async (req, res) => {
   try {
@@ -571,6 +1116,33 @@ app.post(
     const phone = str(req.body.phone, 30);
     const affiliation = str(req.body.affiliation, 60);
     const promoCode = normCode(req.body.promoCode);
+    const referralCodeParam = normCode(req.body.referralCode || req.body.affiliation || '');
+    let customerEmail = normEmail(req.body.email || req.body.customerEmail || '');
+    let customerAccountId = req.customerAccount ? req.customerAccount.id : null;
+    if (req.customerAccount && !customerEmail) {
+      customerEmail = req.customerAccount.email;
+    }
+    if (!customerAccountId && customerEmail) {
+      const accMatch = await pool.query('SELECT id FROM customer_accounts WHERE lower(email) = lower($1) LIMIT 1', [customerEmail]);
+      if (accMatch.rows.length) customerAccountId = accMatch.rows[0].id;
+    }
+
+    // Recherche éventuelle du parrain
+    let referrerAccountId = null;
+    let matchedRefCode = null;
+    if (referralCodeParam) {
+      const refRes = await pool.query(
+        `SELECT id, referral_code FROM customer_accounts WHERE upper(referral_code) = upper($1) LIMIT 1`,
+        [referralCodeParam]
+      );
+      if (refRes.rows.length) {
+        // Empêcher l'auto-parrainage
+        if (!customerAccountId || customerAccountId !== refRes.rows[0].id) {
+          referrerAccountId = refRes.rows[0].id;
+          matchedRefCode = refRes.rows[0].referral_code;
+        }
+      }
+    }
 
     // Transaction : l'utilisation du code promo n'est comptée que si la commande est bien créée
     const client = await pool.connect();
@@ -591,9 +1163,9 @@ app.post(
       const token = crypto.randomBytes(16).toString('hex');
       const trackingCode = generateTrackingCode();
       const ins = await client.query(
-        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, items, total, discount, promo_code, promo_pct, access_token, tracking_code, duration_months, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::int, now() + make_interval(months => $11::int)) RETURNING id, access_token, tracking_code`,
-        [name, lastName, phone, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode, orderDurationMonths]
+        `INSERT INTO orders (customer_name, customer_last_name, customer_phone, customer_email, customer_account_id, items, total, discount, promo_code, promo_pct, access_token, tracking_code, duration_months, expires_at, referral_code, referrer_customer_account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::int, now() + make_interval(months => $13::int), $14, $15) RETURNING id, access_token, tracking_code`,
+        [name, lastName, phone, customerEmail, customerAccountId, JSON.stringify(items), total, discount, promo ? promo.code : null, promo ? promo.pct : null, token, trackingCode, orderDurationMonths, matchedRefCode, referrerAccountId]
       );
       orderId = ins.rows[0].id;
       await client.query('COMMIT');
@@ -626,6 +1198,7 @@ app.post(
       (name ? '\nClient : ' + [name, lastName].filter(Boolean).join(' ') : '') +
       (phone ? '\nTél : ' + phone : '') +
       (affiliation ? '\nAffiliation : ' + affiliation : '') +
+      (matchedRefCode ? '\n🤝 Parrainage : ' + matchedRefCode : '') +
       '\n' + SITE_URL + '/admin'
     );
 
@@ -710,6 +1283,8 @@ app.get('/acces/:token', (req, res) => {
 });
 
 // Pages publiques supplémentaires
+app.get('/compte', (req, res) => res.sendFile(path.join(__dirname, 'public', 'compte.html')));
+app.get(['/client', '/mon-compte', '/connexion', '/inscription', '/login'], (req, res) => res.redirect(302, '/compte'));
 app.get('/news', (req, res) => res.sendFile(path.join(__dirname, 'public', 'news.html')));
 app.get('/nouveautes', (req, res) => res.redirect(301, '/news'));
 app.get('/suivi', (req, res) => res.sendFile(path.join(__dirname, 'public', 'suivi.html')));
@@ -843,6 +1418,862 @@ app.get(
     });
   })
 );
+
+// ----- Espace Client & API Compte Client -----
+const clientRouter = express.Router();
+
+// 1. Inscription client (avec envoi OTP)
+clientRouter.post('/register', rateLimit(10, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  const password = str(req.body.password, 100);
+  const firstName = str(req.body.firstName, 60);
+  const lastName = str(req.body.lastName, 60);
+  const phone = str(req.body.phone, 30);
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpError(400, 'Veuillez saisir une adresse email valide.');
+  }
+  if (!password || password.length < 8) {
+    throw new HttpError(400, 'Le mot de passe doit comporter au moins 8 caractères.');
+  }
+
+  const existing = await pool.query('SELECT id, is_verified FROM customer_accounts WHERE lower(email) = lower($1)', [email]);
+  const pwdHash = hashPassword(password);
+
+  if (existing.rows.length) {
+    const row = existing.rows[0];
+    if (row.is_verified) {
+      throw new HttpError(400, 'Un compte vérifié existe déjà avec cette adresse email. Veuillez vous connecter.');
+    }
+    await pool.query(
+      `UPDATE customer_accounts SET password_hash = $1, first_name = $2, last_name = $3, phone = $4 WHERE id = $5`,
+      [pwdHash, firstName, lastName, phone, row.id]
+    );
+  } else {
+    const refCode = generateReferralCode();
+    await pool.query(
+      `INSERT INTO customer_accounts (email, password_hash, first_name, last_name, phone, is_verified, referral_code) VALUES ($1, $2, $3, $4, $5, FALSE, $6)`,
+      [email, pwdHash, firstName, lastName, phone, refCode]
+    );
+  }
+
+  // Nettoyage des anciens codes register pour cet email
+  await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose = 'register'`, [email]);
+
+  const code = generateOtpCode();
+  const codeHash = hashOtpCode(code);
+  await pool.query(
+    `INSERT INTO customer_otps (email, code_hash, purpose, metadata, expires_at)
+     VALUES ($1, $2, 'register', $3, now() + interval '10 minutes')`,
+    [email, codeHash, JSON.stringify({ firstName, lastName, phone })]
+  );
+
+  const clientIp = getClientIp(req);
+  const userAgent = String(req.headers['user-agent'] || '');
+  await sendOtpEmail({ email, code, purpose: 'register', ip: clientIp, userAgent, firstName });
+
+  res.status(200).json({
+    ok: true,
+    step: 'otp_required',
+    purpose: 'register',
+    email,
+    message: `Un code de confirmation à 6 chiffres a été envoyé à l'adresse ${email}.`
+  });
+}));
+
+// 2. Connexion client (avec détection de connexion suspecte)
+clientRouter.post('/login', rateLimit(15, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  const password = str(req.body.password, 100);
+
+  if (!email || !password) {
+    throw new HttpError(400, 'Veuillez saisir votre email et votre mot de passe.');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id, email, password_hash, first_name, last_name, phone, is_verified, last_login_at, status
+     FROM customer_accounts WHERE lower(email) = lower($1)`,
+    [email]
+  );
+
+  if (!rows.length || !verifyPassword(password, rows[0].password_hash)) {
+    throw new HttpError(401, 'Adresse email ou mot de passe incorrect.');
+  }
+
+  const user = rows[0];
+  if (user.status === 'suspended') {
+    throw new HttpError(403, 'Ce compte client a été suspendu. Veuillez contacter le support.');
+  }
+
+  if (!user.is_verified) {
+    // Renvoyer l'OTP d'activation
+    await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose = 'register'`, [email]);
+    const code = generateOtpCode();
+    await pool.query(
+      `INSERT INTO customer_otps (email, code_hash, purpose, expires_at)
+       VALUES ($1, $2, 'register', now() + interval '10 minutes')`,
+      [email, hashOtpCode(code)]
+    );
+    const clientIp = getClientIp(req);
+    const userAgent = String(req.headers['user-agent'] || '');
+    await sendOtpEmail({ email, code, purpose: 'register', ip: clientIp, userAgent, firstName: user.first_name });
+    return res.json({
+      ok: true,
+      step: 'otp_required',
+      purpose: 'register',
+      email,
+      message: 'Votre compte n\'est pas encore validé. Un code d\'activation vous a été envoyé par email.'
+    });
+  }
+
+  // Détection de connexion suspecte (nouvelle IP OU nouvel appareil inconnu)
+  const clientIp = getClientIp(req);
+  const deviceId = getOrSetDeviceId(req, res);
+  const deviceHash = sha256hex(deviceId);
+  const userAgent = String(req.headers['user-agent'] || '');
+
+  let isSuspicious = false;
+  if (user.last_login_at) {
+    const devRes = await pool.query(
+      `SELECT id FROM customer_known_devices
+       WHERE customer_account_id = $1 AND (device_hash = $2 OR ip = $3)
+       LIMIT 1`,
+      [user.id, deviceHash, clientIp]
+    );
+    if (!devRes.rows.length) {
+      isSuspicious = true;
+    }
+  }
+
+  if (isSuspicious) {
+    // Déclenchement du code OTP de sécurité
+    await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose = 'suspicious_login'`, [email]);
+    const code = generateOtpCode();
+    await pool.query(
+      `INSERT INTO customer_otps (email, code_hash, purpose, metadata, expires_at)
+       VALUES ($1, $2, 'suspicious_login', $3, now() + interval '10 minutes')`,
+      [email, hashOtpCode(code), JSON.stringify({ ip: clientIp, userAgent, deviceHash })]
+    );
+
+    await sendOtpEmail({
+      email,
+      code,
+      purpose: 'suspicious_login',
+      ip: clientIp,
+      userAgent,
+      firstName: user.first_name
+    });
+
+    return res.json({
+      ok: true,
+      step: 'otp_required',
+      purpose: 'suspicious_login',
+      email,
+      ip: clientIp,
+      device: getClientDeviceInfo(userAgent),
+      message: 'Connexion depuis un nouvel appareil ou une nouvelle adresse IP. Un code de sécurité à 6 chiffres vous a été envoyé par email.'
+    });
+  }
+
+  // Connexion de confiance
+  await pool.query(
+    `INSERT INTO customer_known_devices (customer_account_id, device_hash, ip, user_agent, last_used_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (customer_account_id, device_hash)
+     DO UPDATE SET last_used_at = now(), ip = EXCLUDED.ip, user_agent = EXCLUDED.user_agent`,
+    [user.id, deviceHash, clientIp, userAgent]
+  );
+
+  await pool.query(
+    `UPDATE customer_accounts SET last_login_at = now(), last_login_ip = $1 WHERE id = $2`,
+    [clientIp, user.id]
+  );
+
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = sha256hex(sessionToken);
+  const expiresAt = new Date(Date.now() + CLIENT_SESSION_DAYS * 86400 * 1000);
+
+  await pool.query(
+    `INSERT INTO customer_sessions (token_hash, customer_account_id, ip, user_agent, device_hash, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [tokenHash, user.id, clientIp, userAgent, deviceHash, expiresAt]
+  );
+
+  setClientSessionCookie(res, sessionToken);
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phone: user.phone
+    }
+  });
+}));
+
+// 3. Validation OTP (Inscription, Connexion suspecte, Mot de passe)
+clientRouter.post('/verify-otp', rateLimit(12, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  const otp = str(req.body.otp, 10).trim();
+  const purpose = str(req.body.purpose, 30);
+
+  if (!email || !otp || !purpose) {
+    throw new HttpError(400, 'Paramètres requis manquants.');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id, code_hash, attempts, metadata, expires_at
+     FROM customer_otps
+     WHERE lower(email) = lower($1) AND purpose = $2 AND expires_at > now()
+     ORDER BY id DESC LIMIT 1`,
+    [email, purpose]
+  );
+
+  if (!rows.length) {
+    throw new HttpError(400, 'Code expiré ou introuvable. Veuillez demander un nouveau code.');
+  }
+
+  const otpRow = rows[0];
+  if (otpRow.attempts >= 5) {
+    await pool.query('DELETE FROM customer_otps WHERE id = $1', [otpRow.id]);
+    throw new HttpError(429, 'Trop de tentatives infructueuses. Veuillez demander un nouveau code.');
+  }
+
+  const valid = hashOtpCode(otp) === otpRow.code_hash;
+  if (!valid) {
+    await pool.query('UPDATE customer_otps SET attempts = attempts + 1 WHERE id = $1', [otpRow.id]);
+    throw new HttpError(400, 'Code de sécurité incorrect. Vérifiez les 6 chiffres saisis.');
+  }
+
+  await pool.query('DELETE FROM customer_otps WHERE id = $1', [otpRow.id]);
+
+  const clientIp = getClientIp(req);
+  const deviceId = getOrSetDeviceId(req, res);
+  const deviceHash = sha256hex(deviceId);
+  const userAgent = String(req.headers['user-agent'] || '');
+
+  if (purpose === 'register') {
+    const accRes = await pool.query(
+      `UPDATE customer_accounts
+       SET is_verified = TRUE, last_login_at = now(), last_login_ip = $1
+       WHERE lower(email) = lower($2)
+       RETURNING id, email, first_name, last_name, phone`,
+      [clientIp, email]
+    );
+
+    if (!accRes.rows.length) throw new HttpError(404, 'Compte client introuvable.');
+    const user = accRes.rows[0];
+
+    // Liaison automatique des commandes passées avec cet email ou téléphone
+    await pool.query(
+      `UPDATE orders SET customer_account_id = $1
+       WHERE customer_account_id IS NULL AND (lower(customer_email) = lower($2) OR (customer_phone = $3 AND customer_phone <> ''))`,
+      [user.id, user.email, user.phone]
+    );
+
+    // Enregistrement de l'appareil de confiance
+    await pool.query(
+      `INSERT INTO customer_known_devices (customer_account_id, device_hash, ip, user_agent, last_used_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (customer_account_id, device_hash) DO UPDATE SET last_used_at = now(), ip = EXCLUDED.ip`,
+      [user.id, deviceHash, clientIp, userAgent]
+    );
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = sha256hex(sessionToken);
+    const expiresAt = new Date(Date.now() + CLIENT_SESSION_DAYS * 86400 * 1000);
+
+    await pool.query(
+      `INSERT INTO customer_sessions (token_hash, customer_account_id, ip, user_agent, device_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tokenHash, user.id, clientIp, userAgent, deviceHash, expiresAt]
+    );
+
+    setClientSessionCookie(res, sessionToken);
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        phone: user.phone
+      }
+    });
+  }
+
+  if (purpose === 'suspicious_login') {
+    const accRes = await pool.query(
+      `SELECT id, email, first_name, last_name, phone FROM customer_accounts WHERE lower(email) = lower($1)`,
+      [email]
+    );
+    if (!accRes.rows.length) throw new HttpError(404, 'Compte introuvable.');
+    const user = accRes.rows[0];
+
+    // Enregistrer ce nouvel appareil comme appareil de confiance
+    await pool.query(
+      `INSERT INTO customer_known_devices (customer_account_id, device_hash, ip, user_agent, last_used_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (customer_account_id, device_hash)
+       DO UPDATE SET last_used_at = now(), ip = EXCLUDED.ip, user_agent = EXCLUDED.user_agent`,
+      [user.id, deviceHash, clientIp, userAgent]
+    );
+
+    await pool.query(
+      `UPDATE customer_accounts SET last_login_at = now(), last_login_ip = $1 WHERE id = $2`,
+      [clientIp, user.id]
+    );
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = sha256hex(sessionToken);
+    const expiresAt = new Date(Date.now() + CLIENT_SESSION_DAYS * 86400 * 1000);
+
+    await pool.query(
+      `INSERT INTO customer_sessions (token_hash, customer_account_id, ip, user_agent, device_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tokenHash, user.id, clientIp, userAgent, deviceHash, expiresAt]
+    );
+
+    setClientSessionCookie(res, sessionToken);
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        phone: user.phone
+      }
+    });
+  }
+
+  if (purpose === 'reset_password') {
+    const resetSecret = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      `INSERT INTO customer_otps (email, code_hash, purpose, expires_at)
+       VALUES ($1, $2, 'reset_authorized', now() + interval '15 minutes')`,
+      [email, sha256hex(resetSecret)]
+    );
+    return res.json({ ok: true, resetToken: resetSecret });
+  }
+
+  res.json({ ok: true });
+}));
+
+// 4. Renvoi d'un code OTP (avec rate limit de 60s)
+clientRouter.post('/resend-otp', rateLimit(5, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  const purpose = str(req.body.purpose, 30);
+
+  if (!email || !purpose) throw new HttpError(400, 'Paramètres requis manquants.');
+
+  const existing = await pool.query(
+    `SELECT created_at FROM customer_otps WHERE lower(email) = lower($1) AND purpose = $2 AND expires_at > now() ORDER BY id DESC LIMIT 1`,
+    [email, purpose]
+  );
+
+  if (existing.rows.length) {
+    const diffSec = Math.round((Date.now() - new Date(existing.rows[0].created_at).getTime()) / 1000);
+    if (diffSec < 60) {
+      throw new HttpError(429, `Veuillez patienter ${60 - diffSec} secondes avant de demander un nouveau code.`);
+    }
+  }
+
+  const userRes = await pool.query(
+    `SELECT first_name FROM customer_accounts WHERE lower(email) = lower($1)`,
+    [email]
+  );
+  const firstName = userRes.rows.length ? userRes.rows[0].first_name : '';
+
+  await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose = $2`, [email, purpose]);
+
+  const code = generateOtpCode();
+  await pool.query(
+    `INSERT INTO customer_otps (email, code_hash, purpose, expires_at)
+     VALUES ($1, $2, $3, now() + interval '10 minutes')`,
+    [email, hashOtpCode(code), purpose]
+  );
+
+  const clientIp = getClientIp(req);
+  const userAgent = String(req.headers['user-agent'] || '');
+  await sendOtpEmail({ email, code, purpose, ip: clientIp, userAgent, firstName });
+
+  res.json({ ok: true, message: 'Un nouveau code vous a été envoyé par email.' });
+}));
+
+// 5. Mot de passe oublié
+clientRouter.post('/forgot-password', rateLimit(5, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  if (!email) throw new HttpError(400, 'Veuillez saisir votre email.');
+
+  const userRes = await pool.query(
+    `SELECT id, first_name, is_verified FROM customer_accounts WHERE lower(email) = lower($1)`,
+    [email]
+  );
+
+  if (userRes.rows.length && userRes.rows[0].is_verified) {
+    await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose IN ('reset_password', 'reset_authorized')`, [email]);
+    const code = generateOtpCode();
+    await pool.query(
+      `INSERT INTO customer_otps (email, code_hash, purpose, expires_at)
+       VALUES ($1, $2, 'reset_password', now() + interval '10 minutes')`,
+      [email, hashOtpCode(code)]
+    );
+    await sendOtpEmail({
+      email,
+      code,
+      purpose: 'reset_password',
+      firstName: userRes.rows[0].first_name
+    });
+  }
+
+  res.json({
+    ok: true,
+    message: 'Si cette adresse email est associée à un compte, un code de réinitialisation vous a été envoyé.'
+  });
+}));
+
+// 6. Réinitialisation mot de passe avec token vérifié
+clientRouter.post('/reset-password', rateLimit(5, 60 * 1000), wrap(async (req, res) => {
+  const email = normEmail(req.body.email);
+  const resetToken = str(req.body.resetToken, 128);
+  const newPassword = str(req.body.newPassword, 100);
+
+  if (!email || !resetToken || !newPassword) {
+    throw new HttpError(400, 'Paramètres requis manquants.');
+  }
+  if (newPassword.length < 8) {
+    throw new HttpError(400, 'Le nouveau mot de passe doit comporter au moins 8 caractères.');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id FROM customer_otps
+     WHERE lower(email) = lower($1) AND purpose = 'reset_authorized' AND code_hash = $2 AND expires_at > now()`,
+    [email, sha256hex(resetToken)]
+  );
+
+  if (!rows.length) {
+    throw new HttpError(400, 'Session de réinitialisation expirée ou invalide. Veuillez recommencer.');
+  }
+
+  await pool.query('DELETE FROM customer_otps WHERE id = $1', [rows[0].id]);
+
+  const newHash = hashPassword(newPassword);
+  await pool.query(`UPDATE customer_accounts SET password_hash = $1 WHERE lower(email) = lower($2)`, [newHash, email]);
+
+  // Révocation des anciennes sessions pour sécurité
+  await pool.query(
+    `DELETE FROM customer_sessions WHERE customer_account_id = (SELECT id FROM customer_accounts WHERE lower(email) = lower($1))`,
+    [email]
+  );
+
+  res.json({ ok: true, message: 'Votre mot de passe a été réinitialisé avec succès ! Vous pouvez maintenant vous connecter.' });
+}));
+
+// 7. Tableau de bord Client (Mes Abonnements & Accès)
+clientRouter.get('/me', requireCustomerAuth, wrap(async (req, res) => {
+  const user = req.customerAccount;
+
+  // Récupérer les commandes associées au compte client
+  const ordRes = await pool.query(
+    `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.customer_email,
+            o.items, o.total, o.status, o.access_token, o.tracking_code,
+            COALESCE(o.duration_months, 12)::int AS duration_months,
+            o.expires_at AS raw_expires_at,
+            to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at,
+            to_char(o.created_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD HH24:MI') AS created_at
+     FROM orders o
+     WHERE o.customer_account_id = $1 OR (lower(o.customer_email) = lower($2) AND o.customer_email <> '')
+     ORDER BY o.created_at DESC`,
+    [user.id, user.email]
+  );
+
+  const orderIds = ordRes.rows.map(o => o.id);
+  let accountsByOrder = {};
+
+  if (orderIds.length) {
+    const accRes = await pool.query(
+      `SELECT a.id, a.order_id, a.offer_id, a.service_name, a.login, a.password, a.slot_profile, a.notes,
+              a.status, a.warranty_claim, a.defect_reason,
+              o.name AS offer_name, o.hue, o.category, o.is_pack, o.pack_items
+       FROM accounts a
+       LEFT JOIN offers o ON o.id = a.offer_id
+       WHERE a.order_id = ANY($1) AND a.status = 'assigned'
+       ORDER BY a.id ASC`,
+      [orderIds]
+    );
+
+    for (const a of accRes.rows) {
+      if (!accountsByOrder[a.order_id]) accountsByOrder[a.order_id] = [];
+      accountsByOrder[a.order_id].push({
+        id: a.id,
+        serviceName: a.offer_name || a.service_name,
+        login: a.login,
+        password: a.password,
+        slotProfile: a.slot_profile,
+        notes: a.notes,
+        hue: a.hue || 200,
+        category: a.category || 'streaming',
+        warrantyClaim: !!a.warranty_claim,
+        defectReason: a.defect_reason || ''
+      });
+    }
+  }
+
+  const now = new Date();
+  let activeSubsCount = 0;
+  let nearestExpiryDays = null;
+
+  const orders = ordRes.rows.map(o => {
+    let daysRemaining = null;
+    let isExpired = false;
+    if (o.raw_expires_at) {
+      const diffMs = new Date(o.raw_expires_at).getTime() - now.getTime();
+      daysRemaining = Math.ceil(diffMs / (24 * 3600 * 1000));
+      isExpired = daysRemaining < 0;
+    }
+
+    const isActive = o.status === 'confirmed' && !isExpired;
+    if (isActive) {
+      activeSubsCount++;
+      if (daysRemaining !== null && daysRemaining >= 0) {
+        if (nearestExpiryDays === null || daysRemaining < nearestExpiryDays) {
+          nearestExpiryDays = daysRemaining;
+        }
+      }
+    }
+
+    return {
+      id: o.id,
+      trackingCode: o.tracking_code,
+      accessToken: o.access_token,
+      accessUrl: `/acces/${o.access_token}`,
+      status: o.status,
+      total: Number(o.total),
+      items: o.items,
+      durationMonths: o.duration_months,
+      createdAt: o.created_at,
+      expiresAt: o.expires_at,
+      daysRemaining,
+      isExpired,
+      accounts: accountsByOrder[o.id] || []
+    };
+  });
+
+  const totalSpent = orders
+    .filter(o => o.status === 'confirmed')
+    .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const confirmedCount = orders.filter(o => o.status === 'confirmed').length;
+
+  const devCountRes = await pool.query(
+    `SELECT count(*)::int AS count FROM customer_known_devices WHERE customer_account_id = $1`,
+    [user.id]
+  );
+
+  // Données du programme de parrainage (-50%)
+  let referralCode = user.referral_code;
+  if (!referralCode) {
+    referralCode = generateReferralCode();
+    await pool.query('UPDATE customer_accounts SET referral_code = $1 WHERE id = $2', [referralCode, user.id]);
+    user.referral_code = referralCode;
+  }
+
+  // Commandes parrainées apportées
+  const refOrdersRes = await pool.query(
+    `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_email,
+            o.items, o.total, o.status,
+            to_char(o.created_at AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY HH24:MI') AS date_formatted
+     FROM orders o
+     WHERE o.referrer_customer_account_id = $1
+     ORDER BY o.created_at DESC`,
+    [user.id]
+  );
+
+  let confirmedRefOrders = 0;
+  let pendingRefOrders = 0;
+  let totalRefItems = 0;
+
+  const referralHistory = refOrdersRes.rows.map((ro) => {
+    const isConfirmed = ro.status === 'confirmed';
+    if (isConfirmed) confirmedRefOrders++;
+    else if (ro.status === 'new') pendingRefOrders++;
+
+    const items = Array.isArray(ro.items) ? ro.items : [];
+    totalRefItems += items.length || 1;
+    const itemsSummary = items.map((i) => i.name).join(' + ') || 'Abonnement';
+
+    let displayName = 'Client NeonPass';
+    const fullName = [ro.customer_name, ro.customer_last_name].filter(Boolean).join(' ').trim();
+    if (fullName) {
+      const parts = fullName.split(' ');
+      displayName = parts[0] + (parts[1] ? ' ' + parts[1][0] + '.' : '');
+    } else if (ro.customer_email) {
+      const parts = ro.customer_email.split('@');
+      displayName = parts[0].slice(0, 2) + '***@' + parts[1];
+    }
+
+    return {
+      id: ro.id,
+      date: ro.date_formatted,
+      referralName: displayName,
+      itemsSummary,
+      itemsCount: items.length || 1,
+      total: Number(ro.total),
+      status: ro.status
+    };
+  });
+
+  const rewardsRes = await pool.query(
+    `SELECT r.id, r.promo_code, r.pct, r.tier,
+            to_char(r.created_at AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY') AS created_at,
+            p.uses, p.max_uses, p.active
+     FROM customer_referral_rewards r
+     LEFT JOIN promo_codes p ON p.code = r.promo_code
+     WHERE r.customer_account_id = $1
+     ORDER BY r.id DESC`,
+    [user.id]
+  );
+
+  const rewards = rewardsRes.rows.map((rw) => ({
+    id: rw.id,
+    promoCode: rw.promo_code,
+    pct: rw.pct,
+    tier: rw.tier,
+    createdAt: rw.created_at,
+    isUsed: (rw.uses || 0) >= (rw.max_uses || 1) || rw.active === false,
+    uses: rw.uses || 0
+  }));
+
+  const activeReward = rewards.find((rw) => !rw.isUsed) || null;
+  const threshold = 5;
+  const currentTierProgress = confirmedRefOrders % threshold;
+  const progressPct = confirmedRefOrders >= threshold && currentTierProgress === 0
+    ? 100
+    : Math.min(100, Math.round((currentTierProgress / threshold) * 100));
+  const neededForNext = threshold - currentTierProgress;
+
+  const referralData = {
+    code: referralCode,
+    link: `${SITE_URL}/?ref=${encodeURIComponent(referralCode)}`,
+    confirmedOrdersCount: confirmedRefOrders,
+    pendingOrdersCount: pendingRefOrders,
+    totalOrdersCount: refOrdersRes.rows.length,
+    totalItemsCount: totalRefItems,
+    threshold,
+    currentTierProgress,
+    progressPct,
+    neededForNext,
+    activeReward,
+    rewards,
+    history: referralHistory
+  };
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phone: user.phone
+    },
+    orders,
+    summary: {
+      totalOrders: orders.length,
+      confirmedOrdersCount: confirmedCount,
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      activeSubscriptions: activeSubsCount,
+      nearestExpiryDays,
+      knownDevicesCount: devCountRes.rows[0].count
+    },
+    referral: referralData,
+    waNumber: WA_NUMBER
+  });
+}));
+
+// 8. Rattacher une commande via son code de suivi ou son lien secret
+clientRouter.post('/link-order', requireCustomerAuth, wrap(async (req, res) => {
+  const code = str(req.body.code, 64).trim().toUpperCase();
+  if (!code) throw new HttpError(400, 'Veuillez saisir votre numéro de suivi (ex: NP-TRK-...) ou lien d\'accès.');
+
+  const { rows } = await pool.query(
+    `SELECT id, customer_account_id FROM orders WHERE UPPER(tracking_code) = $1 OR UPPER(access_token) = $1`,
+    [code]
+  );
+
+  if (!rows.length) {
+    throw new HttpError(404, 'Aucune commande trouvée correspondant à ce code.');
+  }
+
+  const ord = rows[0];
+  if (ord.customer_account_id && ord.customer_account_id !== req.customerAccount.id) {
+    throw new HttpError(400, 'Cette commande est déjà rattachée à un autre compte client.');
+  }
+
+  await pool.query(
+    `UPDATE orders SET customer_account_id = $1, customer_email = COALESCE(NULLIF(customer_email, ''), $2) WHERE id = $3`,
+    [req.customerAccount.id, req.customerAccount.email, ord.id]
+  );
+
+  res.json({ ok: true, message: 'La commande a été rattachée à votre compte avec succès !' });
+}));
+
+// 9. Mise à jour du profil client
+clientRouter.post('/update-profile', requireCustomerAuth, wrap(async (req, res) => {
+  const firstName = str(req.body.firstName, 60);
+  const lastName = str(req.body.lastName, 60);
+  const phone = str(req.body.phone, 30);
+  const currentPassword = str(req.body.currentPassword, 100);
+  const newPassword = str(req.body.newPassword, 100);
+
+  if (newPassword) {
+    if (newPassword.length < 8) {
+      throw new HttpError(400, 'Le nouveau mot de passe doit comporter au moins 8 caractères.');
+    }
+    const accRes = await pool.query(`SELECT password_hash FROM customer_accounts WHERE id = $1`, [req.customerAccount.id]);
+    if (!accRes.rows.length || !verifyPassword(currentPassword, accRes.rows[0].password_hash)) {
+      throw new HttpError(401, 'Le mot de passe actuel est incorrect.');
+    }
+    const newHash = hashPassword(newPassword);
+    await pool.query(
+      `UPDATE customer_accounts SET first_name = $1, last_name = $2, phone = $3, password_hash = $4 WHERE id = $5`,
+      [firstName, lastName, phone, newHash, req.customerAccount.id]
+    );
+  } else {
+    await pool.query(
+      `UPDATE customer_accounts SET first_name = $1, last_name = $2, phone = $3 WHERE id = $4`,
+      [firstName, lastName, phone, req.customerAccount.id]
+    );
+  }
+
+  res.json({ ok: true, message: 'Profil mis à jour avec succès.' });
+}));
+
+// 10. Déconnexion client
+clientRouter.post('/logout', wrap(async (req, res) => {
+  const token = readCookieValue(req, CLIENT_COOKIE);
+  if (token) {
+    await pool.query('DELETE FROM customer_sessions WHERE token_hash = $1', [sha256hex(token)]);
+  }
+  clearClientSessionCookie(res);
+  res.json({ ok: true, message: 'Déconnexion effectuée.' });
+}));
+
+// 11. Demande de remplacement SAV par le client
+clientRouter.post('/request-sav', requireCustomerAuth, wrap(async (req, res) => {
+  const user = req.customerAccount;
+  const orderId = Number(req.body.orderId) || 0;
+  const accountId = Number(req.body.accountId) || 0;
+  const reason = str(req.body.reason, 120) || 'Accès non fonctionnel';
+  const comment = str(req.body.comment, 500) || '';
+
+  // Vérifier que la commande appartient bien à ce client
+  const ordRes = await pool.query(
+    `SELECT id, customer_name, customer_email, tracking_code FROM orders
+     WHERE id = $1 AND (customer_account_id = $2 OR (lower(customer_email) = lower($3) AND customer_email <> ''))`,
+    [orderId, user.id, user.email]
+  );
+  if (!ordRes.rows.length) {
+    throw new HttpError(404, 'Commande introuvable ou non associée à votre compte.');
+  }
+
+  // Vérifier que le compte appartient à cette commande
+  const accRes = await pool.query(
+    `SELECT id, service_name, offer_id FROM accounts WHERE id = $1 AND order_id = $2 AND status = 'assigned'`,
+    [accountId, orderId]
+  );
+  if (!accRes.rows.length) {
+    throw new HttpError(404, 'Accès introuvable sur cette commande.');
+  }
+
+  const fullReason = comment ? `${reason} — ${comment}` : reason;
+
+  await pool.query(
+    `UPDATE accounts
+     SET warranty_claim = TRUE, defect_reason = $1, defect_at = now()
+     WHERE id = $2`,
+    [fullReason, accountId]
+  );
+
+  await audit(req, 'CLIENT_SAV_REQUEST', {
+    clientId: user.id,
+    email: user.email,
+    orderId,
+    accountId,
+    serviceName: accRes.rows[0].service_name,
+    reason: fullReason
+  });
+
+  res.json({
+    ok: true,
+    message: 'Votre demande de remplacement SAV a bien été enregistrée. Notre équipe va vous attribuer un nouvel accès et vous l\'envoyer par email et sur votre compte.'
+  });
+}));
+
+// 12. Connexion directe "Vue Client" via Token Magique (Généré par l'admin)
+clientRouter.post('/verify-magic-token', wrap(async (req, res) => {
+  const token = str(req.body.magicToken, 128).trim();
+  if (!token) throw new HttpError(400, 'Jeton magique manquant.');
+
+  const tokenHash = sha256hex(token);
+  const { rows } = await pool.query(
+    `SELECT id, email, purpose, metadata, expires_at
+     FROM customer_otps
+     WHERE code_hash = $1 AND purpose = 'magic_login' AND expires_at > now()`,
+    [tokenHash]
+  );
+
+  if (!rows.length) {
+    throw new HttpError(400, 'Lien de connexion expiré ou invalide.');
+  }
+
+  const otpRow = rows[0];
+  await pool.query('DELETE FROM customer_otps WHERE id = $1', [otpRow.id]);
+
+  const accRes = await pool.query(
+    `SELECT id, email, first_name, last_name, phone, is_verified, status FROM customer_accounts WHERE lower(email) = lower($1)`,
+    [otpRow.email]
+  );
+
+  if (!accRes.rows.length) {
+    throw new HttpError(404, 'Compte client introuvable.');
+  }
+
+  const user = accRes.rows[0];
+  const clientIp = getClientIp(req);
+  const deviceId = getOrSetDeviceId(req, res);
+  const deviceHash = sha256hex(deviceId);
+  const userAgent = String(req.headers['user-agent'] || '');
+
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  const sessionHash = sha256hex(sessionToken);
+  const expiresAt = new Date(Date.now() + CLIENT_SESSION_DAYS * 86400 * 1000);
+
+  await pool.query(
+    `INSERT INTO customer_sessions (token_hash, customer_account_id, ip, user_agent, device_hash, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [sessionHash, user.id, clientIp, userAgent, deviceHash, expiresAt]
+  );
+
+  setClientSessionCookie(res, sessionToken);
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phone: user.phone
+    }
+  });
+}));
+
+app.use('/api/client', clientRouter);
 
 // ----- Administration -----
 const noStore = (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
@@ -1163,11 +2594,18 @@ async function restoreFromJson(data, pool) {
     await client.query('UPDATE accounts SET replaced_by_account_id = NULL').catch(() => {});
     await client.query('DELETE FROM accounts');
     await client.query('DELETE FROM reviews');
+    await client.query('DELETE FROM customer_referral_rewards').catch(() => {});
     await client.query('DELETE FROM orders');
+    await client.query('DELETE FROM customer_otps').catch(() => {});
+    await client.query('DELETE FROM customer_sessions').catch(() => {});
+    await client.query('DELETE FROM customer_known_devices').catch(() => {});
+    await client.query('DELETE FROM customer_accounts').catch(() => {});
     await client.query('DELETE FROM clients');
     await client.query('DELETE FROM offers');
-    await client.query('DELETE FROM settings');
     await client.query('DELETE FROM promo_codes');
+    await client.query('DELETE FROM settings');
+    await client.query('DELETE FROM email_logs').catch(() => {});
+    await client.query('DELETE FROM admin_audit').catch(() => {});
 
     const sanitizeRow = (cols, row) => cols.map((c) => {
       const v = row[c];
@@ -1178,64 +2616,34 @@ async function restoreFromJson(data, pool) {
       return v;
     });
 
+    const insertTableRows = async (tableName, rows) => {
+      if (!Array.isArray(rows) || !rows.length) return;
+      for (const row of rows) {
+        const cols = Object.keys(row);
+        const vals = sanitizeRow(cols, row);
+        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        await client.query(`INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+      }
+    };
+
     if (Array.isArray(tables.settings) && tables.settings.length) {
       for (const row of tables.settings) {
         await client.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [row.key, row.value]);
       }
     }
 
-    if (Array.isArray(tables.offers) && tables.offers.length) {
-      for (const row of tables.offers) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO offers (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-    }
-
-    if (Array.isArray(tables.clients) && tables.clients.length) {
-      for (const row of tables.clients) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO clients (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-    }
-
-    if (Array.isArray(tables.orders) && tables.orders.length) {
-      for (const row of tables.orders) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO orders (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-    }
-
-    if (Array.isArray(tables.accounts) && tables.accounts.length) {
-      for (const row of tables.accounts) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO accounts (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-    }
-
-    if (Array.isArray(tables.promo_codes) && tables.promo_codes.length) {
-      for (const row of tables.promo_codes) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO promo_codes (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-    }
-
-    if (Array.isArray(tables.reviews) && tables.reviews.length) {
-      for (const row of tables.reviews) {
-        const cols = Object.keys(row);
-        const vals = sanitizeRow(cols, row);
-        const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        await client.query(`INSERT INTO reviews (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
+    await insertTableRows('promo_codes', tables.promo_codes);
+    await insertTableRows('offers', tables.offers);
+    await insertTableRows('clients', tables.clients);
+    await insertTableRows('customer_accounts', tables.customer_accounts);
+    await insertTableRows('orders', tables.orders);
+    await insertTableRows('accounts', tables.accounts);
+    await insertTableRows('reviews', tables.reviews);
+    await insertTableRows('customer_referral_rewards', tables.customer_referral_rewards);
+    await insertTableRows('customer_known_devices', tables.customer_known_devices);
+    await insertTableRows('email_logs', tables.email_logs);
+    if (Array.isArray(tables.admin_audit) && tables.admin_audit.length) {
+      await insertTableRows('admin_audit', tables.admin_audit);
     }
 
     // Réaligner les séquences SERIAL
@@ -1244,7 +2652,12 @@ async function restoreFromJson(data, pool) {
       ['orders', 'orders_id_seq'],
       ['accounts', 'accounts_id_seq'],
       ['clients', 'clients_id_seq'],
-      ['reviews', 'reviews_id_seq']
+      ['reviews', 'reviews_id_seq'],
+      ['customer_accounts', 'customer_accounts_id_seq'],
+      ['customer_referral_rewards', 'customer_referral_rewards_id_seq'],
+      ['customer_known_devices', 'customer_known_devices_id_seq'],
+      ['email_logs', 'email_logs_id_seq'],
+      ['admin_audit', 'admin_audit_id_seq']
     ];
     for (const [tbl, seq] of seqs) {
       await client.query(`SELECT setval('${seq}', COALESCE((SELECT MAX(id) FROM ${tbl}), 1))`).catch(() => {});
@@ -1266,8 +2679,11 @@ admin.get('/backup/status', wrap(async (req, res) => {
        (SELECT count(*) FROM orders)::int AS orders,
        (SELECT count(*) FROM accounts)::int AS accounts,
        (SELECT count(*) FROM clients)::int AS clients,
+       (SELECT count(*) FROM customer_accounts)::int AS customer_accounts,
        (SELECT count(*) FROM offers)::int AS offers,
        (SELECT count(*) FROM promo_codes)::int AS promos,
+       (SELECT count(*) FROM customer_referral_rewards)::int AS referral_rewards,
+       (SELECT count(*) FROM email_logs)::int AS email_logs,
        (SELECT count(*) FROM reviews)::int AS reviews,
        pg_size_pretty(pg_database_size(current_database())) AS db_size,
        pg_database_size(current_database())::bigint AS db_bytes`
@@ -1302,20 +2718,38 @@ admin.get('/backup/sql', wrap(async (req, res) => {
 
 // Export JSON structuré
 admin.get('/backup/json', wrap(async (req, res) => {
-  const [settings, offers, orders, clients, accounts, promos, reviews] = await Promise.all([
+  const [
+    settings,
+    offers,
+    orders,
+    clients,
+    accounts,
+    promos,
+    reviews,
+    customerAccounts,
+    customerDevices,
+    customerRewards,
+    emailLogs,
+    adminAudit
+  ] = await Promise.all([
     pool.query('SELECT key, value FROM settings ORDER BY key'),
     pool.query('SELECT * FROM offers ORDER BY id'),
     pool.query('SELECT * FROM orders ORDER BY id'),
     pool.query('SELECT * FROM clients ORDER BY id'),
     pool.query('SELECT * FROM accounts ORDER BY id'),
     pool.query('SELECT * FROM promo_codes ORDER BY code'),
-    pool.query('SELECT * FROM reviews ORDER BY id')
+    pool.query('SELECT * FROM reviews ORDER BY id'),
+    pool.query('SELECT * FROM customer_accounts ORDER BY id'),
+    pool.query('SELECT * FROM customer_known_devices ORDER BY id'),
+    pool.query('SELECT * FROM customer_referral_rewards ORDER BY id'),
+    pool.query('SELECT * FROM email_logs ORDER BY id'),
+    pool.query('SELECT * FROM admin_audit ORDER BY id')
   ]);
   const nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const filename = `neonpass-backup-${nowStr}.json`;
   const payload = {
     app: 'NeonPass',
-    version: 1,
+    version: 2,
     exported_at: new Date().toISOString(),
     counts: {
       settings: settings.rowCount,
@@ -1324,7 +2758,12 @@ admin.get('/backup/json', wrap(async (req, res) => {
       clients: clients.rowCount,
       accounts: accounts.rowCount,
       promos: promos.rowCount,
-      reviews: reviews.rowCount
+      reviews: reviews.rowCount,
+      customer_accounts: customerAccounts.rowCount,
+      customer_known_devices: customerDevices.rowCount,
+      customer_referral_rewards: customerRewards.rowCount,
+      email_logs: emailLogs.rowCount,
+      admin_audit: adminAudit.rowCount
     },
     tables: {
       settings: settings.rows,
@@ -1333,7 +2772,12 @@ admin.get('/backup/json', wrap(async (req, res) => {
       clients: clients.rows,
       accounts: accounts.rows,
       promo_codes: promos.rows,
-      reviews: reviews.rows
+      reviews: reviews.rows,
+      customer_accounts: customerAccounts.rows,
+      customer_known_devices: customerDevices.rows,
+      customer_referral_rewards: customerRewards.rows,
+      email_logs: emailLogs.rows,
+      admin_audit: adminAudit.rows
     }
   };
   await audit(req, 'backup.export_json', { filename, counts: payload.counts });
@@ -1521,15 +2965,19 @@ admin.get(
   wrap(async (req, res) => {
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
     const { rows } = await pool.query(
-      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
+      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.customer_email, o.items, o.total::float AS total, o.discount,
               o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
-              o.tracking_code,
+              o.tracking_code, o.referral_code, o.referrer_customer_account_id,
+              ref.email AS referrer_email, trim(concat(ref.first_name, ' ', ref.last_name)) AS referrer_name,
               to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
               COALESCE(o.duration_months, 12)::int AS duration_months,
-              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
+              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count,
+              COALESCE(acc.sav_claims_cnt, 0)::int AS sav_claims_count
        FROM orders o
+       LEFT JOIN customer_accounts ref ON ref.id = o.referrer_customer_account_id
        LEFT JOIN (
-         SELECT order_id, count(*)::int AS cnt FROM accounts GROUP BY order_id
+         SELECT order_id, count(*)::int AS cnt, count(*) FILTER (WHERE warranty_claim = TRUE)::int AS sav_claims_cnt
+         FROM accounts GROUP BY order_id
        ) acc ON acc.order_id = o.id
        WHERE ($1::text IS NULL OR o.status = $1) ORDER BY o.created_at DESC LIMIT 500`,
       [status]
@@ -1543,15 +2991,19 @@ admin.get(
   wrap(async (req, res) => {
     const id = Number(req.params.id) || 0;
     const { rows } = await pool.query(
-      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.items, o.total::float AS total, o.discount,
+      `SELECT o.id, o.customer_name, o.customer_last_name, o.customer_phone, o.customer_email, o.items, o.total::float AS total, o.discount,
               o.promo_code, o.promo_pct, o.payment_method, o.notes, o.source, o.status, o.created_at, o.access_token,
-              o.tracking_code,
+              o.tracking_code, o.referral_code, o.referrer_customer_account_id,
+              ref.email AS referrer_email, trim(concat(ref.first_name, ' ', ref.last_name)) AS referrer_name,
               to_char(o.expires_at AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS expires_at, o.reminder_sent_at,
               COALESCE(o.duration_months, 12)::int AS duration_months,
-              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count
+              COALESCE(acc.cnt, 0)::int AS assigned_accounts_count,
+              COALESCE(acc.sav_claims_cnt, 0)::int AS sav_claims_count
        FROM orders o
+       LEFT JOIN customer_accounts ref ON ref.id = o.referrer_customer_account_id
        LEFT JOIN (
-         SELECT order_id, count(*)::int AS cnt FROM accounts GROUP BY order_id
+         SELECT order_id, count(*)::int AS cnt, count(*) FILTER (WHERE warranty_claim = TRUE)::int AS sav_claims_cnt
+         FROM accounts GROUP BY order_id
        ) acc ON acc.order_id = o.id
        WHERE o.id = $1`,
       [id]
@@ -1648,6 +3100,9 @@ admin.post(
        total, discount, info.payment_method || '', info.notes || '', info.status || 'confirmed', token,
        durationMonths, expiresAt, trackingCode]
     );
+    if ((info.status || 'confirmed') === 'confirmed') {
+      await checkAndAwardReferralRewards(r.rows[0].id);
+    }
     res.status(201).json({ ok: true, id: r.rows[0].id, total, accessToken: token, trackingCode });
   })
 );
@@ -1716,6 +3171,9 @@ admin.patch(
     );
     if (!r.rowCount) throw new HttpError(404, 'Commande introuvable.');
     await setDefaultExpiry(Number(req.params.id) || 0, info.duration_months || 12);
+    if (info.status === 'confirmed') {
+      await checkAndAwardReferralRewards(Number(req.params.id) || 0);
+    }
     res.json({ ok: true });
   })
 );
@@ -2447,7 +3905,7 @@ admin.post(
     const reason = str(req.body.reason, 255) || 'Signalement client / Non fonctionnel';
 
     const ordRes = await pool.query(
-      'SELECT id, customer_name, customer_last_name, customer_phone, access_token FROM orders WHERE id = $1',
+      'SELECT id, customer_name, customer_last_name, customer_phone, customer_email, customer_account_id, access_token FROM orders WHERE id = $1',
       [orderId]
     );
     if (!ordRes.rowCount) throw new HttpError(404, 'Commande introuvable.');
@@ -2497,12 +3955,107 @@ admin.post(
 
     const whatsappUrl = clientPhone ? 'https://wa.me/' + clientPhone + '?text=' + encodeURIComponent(msg) : null;
 
+    // Récupérer l'email du client pour notification automatique SAV
+    let targetEmail = normEmail(ord.customer_email);
+    if (!targetEmail && ord.customer_account_id) {
+      const caRes = await pool.query('SELECT email FROM customer_accounts WHERE id = $1', [ord.customer_account_id]);
+      if (caRes.rows.length) targetEmail = normEmail(caRes.rows[0].email);
+    }
+
+    let emailSent = false;
+    if (targetEmail) {
+      const emailSubject = `🔄 Vos nouveaux identifiants NeonPass - Remplacement SAV (${oldAcc.service_name || 'Accès'})`;
+      const emailHtml = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(emailSubject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080712;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#121026;border:1px solid rgba(255,77,148,0.3);border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,0.65);">
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#ff4d94,#ff7fb4,#8e54ff);"></td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 24px 20px;border-bottom:1px solid rgba(160,150,255,0.12);">
+              <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;font-family:'Unbounded',system-ui,sans-serif;">Neon<span style="color:#ff4d94;font-weight:900;">Pass</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 24px;color:#efecff;">
+              <h1 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#ffffff;">Remplacement de votre accès sous garantie</h1>
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#a8a5cf;">
+                Bonjour ${escapeHtml(clientName)},<br><br>
+                Suite à votre signalement SAV, votre accès pour <strong>${escapeHtml(oldAcc.service_name || 'votre service')}</strong> a été entièrement renouvelé et vérifié par notre équipe technique sous votre garantie NeonPass.
+              </p>
+              <div style="background:rgba(18,16,38,0.9);border:1px solid rgba(255,77,148,0.35);border-radius:14px;padding:20px;margin:20px 0;">
+                <div style="font-weight:700;color:#ff9cc4;font-size:14px;margin-bottom:12px;">🔐 Vos nouveaux accès :</div>
+                <div style="margin-bottom:8px;font-size:13.5px;"><span style="color:#a8a5cf;">Identifiant :</span> <strong style="color:#ffffff;font-family:monospace;">${escapeHtml(newAcc.login)}</strong></div>
+                ${newAcc.password ? `<div style="margin-bottom:8px;font-size:13.5px;"><span style="color:#a8a5cf;">Mot de passe :</span> <strong style="color:#ffffff;font-family:monospace;">${escapeHtml(newAcc.password)}</strong></div>` : ''}
+                ${newAcc.slot_profile ? `<div style="margin-bottom:8px;font-size:13.5px;"><span style="color:#a8a5cf;">Profil / Écran :</span> <strong style="color:#ffffff;font-family:monospace;">${escapeHtml(newAcc.slot_profile)}</strong></div>` : ''}
+                ${newAcc.notes ? `<div style="margin-bottom:4px;font-size:13px;"><span style="color:#a8a5cf;">Consignes :</span> <span style="color:#d8d4f0;">${escapeHtml(newAcc.notes)}</span></div>` : ''}
+              </div>
+              <p style="font-size:13px;color:#a8a5cf;line-height:1.5;">Ces identifiants sont également mis à jour en temps réel sur votre espace client.</p>
+              <div style="text-align:center;margin:24px 0 14px;">
+                <a href="${SITE_URL}/compte" style="display:inline-block;padding:12px 26px;background:linear-gradient(135deg,#ff4d94,#ff7fb4);color:#080712;font-weight:700;text-decoration:none;border-radius:999px;font-size:14px;box-shadow:0 4px 18px rgba(255,77,148,0.35);">Accéder à mon Espace Client</a>
+              </div>
+              ${accessUrl ? `<p style="font-size:12px;text-align:center;color:#8f8ba8;margin-top:14px;">Fiche de commande : <a href="${accessUrl}" style="color:#ff7fb4;text-decoration:none;">${accessUrl}</a></p>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:18px 24px;border-top:1px solid rgba(160,150,255,0.1);background:#0d0b1c;font-size:11.5px;color:#7a7698;line-height:1.6;">
+              NeonPass · Support technique & SAV garanti 7j/7<br>
+              <a href="${SITE_URL}" style="color:#ff7fb4;text-decoration:none;">${escapeHtml(DOMAIN)}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `.trim();
+
+      try {
+        const info = await mailTransporter.sendMail({
+          from: SMTP_FROM,
+          to: targetEmail,
+          subject: emailSubject,
+          html: emailHtml
+        });
+        emailSent = true;
+        await logEmailSent({
+          type: 'sav_replacement',
+          recipient: targetEmail,
+          subject: emailSubject,
+          status: 'sent',
+          messageId: info.messageId,
+          smtpResponse: info.response
+        });
+      } catch (err) {
+        console.error('[mail] Erreur envoi email SAV:', err.message);
+        await logEmailSent({
+          type: 'sav_replacement',
+          recipient: targetEmail,
+          subject: emailSubject,
+          status: 'failed',
+          errorMessage: err.message
+        });
+      }
+    }
+
     res.json({
       ok: true,
       oldAccountId: oldAcc.id,
       newAccount: updNew.rows[0],
       replacementMessage: msg,
-      whatsappUrl
+      whatsappUrl,
+      emailSent,
+      emailRecipient: targetEmail || null
     });
   })
 );
@@ -2541,6 +4094,8 @@ admin.get(
       WITH unified_clients AS (
         SELECT
           c.id AS client_id,
+          NULL::int AS customer_account_id,
+          NULL::text AS email,
           c.name,
           c.phone,
           c.notes,
@@ -2551,7 +4106,9 @@ admin.get(
         FROM clients c
         UNION
         SELECT
-          NULL AS client_id,
+          NULL::int AS client_id,
+          o.customer_account_id,
+          o.customer_email AS email,
           trim(concat(o.customer_name, ' ', o.customer_last_name)) AS name,
           o.customer_phone AS phone,
           '' AS notes,
@@ -2560,12 +4117,27 @@ admin.get(
           min(o.created_at) AS created_at,
           COALESCE(NULLIF(regexp_replace(o.customer_phone, '[^0-9]', '', 'g'), ''), lower(concat(o.customer_name, ' ', o.customer_last_name))) AS match_key
         FROM orders o
-        WHERE o.customer_name != '' OR o.customer_phone != ''
-        GROUP BY match_key, o.customer_name, o.customer_last_name, o.customer_phone
+        WHERE (o.customer_name != '' OR o.customer_phone != '') AND o.customer_name != 'Client supprimé'
+        GROUP BY match_key, o.customer_name, o.customer_last_name, o.customer_phone, o.customer_account_id, o.customer_email
+        UNION
+        SELECT
+          ca.client_id AS client_id,
+          ca.id AS customer_account_id,
+          ca.email AS email,
+          trim(concat(ca.first_name, ' ', ca.last_name)) AS name,
+          ca.phone,
+          concat('Compte Client Web : ', ca.email) AS notes,
+          NULL AS client_code,
+          NULL AS airtable_id,
+          ca.created_at,
+          COALESCE(NULLIF(regexp_replace(ca.phone, '[^0-9]', '', 'g'), ''), lower(ca.email)) AS match_key
+        FROM customer_accounts ca
       ),
       dedup AS (
         SELECT
           max(client_id) AS id,
+          max(customer_account_id) AS customer_account_id,
+          max(NULLIF(email, '')) AS email,
           max(name) AS name,
           max(phone) AS phone,
           max(notes) AS notes,
@@ -2584,15 +4156,17 @@ admin.get(
         max(o.created_at) AS last_order_at
       FROM dedup d
       LEFT JOIN orders o ON
-        (NULLIF(d.phone, '') IS NOT NULL AND o.customer_phone = d.phone)
-        OR (lower(d.name) = lower(trim(concat(o.customer_name, ' ', o.customer_last_name))))
+        (d.customer_account_id IS NOT NULL AND o.customer_account_id = d.customer_account_id)
+        OR (d.customer_account_id IS NULL AND NULLIF(d.phone, '') IS NOT NULL AND (o.customer_phone = d.phone OR regexp_replace(o.customer_phone, '[^0-9]', '', 'g') = regexp_replace(d.phone, '[^0-9]', '', 'g')))
+        OR (d.customer_account_id IS NULL AND NULLIF(d.phone, '') IS NULL AND NULLIF(d.email, '') IS NOT NULL AND lower(o.customer_email) = lower(d.email))
+        OR (d.customer_account_id IS NULL AND NULLIF(d.phone, '') IS NULL AND NULLIF(d.email, '') IS NULL AND lower(d.name) = lower(trim(concat(o.customer_name, ' ', o.customer_last_name))))
     `;
     const params = [];
     if (q) {
-      sql += ` WHERE (lower(d.name) LIKE $1 OR lower(d.phone) LIKE $1 OR lower(d.notes) LIKE $1 OR lower(COALESCE(d.client_code, '')) LIKE $1)`;
+      sql += ` WHERE (lower(d.name) LIKE $1 OR lower(d.phone) LIKE $1 OR lower(d.notes) LIKE $1 OR lower(COALESCE(d.client_code, '')) LIKE $1 OR lower(COALESCE(d.email, '')) LIKE $1)`;
       params.push('%' + q + '%');
     }
-    sql += ` GROUP BY d.id, d.name, d.phone, d.notes, d.client_code, d.airtable_id, d.created_at, d.match_key
+    sql += ` GROUP BY d.id, d.customer_account_id, d.email, d.name, d.phone, d.notes, d.client_code, d.airtable_id, d.created_at, d.match_key
              ORDER BY total_spent DESC, last_order_at DESC NULLS LAST LIMIT 300`;
 
     const { rows } = await pool.query(sql, params);
@@ -2612,36 +4186,206 @@ admin.post(
       `INSERT INTO clients (name, phone, notes, client_code) VALUES ($1, $2, $3, $4) RETURNING *`,
       [name, phone, notes, clientCode]
     );
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone) {
+      await pool.query(
+        `UPDATE customer_accounts SET client_id = $1 WHERE client_id IS NULL AND regexp_replace(phone, '[^0-9]', '', 'g') = $2`,
+        [r.rows[0].id, cleanPhone]
+      );
+    }
     res.status(201).json(r.rows[0]);
   })
 );
 
 admin.patch(
-  '/clients/:id',
+  '/clients/:idOrKey',
   wrap(async (req, res) => {
-    const id = Number(req.params.id) || 0;
+    const rawKey = decodeURIComponent(req.params.idOrKey || '').trim();
+    const rawNum = Number(rawKey);
+    const isSafeId = Number.isInteger(rawNum) && rawNum > 0 && rawNum <= 2147483647 && !rawKey.startsWith('+') && rawKey.length <= 9;
+    const id = isSafeId ? rawNum : 0;
+    const cleanPhone = rawKey.replace(/[^0-9]/g, '');
+
     const out = {};
     if (req.body.name !== undefined) out.name = str(req.body.name, 100);
     if (req.body.phone !== undefined) out.phone = str(req.body.phone, 40);
     if (req.body.notes !== undefined) out.notes = str(req.body.notes, 500);
     const cols = Object.keys(out);
     if (!cols.length) throw new HttpError(400, 'Rien à modifier.');
-    const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
-    const r = await pool.query(
-      'UPDATE clients SET ' + sets + ' WHERE id = $' + (cols.length + 1) + ' RETURNING *',
-      [...cols.map((c) => out[c]), id]
-    );
-    if (!r.rowCount) throw new HttpError(404, 'Client introuvable.');
+
+    let r = null;
+    if (id > 0) {
+      const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
+      r = await pool.query(
+        'UPDATE clients SET ' + sets + ' WHERE id = $' + (cols.length + 1) + ' RETURNING *',
+        [...cols.map((c) => out[c]), id]
+      );
+    } else if (cleanPhone) {
+      const sets = cols.map((c, i) => c + ' = $' + (i + 1)).join(', ');
+      r = await pool.query(
+        `UPDATE clients SET ${sets} WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $${cols.length + 1} RETURNING *`,
+        [...cols.map((c) => out[c]), cleanPhone]
+      );
+    }
+    if (!r || !r.rowCount) {
+      const name = out.name || str(req.body.name, 100);
+      const phone = out.phone || str(req.body.phone, 40);
+      const notes = out.notes || str(req.body.notes, 500);
+      const clientCode = generateClientCode();
+      r = await pool.query(
+        `INSERT INTO clients (name, phone, notes, client_code) VALUES ($1, $2, $3, $4) RETURNING *`,
+        [name, phone, notes, clientCode]
+      );
+      if (cleanPhone) {
+        await pool.query(
+          `UPDATE customer_accounts SET client_id = $1 WHERE client_id IS NULL AND regexp_replace(phone, '[^0-9]', '', 'g') = $2`,
+          [r.rows[0].id, cleanPhone]
+        );
+      }
+    }
     res.json(r.rows[0]);
   })
 );
 
 admin.delete(
-  '/clients/:id',
+  '/clients/:idOrKey',
   wrap(async (req, res) => {
-    const id = Number(req.params.id) || 0;
-    await pool.query('DELETE FROM clients WHERE id = $1', [id]);
-    res.status(204).end();
+    const rawKey = decodeURIComponent(req.params.idOrKey || '').trim();
+    const body = req.body || {};
+    const rawNum = Number(rawKey);
+    const isSafeId = Number.isInteger(rawNum) && rawNum > 0 && rawNum <= 2147483647 && !rawKey.startsWith('+') && rawKey.length <= 9;
+    const bodyClientId = Number(body.clientId);
+    const clientIdParam = (Number.isInteger(bodyClientId) && bodyClientId > 0 && bodyClientId <= 2147483647) ? bodyClientId : (isSafeId ? rawNum : 0);
+    const bodyCaId = Number(body.customerAccountId);
+    const caIdParam = (Number.isInteger(bodyCaId) && bodyCaId > 0 && bodyCaId <= 2147483647) ? bodyCaId : 0;
+
+    const matchKeyParam = str(body.matchKey || (rawKey !== String(clientIdParam) ? rawKey : ''), 120).trim();
+    const phoneParam = str(body.phone || (rawKey.match(/^(\+?[0-9\s.-]+)$/) ? rawKey : ''), 40).trim();
+    const emailParam = normEmail(body.email || (rawKey.includes('@') ? rawKey : ''));
+    const nameParam = str(body.name || (!rawKey.includes('@') && !rawKey.match(/^[0-9+]/) && rawKey !== String(clientIdParam) ? rawKey : ''), 100).trim();
+    const deleteOrders = body.deleteOrders !== false;
+
+    const cleanPhone = (phoneParam || '').replace(/[^0-9]/g, '') || (matchKeyParam.match(/^[0-9]+$/) ? matchKeyParam : '');
+
+    const clientIds = new Set();
+    if (clientIdParam > 0) clientIds.add(clientIdParam);
+
+    const caIds = new Set();
+    if (caIdParam > 0) caIds.add(caIdParam);
+
+    const emails = new Set();
+    if (emailParam) emails.add(emailParam.toLowerCase());
+
+    // 1. Recherche dans clients
+    const cliRes = await pool.query(
+      `SELECT id, name, phone FROM clients
+       WHERE (id = $1 AND $1 > 0)
+          OR (NULLIF($2, '') IS NOT NULL AND regexp_replace(phone, '[^0-9]', '', 'g') = $2)
+          OR (NULLIF($3, '') IS NOT NULL AND lower(name) = lower($3))
+          OR (NULLIF($4, '') IS NOT NULL AND upper(client_code) = upper($4))`,
+      [clientIdParam, cleanPhone, nameParam, rawKey]
+    );
+    cliRes.rows.forEach((r) => clientIds.add(r.id));
+
+    // 2. Recherche dans customer_accounts
+    const clientIdsArr = Array.from(clientIds);
+    const caRes = await pool.query(
+      `SELECT id, email, phone FROM customer_accounts
+       WHERE (id = $1 AND $1 > 0)
+          OR (client_id = ANY($2::int[]))
+          OR (NULLIF($3, '') IS NOT NULL AND regexp_replace(phone, '[^0-9]', '', 'g') = $3)
+          OR (NULLIF($4, '') IS NOT NULL AND lower(email) = lower($4))
+          OR (NULLIF($5, '') IS NOT NULL AND lower(concat(first_name, ' ', last_name)) = lower($5))`,
+      [caIdParam, clientIdsArr, cleanPhone, emailParam, nameParam]
+    );
+    caRes.rows.forEach((r) => {
+      caIds.add(r.id);
+      if (r.email) emails.add(r.email.toLowerCase());
+    });
+
+    // 3. Fallback matchKey si rien trouvé pour l'instant
+    if (!clientIds.size && !caIds.size && matchKeyParam) {
+      if (matchKeyParam.includes('@')) {
+        const caM = await pool.query('SELECT id, email FROM customer_accounts WHERE lower(email) = lower($1)', [matchKeyParam]);
+        caM.rows.forEach((r) => { caIds.add(r.id); emails.add(r.email.toLowerCase()); });
+      } else if (matchKeyParam.match(/^[0-9]+$/)) {
+        const cliM = await pool.query(`SELECT id FROM clients WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1`, [matchKeyParam]);
+        cliM.rows.forEach((r) => clientIds.add(r.id));
+        const caM = await pool.query(`SELECT id, email FROM customer_accounts WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1`, [matchKeyParam]);
+        caM.rows.forEach((r) => { caIds.add(r.id); emails.add(r.email.toLowerCase()); });
+      } else {
+        const cliM = await pool.query('SELECT id FROM clients WHERE lower(name) = lower($1)', [matchKeyParam]);
+        cliM.rows.forEach((r) => clientIds.add(r.id));
+      }
+    }
+
+    const allClientIds = Array.from(clientIds);
+    const allCaIds = Array.from(caIds);
+    const allEmails = Array.from(emails);
+
+    // 4. Recherche des commandes associées
+    const ordRes = await pool.query(
+      `SELECT id FROM orders
+       WHERE (customer_account_id = ANY($1::int[]))
+          OR (NULLIF($2, '') IS NOT NULL AND regexp_replace(customer_phone, '[^0-9]', '', 'g') = $2)
+          OR (lower(customer_email) = ANY($3::text[]))
+          OR (NULLIF($4, '') IS NOT NULL AND lower(trim(concat(customer_name, ' ', customer_last_name))) = lower($4))`,
+      [allCaIds, cleanPhone, allEmails, nameParam]
+    );
+    const orderIds = ordRes.rows.map((r) => r.id);
+
+    if (!allClientIds.length && !allCaIds.length && !orderIds.length) {
+      throw new HttpError(404, 'Client introuvable.');
+    }
+
+    // 5. Nettoyage commandes
+    if (orderIds.length > 0) {
+      if (deleteOrders) {
+        await pool.query(
+          `UPDATE accounts SET status = 'available', order_id = NULL, assigned_at = NULL WHERE order_id = ANY($1::int[])`,
+          [orderIds]
+        );
+        await pool.query('DELETE FROM orders WHERE id = ANY($1::int[])', [orderIds]);
+      } else {
+        await pool.query(
+          `UPDATE orders
+           SET customer_account_id = NULL, customer_name = 'Client supprimé', customer_last_name = '',
+               customer_phone = '', customer_email = ''
+           WHERE id = ANY($1::int[])`,
+          [orderIds]
+        );
+      }
+    }
+
+    // 6. Nettoyage customer_accounts, sessions, OTP
+    if (allEmails.length > 0) {
+      await pool.query('DELETE FROM customer_otps WHERE lower(email) = ANY($1::text[])', [allEmails]);
+    }
+    if (allCaIds.length > 0) {
+      await pool.query('DELETE FROM customer_accounts WHERE id = ANY($1::int[])', [allCaIds]);
+    }
+
+    // 7. Nettoyage clients
+    if (allClientIds.length > 0) {
+      await pool.query('DELETE FROM clients WHERE id = ANY($1::int[])', [allClientIds]);
+    }
+
+    await audit(req, 'delete_client', {
+      rawKey,
+      clientIds: allClientIds,
+      customerAccountIds: allCaIds,
+      orderIdsCount: orderIds.length,
+      deleteOrders
+    });
+
+    res.json({
+      ok: true,
+      deleted: {
+        clients: allClientIds.length,
+        customerAccounts: allCaIds.length,
+        orders: orderIds.length
+      }
+    });
   })
 );
 
@@ -2650,6 +4394,9 @@ admin.get(
   wrap(async (req, res) => {
     const rawKey = req.params.key.trim();
     const cleanPhone = rawKey.replace(/[^0-9]/g, '');
+    const rawNum = Number(rawKey);
+    const isSafeId = Number.isInteger(rawNum) && rawNum > 0 && rawNum <= 2147483647 && !rawKey.startsWith('+') && rawKey.length <= 9;
+    const lookupId = isSafeId ? rawNum : 0;
 
     // 1. Profil client
     let client = null;
@@ -2663,23 +4410,85 @@ admin.get(
     if (!client) {
       const cr = await pool.query(
         `SELECT * FROM clients WHERE lower(name) = lower($1) OR id = $2::int OR upper(client_code) = upper($1) LIMIT 1`,
-        [rawKey, Number.isInteger(Number(rawKey)) ? Number(rawKey) : 0]
+        [rawKey, lookupId]
       );
       if (cr.rowCount) client = cr.rows[0];
     }
 
-    // 2. Commandes du client
+    // 2. Compte client Web (customer_accounts)
+    let customerAccount = null;
+    if (cleanPhone) {
+      const ca = await pool.query(
+        `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+         FROM customer_accounts WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 LIMIT 1`,
+        [cleanPhone]
+      );
+      if (ca.rows.length) customerAccount = ca.rows[0];
+    }
+    if (!customerAccount && rawKey.includes('@')) {
+      const ca = await pool.query(
+        `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+         FROM customer_accounts WHERE lower(email) = lower($1) LIMIT 1`,
+        [rawKey]
+      );
+      if (ca.rows.length) customerAccount = ca.rows[0];
+    }
+    if (!customerAccount && lookupId > 0) {
+      const ca = await pool.query(
+        `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+         FROM customer_accounts WHERE id = $1 LIMIT 1`,
+        [lookupId]
+      );
+      if (ca.rows.length) customerAccount = ca.rows[0];
+    }
+    if (!customerAccount && client && client.name) {
+      const ca = await pool.query(
+        `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+         FROM customer_accounts WHERE lower(concat(first_name, ' ', last_name)) = lower($1) LIMIT 1`,
+        [client.name]
+      );
+      if (ca.rows.length) customerAccount = ca.rows[0];
+    }
+
+    // 3. Commandes du client (élargi par téléphone, nom, compte client web ou email)
+    const matchName = client ? client.name : (customerAccount ? [customerAccount.first_name, customerAccount.last_name].filter(Boolean).join(' ') : rawKey);
+    const matchEmail = customerAccount ? customerAccount.email : (rawKey.includes('@') ? rawKey : '');
+    const matchCaId = customerAccount ? customerAccount.id : 0;
+
     const ordersRes = await pool.query(
       `SELECT * FROM orders
        WHERE (NULLIF($1, '') IS NOT NULL AND regexp_replace(customer_phone, '[^0-9]', '', 'g') = $1)
           OR (NULLIF($2, '') IS NOT NULL AND lower(trim(concat(customer_name, ' ', customer_last_name))) = lower($2))
+          OR ($3::int > 0 AND customer_account_id = $3)
+          OR (NULLIF($4, '') IS NOT NULL AND lower(customer_email) = lower($4))
        ORDER BY created_at DESC`,
-      [cleanPhone, client ? client.name : rawKey]
+      [cleanPhone, matchName, matchCaId, matchEmail]
     );
     const orders = ordersRes.rows;
     const orderIds = orders.map((o) => o.id);
 
-    // 3. Accès / comptes attribués
+    // Si le compte web n'a pas encore été trouvé, le déduire des commandes existantes
+    if (!customerAccount) {
+      for (const o of orders) {
+        if (o.customer_account_id) {
+          const ca = await pool.query(
+            `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+             FROM customer_accounts WHERE id = $1`,
+            [o.customer_account_id]
+          );
+          if (ca.rows.length) { customerAccount = ca.rows[0]; break; }
+        } else if (o.customer_email) {
+          const ca = await pool.query(
+            `SELECT id, email, first_name, last_name, phone, is_verified, status, last_login_at, last_login_ip, created_at, referral_code
+             FROM customer_accounts WHERE lower(email) = lower($1)`,
+            [o.customer_email]
+          );
+          if (ca.rows.length) { customerAccount = ca.rows[0]; break; }
+        }
+      }
+    }
+
+    // 4. Accès / comptes attribués
     let accounts = [];
     if (orderIds.length) {
       const accRes = await pool.query(
@@ -2697,6 +4506,32 @@ admin.get(
     const defaultName = [firstOrder.customer_name, firstOrder.customer_last_name].filter(Boolean).join(' ') || rawKey;
     const defaultPhone = firstOrder.customer_phone || (cleanPhone ? '+' + cleanPhone : '');
 
+    let referralInfo = null;
+    if (customerAccount) {
+      const refCount = await pool.query(
+        `SELECT count(*)::int AS count FROM orders WHERE referrer_customer_account_id = $1 AND status = 'confirmed'`,
+        [customerAccount.id]
+      );
+      const totalRefCount = await pool.query(
+        `SELECT count(*)::int AS count FROM orders WHERE referrer_customer_account_id = $1`,
+        [customerAccount.id]
+      );
+      const rewCount = await pool.query(
+        `SELECT count(*)::int AS count FROM customer_referral_rewards WHERE customer_account_id = $1`,
+        [customerAccount.id]
+      );
+      referralInfo = {
+        code: customerAccount.referral_code,
+        confirmedOrdersCount: refCount.rows[0].count,
+        totalOrdersCount: totalRefCount.rows[0].count,
+        rewardsCount: rewCount.rows[0].count
+      };
+    }
+
+    const unassignedOrdersCount = customerAccount
+      ? orders.filter((o) => !o.customer_account_id || o.customer_account_id !== customerAccount.id).length
+      : 0;
+
     res.json({
       client: client || {
         id: null,
@@ -2705,8 +4540,553 @@ admin.get(
         notes: ''
       },
       orders,
-      accounts
+      accounts,
+      customerAccount,
+      referralInfo,
+      unassignedOrdersCount
     });
+  })
+);
+
+// Assigner automatiquement les commandes d'un client à son compte Web
+admin.post(
+  '/clients/assign-orders',
+  wrap(async (req, res) => {
+    const customerAccountId = Number(req.body.customerAccountId) || 0;
+    if (!customerAccountId) throw new HttpError(400, 'Compte client manquant ou invalide.');
+
+    const caRes = await pool.query(
+      'SELECT id, email, first_name, last_name, phone, is_verified FROM customer_accounts WHERE id = $1',
+      [customerAccountId]
+    );
+    if (!caRes.rowCount) throw new HttpError(404, 'Compte client web introuvable.');
+    const ca = caRes.rows[0];
+
+    const rawOrderIds = Array.isArray(req.body.orderIds) ? req.body.orderIds : [];
+    let orderIds = [...new Set(rawOrderIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+
+    let updated = [];
+    if (orderIds.length) {
+      const r = await pool.query(
+        `UPDATE orders
+         SET customer_account_id = $1,
+             customer_email = CASE WHEN NULLIF(customer_email, '') IS NULL THEN $2 ELSE customer_email END
+         WHERE id = ANY($3)
+         RETURNING id`,
+        [ca.id, ca.email, orderIds]
+      );
+      updated = r.rows.map((x) => x.id);
+    } else {
+      const cleanPhone = (ca.phone || '').replace(/[^0-9]/g, '');
+      const fullName = [ca.first_name, ca.last_name].filter(Boolean).join(' ').trim();
+      const r = await pool.query(
+        `UPDATE orders
+         SET customer_account_id = $1,
+             customer_email = CASE WHEN NULLIF(customer_email, '') IS NULL THEN $2 ELSE customer_email END
+         WHERE (customer_account_id IS NULL OR customer_account_id <> $1)
+           AND (
+             (lower(customer_email) = lower($2) AND $2 <> '')
+             OR (NULLIF($3, '') IS NOT NULL AND regexp_replace(customer_phone, '[^0-9]', '', 'g') = $3)
+             OR (NULLIF($4, '') IS NOT NULL AND lower(trim(concat(customer_name, ' ', customer_last_name))) = lower($4))
+           )
+         RETURNING id`,
+        [ca.id, ca.email, cleanPhone, fullName]
+      );
+      updated = r.rows.map((x) => x.id);
+    }
+
+    await audit(req, 'client.assign_orders', {
+      customerAccountId: ca.id,
+      email: ca.email,
+      assignedCount: updated.length,
+      orderIds: updated
+    });
+
+    res.json({
+      ok: true,
+      assignedCount: updated.length,
+      orderIds: updated,
+      message: updated.length > 0
+        ? `${updated.length} commande(s) assignée(s) au compte de ${ca.first_name || ca.email}.`
+        : 'Toutes les commandes sont déjà assignées à ce compte.'
+    });
+  })
+);
+
+// Lien magique unique d'accès au compte (Vue Client sans mot de passe)
+admin.post(
+  '/clients/magic-token',
+  wrap(async (req, res) => {
+    const email = normEmail(req.body.email);
+    const customerAccountId = Number(req.body.customerAccountId) || 0;
+
+    let ca = null;
+    if (customerAccountId) {
+      const r = await pool.query('SELECT id, email, first_name, last_name FROM customer_accounts WHERE id = $1', [customerAccountId]);
+      if (r.rows.length) ca = r.rows[0];
+    }
+    if (!ca && email) {
+      const r = await pool.query('SELECT id, email, first_name, last_name FROM customer_accounts WHERE lower(email) = lower($1)', [email]);
+      if (r.rows.length) ca = r.rows[0];
+    }
+
+    if (!ca) {
+      throw new HttpError(404, 'Ce client ne possède pas encore de compte Web actif.');
+    }
+
+    const magicSecret = crypto.randomBytes(32).toString('hex');
+    const secretHash = sha256hex(magicSecret);
+
+    // Supprimer les anciens tokens magiques pour cet email
+    await pool.query(`DELETE FROM customer_otps WHERE lower(email) = lower($1) AND purpose = 'magic_login'`, [ca.email]);
+
+    await pool.query(
+      `INSERT INTO customer_otps (email, code_hash, purpose, metadata, expires_at)
+       VALUES ($1, $2, 'magic_login', $3, now() + interval '30 minutes')`,
+      [ca.email, secretHash, JSON.stringify({ adminImpersonation: true, adminAt: new Date().toISOString() })]
+    );
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const magicUrl = `${baseUrl}/compte?magic_token=${magicSecret}`;
+
+    await audit(req, 'ADMIN_IMPERSONATE_LINK', {
+      targetClientId: ca.id,
+      targetEmail: ca.email
+    });
+
+    res.json({
+      ok: true,
+      magicUrl,
+      magicToken: magicSecret,
+      customerEmail: ca.email
+    });
+  })
+);
+
+// Réinitialisation de mot de passe client par l'administrateur
+admin.post(
+  '/clients/reset-password',
+  wrap(async (req, res) => {
+    const email = normEmail(req.body.email);
+    const customerAccountId = Number(req.body.customerAccountId) || 0;
+    const newPassword = str(req.body.newPassword, 100);
+    const sendEmail = req.body.sendEmail !== false;
+
+    let ca = null;
+    if (customerAccountId) {
+      const r = await pool.query('SELECT id, email, first_name, last_name FROM customer_accounts WHERE id = $1', [customerAccountId]);
+      if (r.rows.length) ca = r.rows[0];
+    }
+    if (!ca && email) {
+      const r = await pool.query('SELECT id, email, first_name, last_name FROM customer_accounts WHERE lower(email) = lower($1)', [email]);
+      if (r.rows.length) ca = r.rows[0];
+    }
+
+    if (!ca) {
+      throw new HttpError(404, 'Compte client introuvable.');
+    }
+
+    let finalPassword = newPassword;
+    if (!finalPassword) {
+      // Générer un mot de passe temporaire lisible et sécurisé
+      finalPassword = 'NP-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+    }
+
+    const pwdHash = hashPassword(finalPassword);
+    await pool.query(`UPDATE customer_accounts SET password_hash = $1 WHERE id = $2`, [pwdHash, ca.id]);
+
+    // Révocation des anciennes sessions
+    await pool.query(`DELETE FROM customer_sessions WHERE customer_account_id = $1`, [ca.id]);
+
+    if (sendEmail) {
+      const emailSubject = `🔑 Réinitialisation de votre mot de passe NeonPass`;
+      const emailHtml = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>${escapeHtml(emailSubject)}</title></head>
+<body style="margin:0;padding:0;background-color:#080712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080712;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;background:#121026;border:1px solid rgba(255,77,148,0.3);border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(0,0,0,0.65);">
+          <tr><td style="height:4px;background:linear-gradient(90deg,#ff4d94,#ff7fb4,#8e54ff);"></td></tr>
+          <tr>
+            <td align="center" style="padding:28px 24px 20px;border-bottom:1px solid rgba(160,150,255,0.12);">
+              <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;font-family:'Unbounded',system-ui,sans-serif;">Neon<span style="color:#ff4d94;font-weight:900;">Pass</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 28px 24px;color:#efecff;text-align:center;">
+              <h1 style="margin:0 0 14px;font-size:20px;font-weight:700;color:#ffffff;">Réinitialisation de votre mot de passe</h1>
+              <p style="font-size:14px;line-height:1.6;color:#a8a5cf;text-align:left;">
+                Bonjour ${escapeHtml(ca.first_name || 'Client')},<br><br>
+                Votre mot de passe Espace Client a été réinitialisé. Vous pouvez vous connecter à votre compte à l'aide des identifiants suivants :
+              </p>
+              <div style="background:rgba(18,16,38,0.9);border:1px solid rgba(255,77,148,0.35);border-radius:14px;padding:20px;margin:22px 0;text-align:left;">
+                <div style="margin-bottom:8px;font-size:13.5px;"><span style="color:#a8a5cf;">Identifiant (Email) :</span> <strong style="color:#ffffff;">${escapeHtml(ca.email)}</strong></div>
+                <div style="font-size:13.5px;"><span style="color:#a8a5cf;">Nouveau mot de passe :</span> <strong style="color:#ff7fb4;font-family:monospace;font-size:16px;">${escapeHtml(finalPassword)}</strong></div>
+              </div>
+              <p style="font-size:12.5px;color:#8f8ba8;line-height:1.5;">Nous vous recommandons de modifier ce mot de passe dès votre première connexion.</p>
+              <div style="margin-top:24px;">
+                <a href="${SITE_URL}/compte" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#ff4d94,#ff7fb4);color:#080712;font-weight:700;text-decoration:none;border-radius:999px;font-size:14px;box-shadow:0 4px 18px rgba(255,77,148,0.35);">Me connecter à mon Espace Client</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:18px 24px;border-top:1px solid rgba(160,150,255,0.1);background:#0d0b1c;font-size:11.5px;color:#7a7698;line-height:1.6;">
+              NeonPass · Vos abonnements en toute sérénité<br>
+              <a href="${SITE_URL}" style="color:#ff7fb4;text-decoration:none;">${escapeHtml(DOMAIN)}</a> · <a href="${SITE_URL}/compte" style="color:#ff7fb4;text-decoration:none;">Mon Espace Client</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `.trim();
+
+      try {
+        const info = await mailTransporter.sendMail({
+          from: SMTP_FROM,
+          to: ca.email,
+          subject: emailSubject,
+          html: emailHtml
+        });
+        await logEmailSent({
+          type: 'password_reset_admin',
+          recipient: ca.email,
+          subject: emailSubject,
+          status: 'sent',
+          messageId: info.messageId,
+          smtpResponse: info.response
+        });
+      } catch (err) {
+        console.error('[mail] Erreur envoi email reset password admin:', err.message);
+        await logEmailSent({
+          type: 'password_reset_admin',
+          recipient: ca.email,
+          subject: emailSubject,
+          status: 'failed',
+          errorMessage: err.message
+        });
+      }
+    }
+
+    await audit(req, 'ADMIN_RESET_PASSWORD', {
+      targetClientId: ca.id,
+      targetEmail: ca.email
+    });
+
+    res.json({
+      ok: true,
+      message: 'Mot de passe mis à jour avec succès !' + (sendEmail ? ' Un email avec les accès a été envoyé au client.' : ''),
+      newPassword: finalPassword,
+      email: ca.email
+    });
+  })
+);
+
+// ----- Communication & Campagnes Marketing -----
+admin.get(
+  '/communication/audiences',
+  wrap(async (req, res) => {
+    const allQ = await pool.query(`
+      SELECT DISTINCT lower(email) AS email FROM (
+        SELECT customer_email AS email FROM orders WHERE customer_email IS NOT NULL AND customer_email != ''
+        UNION
+        SELECT email FROM customer_accounts WHERE email IS NOT NULL AND email != ''
+      ) u WHERE email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$'
+    `);
+
+    const accountsQ = await pool.query(`
+      SELECT count(*)::int AS count FROM customer_accounts WHERE is_verified = true
+    `);
+
+    const activeQ = await pool.query(`
+      SELECT count(DISTINCT lower(COALESCE(NULLIF(customer_email, ''), (SELECT email FROM customer_accounts ca WHERE ca.id = orders.customer_account_id))))::int AS count
+      FROM orders
+      WHERE status = 'confirmed' AND (expires_at IS NULL OR expires_at > now())
+        AND (customer_email != '' OR customer_account_id IS NOT NULL)
+    `);
+
+    const expiringQ = await pool.query(`
+      SELECT count(DISTINCT lower(COALESCE(NULLIF(customer_email, ''), (SELECT email FROM customer_accounts ca WHERE ca.id = orders.customer_account_id))))::int AS count
+      FROM orders
+      WHERE status = 'confirmed' AND expires_at IS NOT NULL AND expires_at > now() AND expires_at <= now() + interval '7 days'
+        AND (customer_email != '' OR customer_account_id IS NOT NULL)
+    `);
+
+    res.json({
+      audiences: {
+        all: allQ.rows.length,
+        accounts: Number(accountsQ.rows[0]?.count || 0),
+        active: Number(activeQ.rows[0]?.count || 0),
+        expiring: Number(expiringQ.rows[0]?.count || 0)
+      }
+    });
+  })
+);
+
+admin.get(
+  '/communication/whatsapp-clients',
+  wrap(async (req, res) => {
+    const q = str(req.query.search, 80).toLowerCase();
+    let sql = `
+      SELECT
+        o.id AS order_id,
+        o.tracking_code,
+        trim(concat(o.customer_name, ' ', o.customer_last_name)) AS name,
+        o.customer_name AS first_name,
+        o.customer_last_name AS last_name,
+        o.customer_phone AS phone,
+        o.customer_email AS email,
+        o.status,
+        o.expires_at,
+        o.customer_account_id,
+        (SELECT string_agg(name, ' + ') FROM jsonb_to_recordset(o.items) AS (name text)) AS offer_name,
+        CASE WHEN o.customer_account_id IS NOT NULL OR EXISTS(SELECT 1 FROM customer_accounts ca WHERE ca.email = o.customer_email AND ca.is_verified = true) THEN true ELSE false END AS has_account
+      FROM orders o
+      WHERE (o.customer_phone != '' OR o.customer_email != '' OR o.customer_name != '')
+    `;
+    const params = [];
+    if (q) {
+      sql += ` AND (lower(o.customer_name) LIKE $1 OR lower(o.customer_last_name) LIKE $1 OR lower(o.customer_phone) LIKE $1 OR lower(o.customer_email) LIKE $1 OR lower(o.tracking_code) LIKE $1)`;
+      params.push('%' + q + '%');
+    }
+    sql += ` ORDER BY o.created_at DESC LIMIT 100`;
+
+    const { rows } = await pool.query(sql, params);
+    res.json({ clients: rows });
+  })
+);
+
+admin.post(
+  '/communication/test-email',
+  wrap(async (req, res) => {
+    const testEmail = str(req.body.testEmail, 150).trim().toLowerCase();
+    const subject = str(req.body.subject, 200).trim();
+    const previewText = str(req.body.previewText, 250).trim();
+    const contentHtml = String(req.body.contentHtml || '').trim();
+
+    if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
+      throw new HttpError(400, 'Adresse email de test invalide.');
+    }
+    if (!subject) throw new HttpError(400, 'L\'objet de l\'email est obligatoire.');
+    if (!contentHtml) throw new HttpError(400, 'Le contenu de l\'email est vide.');
+
+    const personalizedHtml = contentHtml
+      .replace(/{PRENOM}/g, 'Alexandre')
+      .replace(/{NOM}/g, 'Dupont')
+      .replace(/{EMAIL}/g, testEmail)
+      .replace(/{TRACKING_CODE}/g, 'NP-TRK-DEMO88')
+      .replace(/{LIEN_COMPTE}/g, `${SITE_URL}/compte?trk=NP-TRK-DEMO88`)
+      .replace(/{SITE_URL}/g, SITE_URL);
+
+    const fullHtml = renderMarketingEmailHtml({
+      subject,
+      previewText,
+      contentHtml: personalizedHtml
+    });
+
+    try {
+      const info = await mailTransporter.sendMail({
+        from: SMTP_FROM,
+        to: testEmail,
+        subject: `[TEST] ${subject}`,
+        html: fullHtml,
+        text: stripHtml(personalizedHtml)
+      });
+      await logEmailSent({
+        type: 'test_email',
+        recipient: testEmail,
+        subject: `[TEST] ${subject}`,
+        status: 'sent',
+        messageId: info.messageId,
+        smtpResponse: info.response
+      });
+    } catch (err) {
+      console.error('[test-email] SMTP error:', err.message);
+      await logEmailSent({
+        type: 'test_email',
+        recipient: testEmail,
+        subject: `[TEST] ${subject}`,
+        status: 'failed',
+        errorMessage: err.message
+      });
+      throw new HttpError(500, `Erreur lors de l'envoi SMTP : ${err.message}`);
+    }
+
+    await audit(req, 'communication.test_email', { to: testEmail, subject });
+    res.json({ ok: true, message: `Email de test envoyé avec succès à ${testEmail} !` });
+  })
+);
+
+admin.post(
+  '/communication/send-campaign',
+  wrap(async (req, res) => {
+    const target = str(req.body.target, 30).trim() || 'all';
+    const subject = str(req.body.subject, 200).trim();
+    const previewText = str(req.body.previewText, 250).trim();
+    const contentHtml = String(req.body.contentHtml || '').trim();
+
+    if (!subject) throw new HttpError(400, 'L\'objet de la campagne est obligatoire.');
+    if (!contentHtml) throw new HttpError(400, 'Le contenu de la campagne est vide.');
+
+    let recipientsQuery = '';
+    if (target === 'accounts') {
+      recipientsQuery = `
+        SELECT DISTINCT ON (lower(email))
+          lower(email) AS email, first_name, last_name, phone,
+          (SELECT tracking_code FROM orders WHERE customer_account_id = ca.id OR customer_email = ca.email ORDER BY created_at DESC LIMIT 1) AS tracking_code
+        FROM customer_accounts ca
+        WHERE is_verified = true AND email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$'
+        ORDER BY lower(email), created_at DESC
+      `;
+    } else if (target === 'active') {
+      recipientsQuery = `
+        SELECT DISTINCT ON (lower(email))
+          lower(email) AS email,
+          customer_name AS first_name,
+          customer_last_name AS last_name,
+          customer_phone AS phone,
+          tracking_code
+        FROM (
+          SELECT COALESCE(NULLIF(o.customer_email, ''), ca.email) AS email,
+                 o.customer_name, o.customer_last_name, o.customer_phone, o.tracking_code, o.created_at
+          FROM orders o
+          LEFT JOIN customer_accounts ca ON ca.id = o.customer_account_id
+          WHERE o.status = 'confirmed' AND (o.expires_at IS NULL OR o.expires_at > now())
+        ) sub
+        WHERE email IS NOT NULL AND email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$'
+        ORDER BY lower(email), created_at DESC
+      `;
+    } else if (target === 'expiring') {
+      recipientsQuery = `
+        SELECT DISTINCT ON (lower(email))
+          lower(email) AS email,
+          customer_name AS first_name,
+          customer_last_name AS last_name,
+          customer_phone AS phone,
+          tracking_code
+        FROM (
+          SELECT COALESCE(NULLIF(o.customer_email, ''), ca.email) AS email,
+                 o.customer_name, o.customer_last_name, o.customer_phone, o.tracking_code, o.created_at
+          FROM orders o
+          LEFT JOIN customer_accounts ca ON ca.id = o.customer_account_id
+          WHERE o.status = 'confirmed' AND o.expires_at IS NOT NULL AND o.expires_at > now() AND o.expires_at <= now() + interval '7 days'
+        ) sub
+        WHERE email IS NOT NULL AND email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$'
+        ORDER BY lower(email), created_at DESC
+      `;
+    } else {
+      recipientsQuery = `
+        SELECT DISTINCT ON (lower(email))
+          lower(email) AS email,
+          first_name,
+          last_name,
+          phone,
+          tracking_code
+        FROM (
+          SELECT customer_email AS email, customer_name AS first_name, customer_last_name AS last_name, customer_phone AS phone, tracking_code, created_at FROM orders WHERE customer_email IS NOT NULL AND customer_email != ''
+          UNION
+          SELECT email, first_name, last_name, phone, NULL AS tracking_code, created_at FROM customer_accounts WHERE is_verified = true
+        ) u
+        WHERE email ~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$'
+        ORDER BY lower(email), created_at DESC
+      `;
+    }
+
+    const { rows: recipients } = await pool.query(recipientsQuery);
+    if (!recipients.length) {
+      throw new HttpError(400, 'Aucun destinataire avec adresse email valide trouvé pour cette audience cible.');
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    const batchSize = 5;
+    for (let i = 0; i < recipients.length; i += batchSize) {
+      const batch = recipients.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (r) => {
+          try {
+            const pFirstName = r.first_name ? escapeHtml(r.first_name) : 'Client';
+            const pLastName = r.last_name ? escapeHtml(r.last_name) : '';
+            const pEmail = r.email;
+            const pTrk = r.tracking_code || '';
+            const pAccountLink = `${SITE_URL}/compte` + (pTrk ? `?action=register&email=${encodeURIComponent(pEmail)}&trk=${encodeURIComponent(pTrk)}` : '');
+
+            const personalizedHtml = contentHtml
+              .replace(/{PRENOM}/g, pFirstName)
+              .replace(/{NOM}/g, pLastName)
+              .replace(/{EMAIL}/g, pEmail)
+              .replace(/{TRACKING_CODE}/g, pTrk)
+              .replace(/{LIEN_COMPTE}/g, pAccountLink)
+              .replace(/{SITE_URL}/g, SITE_URL);
+
+            const fullHtml = renderMarketingEmailHtml({
+              subject,
+              previewText,
+              contentHtml: personalizedHtml
+            });
+
+            const info = await mailTransporter.sendMail({
+              from: SMTP_FROM,
+              to: r.email,
+              subject,
+              html: fullHtml,
+              text: stripHtml(personalizedHtml)
+            });
+            await logEmailSent({
+              type: 'campaign',
+              recipient: r.email,
+              subject,
+              status: 'sent',
+              messageId: info.messageId,
+              smtpResponse: info.response
+            });
+            sent++;
+          } catch (err) {
+            console.error('[campaign error] ' + r.email, err.message);
+            await logEmailSent({
+              type: 'campaign',
+              recipient: r.email,
+              subject,
+              status: 'failed',
+              errorMessage: err.message
+            });
+            failed++;
+          }
+        })
+      );
+    }
+
+    await audit(req, 'communication.campaign_sent', {
+      target,
+      subject,
+      total: recipients.length,
+      sent,
+      failed
+    });
+
+    res.json({
+      ok: true,
+      message: `Campagne envoyée avec succès : ${sent} envoyé(s), ${failed} échec(s) sur ${recipients.length} destinataire(s).`,
+      total: recipients.length,
+      sent,
+      failed
+    });
+  })
+);
+
+admin.get(
+  '/communication/email-logs',
+  wrap(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 100`
+    );
+    res.json({ logs: rows });
   })
 );
 
@@ -3028,6 +5408,11 @@ async function initDb() {
   for (let i = 1; i <= 30; i++) {
     try {
       await pool.query(sql);
+      await pool.query(`
+        UPDATE customer_accounts
+        SET referral_code = 'NP-REF-' || upper(substr(md5(random()::text || id::text || email), 1, 6))
+        WHERE referral_code IS NULL;
+      `);
       console.log('[db] schéma prêt');
       return;
     } catch (e) {

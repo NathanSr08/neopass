@@ -203,3 +203,100 @@ WHERE tracking_code IS NULL;
 INSERT INTO offers (slug, name, category, tag, price, was_price, description, features, hue, is_pack, active, sort, pack_items)
 VALUES ('disney-plus', 'Disney+', 'streaming', 'Populaire', 25.00, 35.00, 'Films et séries Disney, Pixar, Marvel, Star Wars et Star.', '["Films et séries illimités", "4K Ultra HD", "Profil personnel", "Garantie 1 an"]'::jsonb, 210, FALSE, TRUE, 25, '[]'::jsonb)
 ON CONFLICT (slug) DO NOTHING;
+
+-- Comptes clients, Authentification & Sécurité OTP
+CREATE TABLE IF NOT EXISTS customer_accounts (
+  id             SERIAL PRIMARY KEY,
+  email          TEXT UNIQUE NOT NULL,
+  password_hash  TEXT NOT NULL,
+  first_name     TEXT NOT NULL DEFAULT '',
+  last_name      TEXT NOT NULL DEFAULT '',
+  phone          TEXT NOT NULL DEFAULT '',
+  client_id      INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+  is_verified    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_login_at  TIMESTAMPTZ,
+  last_login_ip  TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_idx ON customer_accounts (lower(email));
+
+-- Codes OTP (Inscription, Connexion suspecte, Réinitialisation de mot de passe)
+CREATE TABLE IF NOT EXISTS customer_otps (
+  id          SERIAL PRIMARY KEY,
+  email       TEXT NOT NULL,
+  code_hash   TEXT NOT NULL,
+  purpose     TEXT NOT NULL CHECK (purpose IN ('register', 'suspicious_login', 'reset_password', 'reset_authorized', 'magic_login')),
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  metadata    JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS customer_otps_email_idx ON customer_otps (lower(email), purpose);
+
+-- Terminaux et adresses IP reconnus (Détection de connexion suspecte)
+CREATE TABLE IF NOT EXISTS customer_known_devices (
+  id                  SERIAL PRIMARY KEY,
+  customer_account_id INTEGER NOT NULL REFERENCES customer_accounts(id) ON DELETE CASCADE,
+  device_hash         TEXT NOT NULL,
+  ip                  TEXT NOT NULL DEFAULT '',
+  user_agent          TEXT NOT NULL DEFAULT '',
+  last_used_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS customer_known_devices_idx ON customer_known_devices (customer_account_id, device_hash);
+CREATE INDEX IF NOT EXISTS customer_known_ips_idx ON customer_known_devices (customer_account_id, ip);
+
+-- Sessions actives des clients
+CREATE TABLE IF NOT EXISTS customer_sessions (
+  token_hash          TEXT PRIMARY KEY,
+  customer_account_id INTEGER NOT NULL REFERENCES customer_accounts(id) ON DELETE CASCADE,
+  ip                  TEXT NOT NULL DEFAULT '',
+  user_agent          TEXT NOT NULL DEFAULT '',
+  device_hash         TEXT NOT NULL DEFAULT '',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at          TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS customer_sessions_acc_idx ON customer_sessions (customer_account_id);
+
+-- Association des commandes aux comptes clients
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_account_id INTEGER REFERENCES customer_accounts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS orders_customer_account_idx ON orders (customer_account_id);
+CREATE INDEX IF NOT EXISTS orders_customer_email_idx ON orders (lower(customer_email));
+
+-- Journal d'audit détaillé des emails envoyés (SMTP)
+CREATE TABLE IF NOT EXISTS email_logs (
+  id            BIGSERIAL PRIMARY KEY,
+  type          TEXT NOT NULL,
+  recipient     TEXT NOT NULL,
+  subject       TEXT NOT NULL DEFAULT '',
+  status        TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'failed')),
+  message_id    TEXT NOT NULL DEFAULT '',
+  smtp_response TEXT NOT NULL DEFAULT '',
+  error_message TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS email_logs_created_idx ON email_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS email_logs_recipient_idx ON email_logs (lower(recipient));
+
+-- Programme de Parrainage (Lien de parrainage, Comptabilisation des commandes confirmées & Récompenses -50%)
+ALTER TABLE customer_accounts ADD COLUMN IF NOT EXISTS referral_code TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_referral_code_idx ON customer_accounts (upper(referral_code)) WHERE referral_code IS NOT NULL;
+UPDATE customer_accounts
+SET referral_code = 'NP-REF-' || upper(substr(md5(random()::text || id::text || email), 1, 6))
+WHERE referral_code IS NULL;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS referral_code TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS referrer_customer_account_id INTEGER REFERENCES customer_accounts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS orders_referrer_customer_account_idx ON orders (referrer_customer_account_id);
+
+CREATE TABLE IF NOT EXISTS customer_referral_rewards (
+  id                  SERIAL PRIMARY KEY,
+  customer_account_id INTEGER NOT NULL REFERENCES customer_accounts(id) ON DELETE CASCADE,
+  promo_code          TEXT NOT NULL REFERENCES promo_codes(code) ON DELETE CASCADE,
+  pct                 INTEGER NOT NULL DEFAULT 50,
+  tier                INTEGER NOT NULL DEFAULT 1,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS customer_referral_rewards_acc_idx ON customer_referral_rewards (customer_account_id);
