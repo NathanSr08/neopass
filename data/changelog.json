@@ -1,0 +1,101 @@
+[
+  {
+    "id": "cl-2026-11-24-1",
+    "version": "v2.3.0",
+    "date": "2026-11-24",
+    "time": "08:30",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Attribution de Stock Avancée (Automatique ou Spécifique)",
+    "summary": "Système à deux vitesses pour attribuer les accès : attribution automatique du premier stock libre ou sélection manuelle précise d'un compte spécifique.",
+    "details": [
+      "Fiche Commande : Ajout du bouton « 🎯 Attribuer un stock spécifique » ouvrant un sélecteur interactif avec recherche en temps réel et filtre par offre.",
+      "Section Recommandée : Mise en avant automatique des comptes disponibles correspondant aux produits achetés (badge ⭐ RECOMMANDÉS).",
+      "Actions par produit commandé : Chaque produit affiche son statut en direct (✓ Attribué ou En attente) avec les boutons rapides [⚡ Auto] et [🎯 Spécifique].",
+      "Attribution depuis l'onglet Stock : Bouton [🎯 Attribuer] sur chaque compte disponible avec liste des commandes candidates et détection immédiate des commandes en attente.",
+      "Nouveaux endpoints API : GET /api/admin/orders/:id/matching-accounts et GET /api/admin/accounts/:id/candidate-orders.",
+      "Test automatisé n°10 : Validation complète des flux d'attribution spécifique, de visibilité client (/api/acces/:token) et de désassignation."
+    ]
+  },
+  {
+    "id": "cl-2026-11-23-1",
+    "version": "v2.2.5",
+    "date": "2026-11-23",
+    "time": "11:00",
+    "category": "improvement",
+    "categoryLabel": "⚡ Amélioration",
+    "title": "Gestion personnalisée des durées d'abonnement & SAV",
+    "summary": "Support des durées personnalisées sur les commandes (ex: abonnements 1 mois pour Claude Nolimittoken).",
+    "details": [
+      "Prise en compte fine de la durée unitaire (1 mois, 6 mois, 12 mois) avec recalcul automatique de la date d'échéance exacte.",
+      "Ajustement réussi sur la commande #31 (Claude Nolimittoken) passée à 1 mois avec expiration au 11 décembre 2026.",
+      "Maintien de la cohérence d'affichage sur l'espace abonné client (/compte) et la fiche sécurisée (/acces/:token)."
+    ]
+  },
+  {
+    "id": "cl-2026-11-17-2",
+    "version": "v2.2.0",
+    "date": "2026-11-17",
+    "time": "13:00",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Moteur Internationalisation Multilingue (FR, EN, HE) & RTL Hébreu",
+    "summary": "Déploiement du support de 3 langues avec détection automatique du navigateur et mode de lecture droite-à-gauche pour l'hébreu.",
+    "details": [
+      "Détection automatique de la langue système de l'utilisateur (navigator.languages / navigator.language) avec bascule automatique.",
+      "Sélecteur de langue interactif dans la barre de navigation et dans le tiroir mobile avec mémorisation localStorage.",
+      "Support complet de l'hébreu en mode RTL (dir='rtl') : inversion des marges, boutons flottants WhatsApp et sens de lecture.",
+      "Dictionnaire OFFERS_I18N : Traduction complète et dynamique des 16 produits du catalogue (nom, tag, description et liste à puces des fonctionnalités).",
+      "Suite de tests n°8 & n°9 : Couverture i18n et exécution headless app.js validant le rendu du catalogue dans les 3 langues."
+    ]
+  },
+  {
+    "id": "cl-2026-11-17-1",
+    "version": "v2.1.0",
+    "date": "2026-11-17",
+    "time": "08:30",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Programme de Parrainage (-50%) & Assignation Automatique CRM",
+    "summary": "Système de parrainage automatisé récompensant les clients fidèles et outil CRM d'attribution de commandes en 1 clic.",
+    "details": [
+      "Génération automatique d'un code de parrainage unique (NP-REF-XXXX) pour chaque compte client vérifié.",
+      "Comptabilisation des commandes confirmées des filleuls et déblocage automatique d'un bon unique -50% dès le palier de 5 commandes atteint.",
+      "Tableau de bord parrainage dans l'espace client avec bouton de partage du lien de parrainage.",
+      "Bouton d'assignation automatique dans le CRM admin pour lier toutes les commandes non rattachées d'un client à son compte vérifié."
+    ]
+  },
+  {
+    "id": "cl-2026-11-16-1",
+    "version": "v2.0.5",
+    "date": "2026-11-16",
+    "time": "11:30",
+    "category": "security",
+    "categoryLabel": "🔒 Sécurité",
+    "title": "Sauvegarde & Restauration Intégrée (SQL & JSON v2)",
+    "summary": "Moteur complet de sauvegarde préventive et de restauration directe depuis le panneau admin.",
+    "details": [
+      "Snapshot JSON v2 englobant l'intégralité des 12 tables applicatives avec respect de l'ordre topologique des clés étrangères.",
+      "Dump SQL PostgreSQL complet généré à la volée avec pg_dump --clean.",
+      "Sauvegarde préventive automatique créée avant chaque restauration pour sécuriser l'opération.",
+      "Purge sélective du journal d'audit par période (1h, 6h, 12h, 1j, 3j, 7j, 30j ou totale)."
+    ]
+  },
+  {
+    "id": "cl-2026-11-15-1",
+    "version": "v2.0.0",
+    "date": "2026-11-15",
+    "time": "16:00",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Espace Mon Compte, Sécurité OTP Gmail & Module SAV",
+    "summary": "Lancement de l'espace client unifié, sécurisation de l'authentification par email OTP et gestion des garanties SAV.",
+    "details": [
+      "Espace /compte : Visualisation du montant total dépensé, liste des abonnements actifs, dates d'échéance et identifiants.",
+      "Bouton Demande de remplacement SAV pour signaler un accès défectueux sous garantie.",
+      "Résolution SAV Admin en un clic avec préparation du message WhatsApp et expédition automatique des nouveaux accès par email.",
+      "Migration SMTP vers Gmail (smtp.gmail.com:465 SSL) avec journalisation complète (email_logs).",
+      "Charte visuelle cyber-néon unifiée sur tous les emails transactionnels et pages de la plateforme."
+    ]
+  }
+]

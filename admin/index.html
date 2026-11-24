@@ -163,6 +163,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="tab" role="tab" data-panel="settings" aria-selected="false">Paramètres</button>
     <button class="tab" role="tab" data-panel="security" aria-selected="false">Sécurité</button>
     <button class="tab" role="tab" data-panel="audit" aria-selected="false">Journal</button>
+    <button class="tab" role="tab" data-panel="changelog" aria-selected="false" id="changelogTab">Changelog <span class="pill on" style="font-size:10px;padding:1px 6px;margin-left:4px">v2.3.0</span></button>
   </div>
 
   <section class="panel" id="panel-orders">
@@ -809,6 +810,35 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <p class="empty" id="auditEmpty" hidden>Aucune action enregistrée.</p>
   </section>
 
+  <section class="panel" id="panel-changelog" hidden>
+    <div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;display:flex;align-items:center;gap:10px">
+          <span>📜 Journal des Mises à Jour & Évolutions</span>
+          <span class="pill on" style="font-size:11px">v2.3.0</span>
+        </h2>
+        <p class="hint" style="margin:4px 0 0">Historique détaillé et horodaté de toutes les modifications, fonctionnalités et correctifs apportés à NeonPass.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a class="btn small" href="/changelog" target="_blank" rel="noopener">🔗 Ouvrir page publique</a>
+        <button class="btn small" type="button" id="changelogRefresh">🔄 Actualiser</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0">
+      <input type="search" class="input" id="changelogSearch" placeholder="🔍 Rechercher une version, feature, mot-clé..." style="flex:1;min-width:240px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="changelogCategoryFilters">
+        <button class="pill on" data-cat="all" type="button" style="cursor:pointer">Toutes</button>
+        <button class="pill" data-cat="feature" type="button" style="cursor:pointer">✨ Nouveautés</button>
+        <button class="pill" data-cat="improvement" type="button" style="cursor:pointer">⚡ Améliorations</button>
+        <button class="pill" data-cat="security" type="button" style="cursor:pointer">🔒 Sécurité</button>
+      </div>
+    </div>
+
+    <div id="changelogTimeline" style="display:grid;gap:14px;margin-top:16px"></div>
+    <p class="empty" id="changelogEmpty" hidden>Aucune mise à jour ne correspond aux filtres.</p>
+  </section>
+
 </div>
 
 <dialog id="offerDlg">
@@ -951,7 +981,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
             <b style="color:var(--text);font-size:14px">🔐 Accès & Comptes attribués au client</b>
             <span id="orderViewAccCount" class="pill" style="margin-left:8px;font-size:11px"></span>
           </div>
-          <button class="btn small primary" type="button" id="orderViewAutoAssignBtn">⚡ Attribuer depuis le stock</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn small" type="button" id="orderViewAutoAssignBtn" title="Attribuer automatiquement les premiers comptes disponibles en stock">⚡ Attribution auto</button>
+            <button class="btn small primary" type="button" id="orderViewSpecificAssignBtn" title="Choisir précisément un compte disponible dans le stock">🎯 Attribuer un stock spécifique</button>
+          </div>
         </div>
         <div id="orderViewAssignedList" style="display:grid;gap:8px"></div>
         <p id="orderViewAssignedEmpty" class="hint" style="margin:8px 0 0" hidden>Aucun identifiant attribué pour cette commande.</p>
@@ -1162,10 +1195,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   </div>
 
   <div class="dlg-actions" style="margin-top:16px;flex-wrap:wrap;justify-content:space-between">
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn small danger" type="button" id="viewAccDelete">🗑️ Supprimer</button>
       <button class="btn small" type="button" id="viewAccUnassign" hidden>Désassigner</button>
       <button class="btn small" type="button" id="viewAccActivateSavBtn" style="border-color:var(--bad);color:var(--bad)" hidden>🚨 Activer SAV Fournisseur</button>
+      <button class="btn small primary" type="button" id="viewAccAssignToOrderBtn" hidden>🎯 Attribuer à une commande</button>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn small" type="button" id="viewAccCopyAll">📋 Copier identifiants</button>
@@ -1312,6 +1346,74 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <button class="btn" type="button" id="savResultCloseBtn">Fermer</button>
       <a class="btn primary" id="savResultWaBtn" href="#" target="_blank" rel="noopener">💬 Envoyer sur WhatsApp</a>
     </div>
+  </div>
+</dialog>
+
+<!-- Modal : Sélection et attribution d'un stock spécifique à une commande -->
+<dialog id="selectSpecificStockDlg" style="width:min(900px, calc(100vw - 24px));padding:0;border-radius:20px;border:1px solid var(--line);background:var(--panel);max-height:92vh;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)">
+    <div>
+      <h2 id="specificStockTitle" style="margin:0;font-size:18px">🎯 Attribuer un stock spécifique</h2>
+      <p class="hint" id="specificStockSubtitle" style="margin:2px 0 0;font-size:13px;color:var(--cyan)"></p>
+    </div>
+    <button type="button" class="btn small" id="specificStockClose" style="border:none;background:rgba(255,255,255,.08);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;color:var(--text);padding:0">✕</button>
+  </div>
+
+  <div style="padding:18px 22px;max-height:calc(92vh - 65px);overflow-y:auto">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <input type="search" class="input" id="specificStockSearch" placeholder="🔍 Filtrer par login, profil, notes, fournisseur..." style="flex:1;min-width:240px">
+      <select class="select" id="specificStockOfferFilter" style="max-width:280px">
+        <option value="">Tous les services disponibles</option>
+      </select>
+    </div>
+
+    <div id="specificStockRecommendedSec" style="margin-bottom:16px" hidden>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="pill on" style="font-size:11px;font-weight:700">⭐ RECOMMANDÉS</span>
+        <small style="color:var(--text);font-weight:600">Comptes disponibles pour les produits commandés</small>
+      </div>
+      <div id="specificStockRecommendedList" style="display:grid;gap:8px"></div>
+    </div>
+
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <small style="color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.05em" id="specificStockAllTitle">Stock disponible</small>
+        <span id="specificStockCountBadge" class="pill" style="font-size:11px"></span>
+      </div>
+      <div id="specificStockList" style="display:grid;gap:8px"></div>
+      <p id="specificStockEmpty" class="hint" style="margin:16px 0;text-align:center" hidden>Aucun compte disponible trouvé.</p>
+    </div>
+  </div>
+</dialog>
+
+<!-- Modal : Attribuer ce compte précis du stock à une commande -->
+<dialog id="assignStockToOrderDlg" style="width:min(880px, calc(100vw - 24px));padding:0;border-radius:20px;border:1px solid var(--line);background:var(--panel);max-height:92vh;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)">
+    <div>
+      <h2 style="margin:0;font-size:18px">🎯 Attribuer ce compte à une commande</h2>
+      <p class="hint" id="assignAccDlgSubtitle" style="margin:2px 0 0;font-size:13px;color:var(--cyan)"></p>
+    </div>
+    <button type="button" class="btn small" id="assignAccDlgClose" style="border:none;background:rgba(255,255,255,.08);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;color:var(--text);padding:0">✕</button>
+  </div>
+
+  <div style="padding:18px 22px;max-height:calc(92vh - 65px);overflow-y:auto">
+    <div id="assignAccPreviewCard" style="background:rgba(0,242,254,.04);border:1px solid rgba(0,242,254,.3);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+          <b id="assignAccPreviewOffer" style="color:var(--cyan);font-size:15px"></b>
+          <span id="assignAccPreviewSlot" class="pill" style="font-size:11px"></span>
+        </div>
+        <div style="font-size:13px">Login : <span id="assignAccPreviewLogin" class="code"></span></div>
+      </div>
+      <div id="assignAccPreviewSupplier" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <input type="search" class="input" id="assignAccOrderSearch" placeholder="🔍 Rechercher une commande par n° (ex: 42), nom client, téléphone, produit..." style="width:100%">
+    </div>
+
+    <div id="assignAccOrdersList" style="display:grid;gap:8px"></div>
+    <p id="assignAccOrdersEmpty" class="hint" style="margin:16px 0;text-align:center" hidden>Aucune commande correspondante trouvée.</p>
   </div>
 </dialog>
 
@@ -2508,7 +2610,68 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       });
     }
 
-    // Auto-attribution depuis le stock
+    // Mise à jour de la liste des produits commandés avec indicateur d'état & actions rapides
+    const itemsBox = $('#orderViewItemsList');
+    if (itemsBox) {
+      itemsBox.textContent = '';
+      const orderItems = Array.isArray(o.items) ? o.items : [];
+      if (!orderItems.length) {
+        itemsBox.append(h('div', { className: 'hint' }, 'Aucun produit renseigné.'));
+      } else {
+        const assignedOfferIds = list.map((a) => a.offer_id);
+        orderItems.forEach((item) => {
+          const fullOffer = offers.find((off) => off.id === item.id) || item;
+          let isFullyAssigned = false;
+          if (fullOffer.isPack && Array.isArray(fullOffer.packItems) && fullOffer.packItems.length) {
+            isFullyAssigned = fullOffer.packItems.every((subId) => assignedOfferIds.includes(subId));
+          } else {
+            isFullyAssigned = assignedOfferIds.includes(item.id);
+          }
+
+          const itemRow = h('div', {
+            style: 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;font-size:13px;flex-wrap:wrap;gap:8px'
+          });
+
+          const leftInfo = h('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
+            h('span', { style: 'font-weight:600' }, '• ' + item.name),
+            h('span', { style: 'color:var(--neon);font-family:\'JetBrains Mono\', monospace' }, fmt(item.price)),
+            isFullyAssigned
+              ? h('span', { className: 'pill on', style: 'font-size:10px;font-weight:700' }, '✓ Attribué')
+              : h('span', { className: 'pill off', style: 'font-size:10px' }, 'En attente d\'accès')
+          );
+
+          const rightActions = h('div', { style: 'display:flex;gap:6px;align-items:center' });
+          if (!isFullyAssigned) {
+            const quickAutoBtn = h('button', { className: 'btn small', type: 'button', style: 'font-size:11px;padding:3px 8px', title: 'Attribuer automatiquement depuis le stock disponible' }, '⚡ Auto');
+            quickAutoBtn.onclick = async () => {
+              quickAutoBtn.disabled = true;
+              try {
+                const res = await api('/orders/' + o.id + '/assign-account', { method: 'POST', body: { offerId: item.id } });
+                toast('Compte attribué pour ' + item.name + ' !');
+                refreshOrderAccounts(o, pKey);
+                loadOrders();
+                loadAccounts();
+              } catch (err) {
+                quickAutoBtn.disabled = false;
+                toast('Stock insuffisant : ' + err.message, true);
+              }
+            };
+
+            const quickSpecificBtn = h('button', { className: 'btn small primary', type: 'button', style: 'font-size:11px;padding:3px 8px', title: 'Choisir un compte précis dans le stock pour ce produit' }, '🎯 Spécifique');
+            quickSpecificBtn.onclick = () => {
+              openSpecificStockDialog(o, item.id);
+            };
+
+            rightActions.append(quickAutoBtn, quickSpecificBtn);
+          }
+
+          itemRow.append(leftInfo, rightActions);
+          itemsBox.append(itemRow);
+        });
+      }
+    }
+
+    // Auto-attribution de tous les produits non assignés depuis le stock libre
     $('#orderViewAutoAssignBtn').onclick = async () => {
       const orderItems = o.items || [];
       if (!orderItems.length) return toast('Aucun produit dans la commande.', true);
@@ -2545,6 +2708,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         loadOrders();
         loadAccounts();
       }
+    };
+
+    // Attribution d'un stock spécifique choisi manuellement par l'admin
+    $('#orderViewSpecificAssignBtn').onclick = () => {
+      openSpecificStockDialog(o);
     };
 
     // Message de livraison WhatsApp
@@ -3258,6 +3426,16 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         .catch(() => prompt('Identifiants :', str));
     };
 
+    const assignOrderBtn = $('#viewAccAssignToOrderBtn');
+    if (a.status === 'available') {
+      assignOrderBtn.hidden = false;
+      assignOrderBtn.onclick = () => {
+        openAssignStockToOrderDialog(a);
+      };
+    } else {
+      assignOrderBtn.hidden = true;
+    }
+
     unassignBtn.onclick = async () => {
       if (!confirm('Désassigner ce compte de la commande #' + a.order_id + ' ? Il redeviendra disponible en stock libre.')) return;
       try {
@@ -3289,6 +3467,244 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
   }
 
   $('#viewAccClose').addEventListener('click', () => accViewDlg.close());
+
+  // ===== ATTRIBUTION DU STOCK (AUTOMATIQUE OU SPÉCIFIQUE) =====
+  const specificStockDlg = $('#selectSpecificStockDlg');
+  let currentSpecificStockData = null;
+
+  async function openSpecificStockDialog(order, targetOfferId = null) {
+    if (!order || !order.id) return;
+    $('#specificStockTitle').textContent = '🎯 Attribuer un stock spécifique à la Commande #' + order.id;
+    const clientName = [order.customer_name, order.customer_last_name].filter(Boolean).join(' ') || 'Client';
+    $('#specificStockSubtitle').textContent = clientName + (order.customer_phone ? ' · ' + order.customer_phone : '') + (order.customer_email ? ' · ' + order.customer_email : '');
+
+    $('#specificStockSearch').value = '';
+    $('#specificStockRecommendedList').textContent = '';
+    $('#specificStockList').textContent = '⏳ Chargement du stock disponible...';
+    $('#specificStockEmpty').hidden = true;
+    specificStockDlg.showModal();
+
+    try {
+      const data = await api('/orders/' + order.id + '/matching-accounts');
+      currentSpecificStockData = data;
+
+      const sel = $('#specificStockOfferFilter');
+      sel.textContent = '';
+      sel.append(h('option', { value: '' }, 'Tous les services disponibles (' + (data.matchingAccounts.length + data.otherAccounts.length) + ')'));
+
+      const allOffersMap = {};
+      [...data.matchingAccounts, ...data.otherAccounts].forEach(a => {
+        allOffersMap[a.offer_id] = a.offer_name || 'Offre #' + a.offer_id;
+      });
+      Object.keys(allOffersMap).forEach(offId => {
+        const isNeeded = data.neededOfferIds.includes(Number(offId));
+        sel.append(h('option', { value: offId }, (isNeeded ? '⭐ ' : '') + allOffersMap[offId]));
+      });
+
+      if (targetOfferId) {
+        sel.value = String(targetOfferId);
+      }
+
+      renderSpecificStockList(order);
+    } catch (err) {
+      toast('Erreur chargement stock : ' + err.message, true);
+      specificStockDlg.close();
+    }
+  }
+
+  function renderSpecificStockList(order) {
+    if (!currentSpecificStockData) return;
+    const filterOfferId = $('#specificStockOfferFilter').value;
+    const search = $('#specificStockSearch').value.toLowerCase().trim();
+
+    const matchesFilter = (a) => {
+      if (filterOfferId && String(a.offer_id) !== filterOfferId) return false;
+      if (!search) return true;
+      const haystack = [a.offer_name, a.service_name, a.login, a.slot_profile, a.supplier, a.notes, a.private_notes].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(search);
+    };
+
+    const matchingFiltered = (currentSpecificStockData.matchingAccounts || []).filter(matchesFilter);
+    const otherFiltered = (currentSpecificStockData.otherAccounts || []).filter(matchesFilter);
+
+    const recSec = $('#specificStockRecommendedSec');
+    const recList = $('#specificStockRecommendedList');
+    recList.textContent = '';
+
+    if (matchingFiltered.length) {
+      recSec.hidden = false;
+      matchingFiltered.forEach(a => {
+        recList.append(createSpecificStockCard(a, order, true));
+      });
+    } else {
+      recSec.hidden = true;
+    }
+
+    const allList = $('#specificStockList');
+    allList.textContent = '';
+    const totalCount = matchingFiltered.length + otherFiltered.length;
+    $('#specificStockCountBadge').textContent = totalCount + ' compte(s)';
+    $('#specificStockEmpty').hidden = totalCount > 0;
+
+    const listToRender = recSec.hidden ? matchingFiltered.concat(otherFiltered) : otherFiltered;
+    if (listToRender.length) {
+      listToRender.forEach(a => {
+        allList.append(createSpecificStockCard(a, order, false));
+      });
+    } else if (matchingFiltered.length) {
+      allList.append(h('p', { className: 'hint', style: 'margin:4px 0' }, 'Tous les comptes disponibles correspondent aux produits recommandés ci-dessus.'));
+    }
+  }
+
+  function createSpecificStockCard(a, order, isRecommended) {
+    const card = h('div', {
+      style: 'background:' + (isRecommended ? 'rgba(0,242,254,.05)' : 'rgba(255,255,255,.03)') +
+             ';border:1px solid ' + (isRecommended ? 'rgba(0,242,254,.35)' : 'var(--line)') +
+             ';border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap'
+    });
+
+    const infoLeft = h('div', { style: 'font-size:13px;flex:1;min-width:240px' },
+      h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap' },
+        h('b', { style: 'color:' + (isRecommended ? 'var(--cyan)' : 'var(--text)') }, a.offer_name || a.service_name || 'Offre #' + a.offer_id),
+        a.slot_profile ? h('span', { className: 'pill', style: 'font-size:11px' }, a.slot_profile) : '',
+        a.supplier ? h('small', { style: 'color:var(--muted);font-size:11px' }, '· ' + a.supplier) : '',
+        a.cost > 0 ? h('small', { style: 'color:var(--muted);font-size:11px' }, '· ' + fmt(a.cost)) : ''
+      ),
+      h('div', {}, 'Login : ', h('span', { className: 'code', style: 'user-select:all' }, a.login)),
+      a.password ? h('div', {}, 'Passe : ', h('span', { className: 'code', style: 'user-select:all' }, a.password)) : '',
+      a.notes ? h('div', { style: 'color:var(--warn);font-size:12px;margin-top:2px' }, '📌 ' + a.notes) : ''
+    );
+
+    const assignBtn = h('button', { className: 'btn small primary', type: 'button' }, '🎯 Attribuer ce compte');
+    assignBtn.onclick = async () => {
+      assignBtn.disabled = true;
+      assignBtn.textContent = '⏳ Attribution...';
+      try {
+        await api('/orders/' + order.id + '/assign-account', {
+          method: 'POST',
+          body: { accountId: a.id }
+        });
+        toast('✅ Compte « ' + a.login + ' » attribué à la commande #' + order.id + ' !');
+        specificStockDlg.close();
+        refreshOrderAccounts(order);
+        loadOrders();
+        loadAccounts();
+      } catch (err) {
+        assignBtn.disabled = false;
+        assignBtn.textContent = '🎯 Attribuer ce compte';
+        toast('Erreur : ' + err.message, true);
+      }
+    };
+
+    card.append(infoLeft, assignBtn);
+    return card;
+  }
+
+  $('#specificStockClose').addEventListener('click', () => specificStockDlg.close());
+  $('#specificStockSearch').addEventListener('input', () => {
+    if (editingOrder) renderSpecificStockList(editingOrder);
+  });
+  $('#specificStockOfferFilter').addEventListener('change', () => {
+    if (editingOrder) renderSpecificStockList(editingOrder);
+  });
+
+  const assignStockToOrderDlg = $('#assignStockToOrderDlg');
+  let currentCandidateOrdersData = null;
+  let currentAssigningAccount = null;
+
+  async function openAssignStockToOrderDialog(account) {
+    if (!account || !account.id) return;
+    currentAssigningAccount = account;
+    $('#assignAccDlgSubtitle').textContent = 'Compte #' + account.id + ' · ' + (account.offer_name || account.service_name || 'Service');
+    $('#assignAccPreviewOffer').textContent = account.offer_name || account.service_name || 'Service';
+    $('#assignAccPreviewSlot').textContent = account.slot_profile || 'Pas de profil';
+    $('#assignAccPreviewLogin').textContent = account.login || '—';
+    $('#assignAccPreviewSupplier').textContent = (account.supplier ? 'Fournisseur : ' + account.supplier : '') + (account.cost > 0 ? ' (' + fmt(account.cost) + ')' : '');
+
+    $('#assignAccOrderSearch').value = '';
+    $('#assignAccOrdersList').textContent = '⏳ Chargement des commandes...';
+    $('#assignAccOrdersEmpty').hidden = true;
+    assignStockToOrderDlg.showModal();
+
+    try {
+      const data = await api('/accounts/' + account.id + '/candidate-orders');
+      currentCandidateOrdersData = data;
+      renderCandidateOrdersList(account);
+    } catch (err) {
+      toast('Erreur chargement commandes : ' + err.message, true);
+      assignStockToOrderDlg.close();
+    }
+  }
+
+  function renderCandidateOrdersList(account) {
+    if (!currentCandidateOrdersData) return;
+    const search = $('#assignAccOrderSearch').value.toLowerCase().trim();
+    const listEl = $('#assignAccOrdersList');
+    listEl.textContent = '';
+
+    const orders = (currentCandidateOrdersData.orders || []).filter(o => {
+      if (!search) return true;
+      const haystack = [
+        '#' + o.id, String(o.id), o.customer_name, o.customer_last_name, o.customer_phone, o.customer_email,
+        (o.items || []).map(i => i.name).join(' ')
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(search);
+    });
+
+    $('#assignAccOrdersEmpty').hidden = orders.length > 0;
+
+    orders.forEach(o => {
+      const isRecommended = !!o.needsThisOffer;
+      const card = h('div', {
+        style: 'background:' + (isRecommended ? 'rgba(0,242,254,.05)' : 'rgba(255,255,255,.03)') +
+               ';border:1px solid ' + (isRecommended ? 'rgba(0,242,254,.35)' : 'var(--line)') +
+               ';border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap'
+      });
+
+      const clientName = [o.customer_name, o.customer_last_name].filter(Boolean).join(' ') || 'Client';
+      const itemsStr = (o.items || []).map(i => i.name).join(', ') || 'Aucun produit';
+
+      const left = h('div', { style: 'font-size:13px;flex:1;min-width:240px' },
+        h('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap' },
+          h('b', { style: 'color:var(--text);font-size:14px' }, 'Commande #' + o.id),
+          isRecommended ? h('span', { className: 'pill on', style: 'font-size:11px;font-weight:700' }, '⭐ En attente de ce produit') : '',
+          h('span', { className: 'pill', style: 'font-size:11px' }, STATUS_LABEL[o.status] || o.status),
+          h('span', { style: 'color:var(--muted);font-size:11px' }, o.created_at || '')
+        ),
+        h('div', { style: 'font-weight:600;color:var(--cyan)' }, clientName + (o.customer_phone ? ' · ' + o.customer_phone : '')),
+        h('div', { style: 'color:var(--muted);font-size:12px;margin-top:2px' }, '📦 ' + itemsStr + ' · ' + fmt(o.total) + ' (' + (o.assigned_count || 0) + ' accès déjà attribué' + ((o.assigned_count || 0) > 1 ? 's' : '') + ')')
+      );
+
+      const assignBtn = h('button', { className: 'btn small primary', type: 'button' }, '🎯 Assigner à cette commande');
+      assignBtn.onclick = async () => {
+        assignBtn.disabled = true;
+        assignBtn.textContent = '⏳ Attribution...';
+        try {
+          await api('/orders/' + o.id + '/assign-account', {
+            method: 'POST',
+            body: { accountId: account.id }
+          });
+          toast('✅ Compte attribué à la commande #' + o.id + ' (' + clientName + ') !');
+          assignStockToOrderDlg.close();
+          if (accViewDlg && accViewDlg.open) accViewDlg.close();
+          loadAccounts();
+          loadOrders();
+        } catch (err) {
+          assignBtn.disabled = false;
+          assignBtn.textContent = '🎯 Assigner à cette commande';
+          toast('Erreur : ' + err.message, true);
+        }
+      };
+
+      card.append(left, assignBtn);
+      listEl.append(card);
+    });
+  }
+
+  $('#assignAccDlgClose').addEventListener('click', () => assignStockToOrderDlg.close());
+  $('#assignAccOrderSearch').addEventListener('input', () => {
+    if (currentAssigningAccount) renderCandidateOrdersList(currentAssigningAccount);
+  });
 
   function renderStockAlerts(alerts) {
     const banner = $('#accAlertBanner');
@@ -3423,6 +3839,15 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         openAccountViewDialog(a);
       });
 
+      let assignOrderBtn = '';
+      if (a.status === 'available') {
+        assignOrderBtn = h('button', { className: 'btn small primary', type: 'button', style: 'border-color:var(--cyan);color:var(--cyan)', title: 'Attribuer ce compte précis à une commande' }, '🎯 Attribuer');
+        assignOrderBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAssignStockToOrderDialog(a);
+        });
+      }
+
       const editBtn = h('button', { className: 'btn small', type: 'button', title: 'Modifier les informations' }, '✏️ Modifier');
       editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3465,7 +3890,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
         h('td', {}, a.slot_profile || h('span', { style: 'color:var(--muted)' }, '—')),
         h('td', {}, statusPill, clientInfo),
         notesTd,
-        h('td', {}, h('div', { className: 'row-actions' }, viewBtn, editBtn, delBtn))
+        h('td', {}, h('div', { className: 'row-actions' }, assignOrderBtn, viewBtn, editBtn, delBtn))
       );
 
       tr.addEventListener('click', () => openAccountViewDialog(a));
@@ -4853,11 +5278,107 @@ L'équipe NeonPass ⚡`;
     waPickerList.style.display = 'block';
   });
 
+  // ----- Changelog & Journal des Mises à Jour -----
+  let allAdminChangelogs = [];
+  let activeChangelogCat = 'all';
+
+  async function loadChangelog() {
+    const listEl = $('#changelogTimeline');
+    if (!listEl) return;
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)">⏳ Chargement de l\'historique des modifications...</div>';
+    try {
+      const res = await api('/changelog');
+      allAdminChangelogs = Array.isArray(res) ? res : [];
+      renderAdminChangelog();
+    } catch (err) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--bad)">Erreur : ' + err.message + '</div>';
+    }
+  }
+
+  function renderAdminChangelog() {
+    const listEl = $('#changelogTimeline');
+    const emptyMsg = $('#changelogEmpty');
+    const searchInp = $('#changelogSearch');
+    if (!listEl) return;
+
+    const q = (searchInp ? searchInp.value : '').toLowerCase().trim();
+    const filtered = allAdminChangelogs.filter((item) => {
+      if (activeChangelogCat !== 'all' && item.category !== activeChangelogCat) return false;
+      if (!q) return true;
+      const haystack = [
+        item.version,
+        item.date,
+        item.time,
+        item.title,
+        item.summary,
+        ...(item.details || [])
+      ].join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+
+    listEl.textContent = '';
+    if (emptyMsg) emptyMsg.hidden = filtered.length > 0;
+
+    filtered.forEach((item) => {
+      const card = h('div', {
+        style: 'background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:18px 20px;transition:border-color .15s'
+      });
+
+      const dateObj = new Date(item.date + 'T' + (item.time || '12:00') + ':00');
+      const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      const timeStr = item.time ? (' à ' + item.time) : '';
+
+      let catBadgeColor = 'color:var(--cyan);background:rgba(43,230,255,.1);border:1px solid rgba(43,230,255,.3)';
+      if (item.category === 'improvement') {
+        catBadgeColor = 'color:var(--ok);background:rgba(94,234,212,.1);border:1px solid rgba(94,234,212,.3)';
+      } else if (item.category === 'security') {
+        catBadgeColor = 'color:var(--warn);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3)';
+      }
+
+      const header = h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px' },
+        h('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
+          h('span', { className: 'pill on', style: 'font-weight:800;font-family:\'Unbounded\', sans-serif;font-size:11px' }, item.version),
+          h('span', { className: 'pill', style: 'font-size:11px;font-weight:700;' + catBadgeColor }, item.categoryLabel || item.category),
+          h('span', { style: 'font-size:12px;color:var(--muted);font-family:\'JetBrains Mono\', monospace' }, '📅 ' + formattedDate + timeStr)
+        )
+      );
+
+      const title = h('h3', { style: 'margin:0 0 6px;color:#fff;font-size:16px;font-family:\'Unbounded\', sans-serif' }, item.title);
+      const summary = h('p', { style: 'color:var(--muted);font-size:13.5px;margin:0 0 12px;line-height:1.5' }, item.summary);
+
+      const ul = h('ul', { style: 'margin:0;padding:12px 14px 12px 28px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;display:grid;gap:6px' });
+      (item.details || []).forEach((d) => {
+        const li = h('li', { style: 'font-size:13px;color:var(--text);line-height:1.5' }, d);
+        ul.append(li);
+      });
+
+      card.append(header, title, summary, ul);
+      listEl.append(card);
+    });
+  }
+
+  const clRefresh = $('#changelogRefresh');
+  if (clRefresh) clRefresh.addEventListener('click', () => loadChangelog().catch((e) => toast(e.message, true)));
+  const clSearch = $('#changelogSearch');
+  if (clSearch) clSearch.addEventListener('input', renderAdminChangelog);
+  document.querySelectorAll('#changelogCategoryFilters button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#changelogCategoryFilters button').forEach((b) => b.className = 'pill');
+      btn.className = 'pill on';
+      activeChangelogCat = btn.dataset.cat;
+      renderAdminChangelog();
+    });
+  });
+
   // ----- Onglets -----
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
     const pName = t.dataset.panel;
-    ['orders', 'renewals', 'accounts', 'clients', 'communication', 'offers', 'reviews', 'promos', 'sales', 'settings', 'security', 'audit'].forEach((p) => {
+    ['orders', 'renewals', 'accounts', 'clients', 'communication', 'offers', 'reviews', 'promos', 'sales', 'settings', 'security', 'audit', 'changelog'].forEach((p) => {
       const el = $('#panel-' + p);
       if (el) el.hidden = p !== pName;
     });
@@ -4865,6 +5386,7 @@ L'équipe NeonPass ⚡`;
     if (pName === 'accounts') loadAccounts().catch((e) => toast(e.message, true));
     if (pName === 'clients') loadClients().catch((e) => toast(e.message, true));
     if (pName === 'sales') loadSales().catch((e) => toast(e.message, true));
+    if (pName === 'changelog') loadChangelog().catch((e) => toast(e.message, true));
     if (pName === 'settings') {
       loadSettings().catch(() => {});
       loadNotify().catch(() => {});
@@ -4874,7 +5396,7 @@ L'équipe NeonPass ⚡`;
   }));
   $('#orderFilter').addEventListener('change', loadOrders);
 
-  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadCommunication(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadBackupStats(), loadSecurity(), loadSales(), loadAudit(), loadSystem()]).catch((e) => toast(e.message, true));
+  Promise.all([loadStats(), loadOrders(), loadOffers(), loadAccounts(), loadClients(), loadCommunication(), loadRenewals(), loadReviews(), loadPromos(), loadNotify(), loadSettings(), loadBackupStats(), loadSecurity(), loadSales(), loadAudit(), loadSystem(), loadChangelog()]).catch((e) => toast(e.message, true));
 })();
 </script>
 </body>

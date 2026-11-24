@@ -30,6 +30,8 @@
   - [Comptes Clients & Sécurité OTP](#9-comptes-clients-espace-mon-compte--sécurité-otp-email)
   - [Communication & Campagnes](#10-communication-marketing-campagnes-email--assistant-whatsapp)
   - [Programme de Parrainage (-50%)](#11-programme-de-parrainage--récompenses--50-dès-5-commandes-validées)
+  - [Multi-langue & RTL (FR, EN, HE)](#12-moteur-multi-langue-internationalisation-i18n--rtl)
+  - [Changelog & Historique](#13-journal-des-mises-à-jour--changelog)
 - [Architecture & Stack Technique](#-architecture--stack-technique)
 - [Installation & Déploiement](#-installation--déploiement)
 - [Variables d'Environnement](#-variables-denvironnement-env)
@@ -78,7 +80,10 @@
 * **Découplage intelligent Packs vs Stock unitaire** :
   * Les packs commerciaux (ex. *Pack XpressVPN + Disney+*) sont vendus au client sous une seule offre, mais piochés individuellement dans leurs stocks unitaires respectifs.
   * Fini les identifiants combinés artificiels : le stock reste modulaire et réutilisable.
-* **Auto-attribution en un clic** : Analyse les produits commandés et attribue automatiquement les accès disponibles en réserve.
+* **Double mode d'attribution du stock** :
+  * **Attribution Automatique (`⚡ Auto`)** : Pioche instantanément le premier compte disponible en stock libre pour chaque offre ou composant de pack de la commande.
+  * **Attribution de Stock Spécifique (`🎯 Spécifique`)** : Modal interactif permettant à l'administrateur de filtrer, comparer et choisir précisément le compte en stock (par exemple selon un slot/profil d'écran, un fournisseur précis ou des notes d'installation) et de l'assigner manuellement à la commande.
+  * **Attribution directe depuis l'onglet Stock (`🎯 Attribuer`)** : Depuis chaque compte disponible du coffre-fort, bouton d'attribution directe ouvrant les commandes candidates avec mise en avant immédiate des commandes en attente de ce produit (`⭐ En attente de ce produit`).
 * **Notes privées Admin** : Champ confidentiel visible uniquement dans l'administration pour conserver la facture d'achat, le fournisseur, l'identifiant de garantie ou le numéro d'invoice.
 * **Jauges critiques & Alertes de Stock** :
   * Possibilité d'activer ou désactiver globalement les alertes automatiques.
@@ -203,6 +208,40 @@
   * Badge `🤝 NP-REF-...` visible directement sur les lignes du tableau des commandes.
   * Filtre de recherche par code de parrainage dans l'onglet Commandes.
   * Synthèse des performances de parrainage (filleuls, commandes validées, bons accordés) intégrée dans la fiche client du CRM.
+
+### 12. Moteur Multi-langue, Internationalisation (i18n) & RTL
+* **3 Langues intégrées nativement** :
+  * 🇫🇷 **Français (FR)** : Langue par défaut et vitrine d'origine.
+  * 🇬🇧 **English (EN)** : Traduction complète du catalogue, panier, FAQ et footer.
+  * 🇮🇱 **עברית (Hébreu - HE)** : Traduction complète et support intégral Right-to-Left (RTL).
+* **Détection automatique de la langue système** :
+  * Analyse automatique de `navigator.languages` et `navigator.language` dès la première visite de l'utilisateur.
+  * Si le navigateur est configuré en Hébreu (`he`, `he-IL`, `iw`), le site bascule instantanément en hébreu avec inversion RTL.
+  * Si le navigateur est configuré en Anglais (`en`, `en-US`, `en-GB`...), le site s'affiche en anglais.
+  * Si le navigateur est en Français (`fr`, `fr-FR`...), le site reste en français.
+* **Sélecteur de langue interactif & mémorisation** :
+  * Bouton discret avec drapeau et code ISO (`🇫🇷 FR`, `🇬🇧 EN`, `🇮🇱 עברית`) dans la barre de navigation et dans le menu mobile.
+  * Menu déroulant stylisé néon et pilules tactiles rapides dans le tiroir mobile.
+  * Mémorisation persistante dans `localStorage` (`np_lang`) et support du paramètre URL prioritaire `?lang=fr|en|he`.
+* **Moteur RTL complet pour l'Hébreu** :
+  * Bascule dynamique des attributs `dir="rtl"` et de la classe `.is-rtl`.
+  * Réalignement automatique des textes, inversion du flux flexbox, positionnement miroir du bouton flottant WhatsApp et retournement des flèches/chevrons de navigation.
+* **Messages WhatsApp et paniers multilingues** :
+  * Génération des messages pré-remplis de commande WhatsApp traduits selon la langue active du visiteur.
+  * Rafraîchissement réactif instantané sans rechargement de page via l'événement personnalisé `languagechange`.
+
+### 13. Journal des Mises à Jour & Changelog
+* **Traçabilité complète des évolutions** :
+  * Historique horodaté (date et heure exacte) de l'ensemble des releases, fonctionnalités majeures, améliorations techniques et correctifs de sécurité.
+  * Structure de données normalisée dans `data/changelog.json`.
+* **Intégration directe dans le Dashboard Admin (`/admin`)** :
+  * Onglet dédié **`Changelog v2.3.0`** dans la barre de navigation de l'administration.
+  * Barre de recherche instantanée (filtrage par version, mot-clé, composant ou description).
+  * Filtres par pastilles de catégories : *Toutes*, *✨ Fonctionnalités*, *🚀 Améliorations*, *🛡️ Sécurité*.
+  * Timeline visuelle cyberpunk sombre avec puces de version, dates formatées, badges de composants et liste détaillée des changements.
+* **Page Standalone & API REST** :
+  * Page autonome accessible sur `/changelog` et `/admin/changelog`.
+  * Endpoint REST dédié `GET /api/changelog` pour synchronisation ou intégrations externes.
 
 ---
 
@@ -413,9 +452,11 @@ cat backup.sql | docker exec -i neonpass-app psql "$DATABASE_URL"
 |---|---|---|
 | `POST` | `/login` | Connexion session admin (+ challenge 2FA) |
 | `GET` | `/orders` | Liste des commandes avec filtres et pagination |
+| `GET` | `/orders/:id/matching-accounts` | Recherche des stocks disponibles recommandés et généraux pour une commande |
 | `POST` | `/orders/:id/set-expiry` | Mise à jour rapide de l'échéance (durée en mois ou date) |
 | `GET` | `/accounts` | Inventaire complet du stock & comptes |
-| `POST` | `/orders/:id/assign-account` | Attribution d'un compte disponible à une commande |
+| `GET` | `/accounts/:id/candidate-orders` | Recherche et tri des commandes candidates pour un compte de stock précis |
+| `POST` | `/orders/:id/assign-account` | Attribution d'un compte (automatique par `offerId` ou spécifique par `accountId`) |
 | `POST` | `/orders/:id/activate-sav/:accId` | Déclaration d'un accès en panne SAV |
 | `POST` | `/orders/:id/replace-account/:accId`| Remplacement d'un compte défectueux |
 | `GET` | `/clients` | Liste et statistiques unifiées des clients CRM |
@@ -457,6 +498,9 @@ node tests/suite.js
 5. **Palier Parrainage & Bon -50%** : Test de montée en charge à 5 commandes confirmées et vérification du déblocage automatique du bon unique `PARRAIN50-XXXX` à -50%.
 6. **Assignation Automatique CRM (`POST /api/admin/clients/assign-orders`)** : Détection des commandes non rattachées et attribution en 1 clic vers le compte client vérifié.
 7. **Sauvegarde & Restauration (`/api/admin/backup/*`)** : Vérification des compteurs réels et de l'export JSON v2 complet englobant l'intégralité des tables.
+8. **Internationalisation i18n (`/i18n.js` & `/`)** : Vérification du moteur i18n, support des 3 langues (FR, EN, HE), configuration RTL de l'hébreu, détection automatique de la langue système et balises `data-i18n` sur la boutique.
+9. **Rendu Catalogue Client (`app.js` & `grid`)** : Exécution réelle des scripts clients, validation de syntaxe stricte, affichage effectif de la totalité des cartes produits et bascule multilingue réactive (FR / EN / HE).
+10. **Stock & Attribution (Automatique vs Spécifique)** : Validation des endpoints `matching-accounts` et `candidate-orders`, test de l'attribution manuelle d'un compte précis (`accountId`), vérification de la délivrance instantanée sur la fiche d'accès client (`/api/acces/:token`), désassignation et attribution automatique par offre (`offerId`).
 
 ---
 

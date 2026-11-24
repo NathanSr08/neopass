@@ -982,7 +982,7 @@
           <div class="nav-drawer-links">
             <a href="/#offres" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Offres & Formules</span>
+                <span class="drawer-title" data-i18n="nav_offers">Offres & Formules</span>
                 <span class="drawer-desc">Abonnements streaming, VPN et TV</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -990,7 +990,7 @@
 
             <a href="/#composer" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Composer mon Pack</span>
+                <span class="drawer-title" data-i18n="nav_composer">Composer mon Pack</span>
                 <span class="drawer-desc">Formule personnalisée sur-mesure</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -999,7 +999,7 @@
             <a href="/news" class="nav-drawer-item">
               <div class="drawer-text">
                 <div class="drawer-title-row">
-                  <span class="drawer-title">Nouveautés & Concours</span>
+                  <span class="drawer-title" data-i18n="nav_news">Nouveautés & Concours</span>
                   <span class="drawer-pill-badge badge-contest">Concours Instagram</span>
                 </div>
                 <span class="drawer-desc">DAZN, Google One AI Pro et tirage au sort</span>
@@ -1009,7 +1009,7 @@
 
             <a href="/compte" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Mon Espace Client</span>
+                <span class="drawer-title" data-i18n="foot_my_account">Mon Espace Client</span>
                 <span class="drawer-desc">Connexion, mes abonnements et accès</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -1017,7 +1017,7 @@
 
             <a href="/suivi" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Retrouver mes Accès</span>
+                <span class="drawer-title" data-i18n="nav_tracking">Retrouver mes Accès</span>
                 <span class="drawer-desc">Espace abonné sécurisé & suivi de commande</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -1026,7 +1026,7 @@
             <a href="/status" class="nav-drawer-item">
               <div class="drawer-text">
                 <div class="drawer-title-row">
-                  <span class="drawer-title">Statut Réseau</span>
+                  <span class="drawer-title" data-i18n="nav_status">Statut Réseau</span>
                   <span class="drawer-pill-badge badge-status">
                     <span class="drawer-dot-pulse"></span>
                     99.98% En ligne
@@ -1039,7 +1039,7 @@
 
             <a href="/garantie" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Charte de Garantie & SAV</span>
+                <span class="drawer-title" data-i18n="foot_warranty_charter">Charte de Garantie & SAV</span>
                 <span class="drawer-desc">Assistance 7j/7 et remplacement immédiat</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -1047,7 +1047,7 @@
 
             <a href="/#faq" class="nav-drawer-item">
               <div class="drawer-text">
-                <span class="drawer-title">Foire aux Questions</span>
+                <span class="drawer-title" data-i18n="nav_faq">Foire aux Questions</span>
                 <span class="drawer-desc">Tout comprendre sur le service et les garanties</span>
               </div>
               <svg class="drawer-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
@@ -1057,7 +1057,7 @@
           <div class="nav-drawer-footer">
             <a class="drawer-wa-btn" id="drawerWaBtn" href="#" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.7 11.7 0 0 0 4.5 4c1.7.7 2.4.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
-              <span>Commander sur WhatsApp</span>
+              <span data-i18n="card_order_btn">Commander sur WhatsApp</span>
             </a>
             <div class="drawer-footer-sub">
               <a href="https://instagram.com/neonpass_officiel" target="_blank" rel="noopener" class="drawer-insta-link">

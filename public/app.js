@@ -14,6 +14,12 @@
 
   function durLabel(months) {
     months = Number(months) || 12;
+    if (window.t) {
+      if (months === 1) return window.t('dur_1_month', '1 mois');
+      if (months === 6) return window.t('dur_6_months', '6 mois');
+      if (months === 12) return window.t('dur_1_year', '1 an');
+      return (window.t('dur_n_months', '{n} mois') || '{n} mois').replace('{n}', months);
+    }
     if (months === 1) return '1 mois';
     if (months === 6) return '6 mois';
     if (months === 12) return '1 an';
@@ -22,10 +28,23 @@
 
   function durPerText(months) {
     months = Number(months) || 12;
+    if (window.t) {
+      if (months === 1) return window.t('dur_per_month', '/ mois');
+      if (months === 6) return window.t('dur_per_6_months', '/ 6 mois');
+      if (months === 12) return window.t('dur_per_year', '/ an');
+      return (window.t('dur_per_n_months', '/ {n} mois') || '/ {n} mois').replace('{n}', months);
+    }
     if (months === 1) return '/ mois';
     if (months === 6) return '/ 6 mois';
     if (months === 12) return '/ an';
     return '/ ' + months + ' mois';
+  }
+
+  function getCategoryLabel(cat) {
+    if (!cat) return '';
+    const key = 'tab_' + cat;
+    if (window.t && window.t(key)) return window.t(key);
+    return LABELS[cat] || cat;
   }
 
   const esc = (s) =>
@@ -135,26 +154,37 @@
 
   // ---------- Ticker ----------
   function renderTicker() {
-    const names = OFFERS.map((o) => o.name).concat(['Pack annuel', 'Commande WhatsApp']);
+    const annualPackText = (window.t && window.t('ticker_annual_pack')) || 'Pack annuel';
+    const waOrderText = (window.t && window.t('ticker_wa_order')) || 'Commande WhatsApp';
+    const names = OFFERS.map((rawO) => {
+      const o = (window.NeonPassI18N && window.NeonPassI18N.translateOffer) ? window.NeonPassI18N.translateOffer(rawO) : rawO;
+      return o.name;
+    }).concat([annualPackText, waOrderText]);
     const row = names.map((t) => '<span>' + esc(t) + '</span>').join('');
     $('ticker').innerHTML = row + row;
   }
 
   // ---------- Catalogue ----------
-  function cardHTML(o, i) {
+  function cardHTML(rawO, i) {
+    const o = (window.NeonPassI18N && window.NeonPassI18N.translateOffer) ? window.NeonPassI18N.translateOffer(rawO) : rawO;
     const months = o.durationMonths || 12;
     const price = Number(o.price);
     const label = durLabel(months);
     const per = durPerText(months);
     const monthlyEq = months > 1 ? Math.round((price / months) * 100) / 100 : null;
-    const msg = "Bonjour, je souhaite commander l'offre « " + o.name + " » (" + label + ") à " + euro(price) + "." + DEMO_TAIL;
+    const rawSingleMsg = (window.t && window.t('wa_single_msg')) || "Bonjour, je souhaite commander l'offre « {name} » ({dur}) à {price}.";
+    const msg = rawSingleMsg.replace('{name}', o.name).replace('{dur}', label).replace('{price}', euro(price)) + DEMO_TAIL;
     const save = o.was && o.was > price ? Math.round((1 - price / o.was) * 100) : 0;
     const priceVal = Math.round(price) === price ? price : null;
+    const orderBtnText = (window.t && window.t('card_order_btn')) || 'Commander via WhatsApp';
+    const tagText = esc(o.tag || getCategoryLabel(o.category) || '');
+    const affilToggleText = (window.t && window.t('card_affil_add')) || '+ Affiliation';
+    const affilPlaceholder = (window.t && window.t('card_affil_input')) || 'Nom du parrain';
 
     return (
       '<article class="card' + (o.isPack ? ' is-pack' : '') + '" style="--h:' + (Number(o.hue) || 330) + ';animation-delay:' + i * 60 + 'ms">' +
       '<div class="card-top">' +
-        '<span class="tag">' + esc(o.tag || LABELS[o.category] || '') + '</span>' +
+        '<span class="tag">' + tagText + '</span>' +
         '<span class="card-dur-tag">' + esc(label) + '</span>' +
         (save ? '<span class="save">−' + save + ' %</span>' : '') +
       '</div>' +
@@ -164,30 +194,31 @@
       '<div class="price"><span class="amount">' +
       (priceVal !== null ? '<span data-count="' + priceVal + '">' + priceVal + '</span>' : esc(num(price))) +
       ' €</span><span class="per">' + esc(per) + '</span>' +
-      (monthlyEq ? '<span class="monthly-equiv">(' + esc(euro(monthlyEq)) + '/mois)</span>' : '') +
+      (monthlyEq ? '<span class="monthly-equiv">(' + esc(euro(monthlyEq)) + ' ' + esc(durPerText(1)) + ')</span>' : '') +
       '</div>' +
       '<ul class="feat">' + (o.features || []).map((f) => '<li>' + esc(f) + '</li>').join('') + '</ul>' +
       '<div class="affil">' +
-      '<button class="affil-toggle" type="button" aria-expanded="false" aria-controls="aff-' + o.id + '">+ Affiliation</button>' +
-      '<input class="affil-input" id="aff-' + o.id + '" type="text" maxlength="60" placeholder="Nom du parrain" hidden aria-label="Nom de la personne qui parraine">' +
+      '<button class="affil-toggle" type="button" aria-expanded="false" aria-controls="aff-' + o.id + '">' + esc(affilToggleText) + '</button>' +
+      '<input class="affil-input" id="aff-' + o.id + '" type="text" maxlength="60" placeholder="' + esc(affilPlaceholder) + '" hidden aria-label="' + esc(affilPlaceholder) + '">' +
       '</div>' +
-      '<a class="btn btn-primary order-btn" data-id="' + o.id + '" href="' + waLink(msg) + '" target="_blank" rel="noopener">Commander sur WhatsApp</a>' +
+      '<a class="btn btn-primary order-btn" data-id="' + o.id + '" href="' + waLink(msg) + '" target="_blank" rel="noopener">' + esc(orderBtnText) + '</a>' +
       '</article>'
     );
   }
 
   // ---------- Avis ----------
   const starsHTML = (r) => '<span class="stars" style="--pct:' + Math.max(0, Math.min(100, (r / 5) * 100)) + '%" aria-hidden="true"></span>';
-  const avisWord = (n) => n + ' avis';
+  const avisWord = (n) => n + ' ' + ((window.t && window.t('card_reviews')) || 'avis');
 
   function ratingHTML(o) {
+    const revLabel = (window.t && window.t('card_reviews')) || 'avis';
     const label = o.reviewCount
       ? 'Note ' + num(o.rating) + ' sur 5, ' + avisWord(o.reviewCount) + '. Voir les avis'
-      : 'Aucun avis. Donner le premier avis';
+      : (window.t && window.t('reviews_leave_title')) || 'Donner le premier avis';
     return (
       '<button class="rating-row" type="button" data-reviews="' + o.id + '" aria-label="' + esc(label) + '">' +
       starsHTML(o.rating || 0) +
-      (o.reviewCount ? '<b>' + esc(num(o.rating)) + '</b><u>(' + avisWord(o.reviewCount) + ')</u>' : '<u>Donner le premier avis</u>') +
+      (o.reviewCount ? '<b>' + esc(num(o.rating)) + '</b><u>(' + avisWord(o.reviewCount) + ')</u>' : '<u>' + esc((window.t && window.t('reviews_leave_title')) || 'Donner le premier avis') + '</u>') +
       '</button>'
     );
   }
@@ -255,7 +286,7 @@
     if (!grid) return;
     const list = OFFERS.filter((o) => current === 'all' || o.category === current);
     if (!list.length) {
-      grid.innerHTML = '<p class="muted">Aucune offre dans cette catégorie pour le moment.</p>';
+      grid.innerHTML = '<p class="muted">' + esc((window.t && window.t('no_offers_cat')) || 'Aucune offre dans cette catégorie pour le moment.') + '</p>';
       return;
     }
     grid.innerHTML = list.map(cardHTML).join('');
@@ -273,7 +304,8 @@
     const el = $('tabs');
     if (!el) return;
     const cats = Object.keys(LABELS).filter((k) => OFFERS.some((o) => o.category === k));
-    const tabs = [['all', 'Tout']].concat(cats.map((k) => [k, LABELS[k]]));
+    const allLabel = (window.t && window.t('tab_all')) || 'Tous';
+    const tabs = [['all', allLabel]].concat(cats.map((k) => [k, getCategoryLabel(k)]));
     el.innerHTML = tabs
       .map(([k, label]) => '<button class="tab" role="tab" type="button" data-k="' + k + '" aria-selected="' + (k === current) + '">' + esc(label) + '</button>')
       .join('');
@@ -307,12 +339,14 @@
   function renderChips() {
     const el = $('chips');
     if (!el) return;
+    const packLabel = (window.t && window.t('tab_packs')) || 'Pack';
     el.innerHTML = composable()
-      .map((o) => {
+      .map((rawO) => {
+        const o = (window.NeonPassI18N && window.NeonPassI18N.translateOffer) ? window.NeonPassI18N.translateOffer(rawO) : rawO;
         const p = Number(o.price);
         const d = durLabel(o.durationMonths || 12);
         return '<button class="chip' + (o.isPack ? ' chip-pack' : '') + '" type="button" data-id="' + o.id + '" aria-pressed="' + picked.has(o.id) + '">' +
-          (o.isPack ? '<em>Pack</em>' : '') + esc(o.name) + ' <small>' + esc(euro(p)) + ' · ' + esc(d) + '</small></button>';
+          (o.isPack ? '<em>' + esc(packLabel) + '</em>' : '') + esc(o.name) + ' <small>' + esc(euro(p)) + ' · ' + esc(d) + '</small></button>';
       })
       .join('');
   }
@@ -328,27 +362,40 @@
     let t = discount ? sum * (1 - dPct / 100) : sum;
     if (PROMO) t = t * (1 - PROMO.pct / 100);
     const total = Math.round(t * 100) / 100;
+    const emptyMsg = (window.t && window.t('comp_empty')) || 'Sélectionne au moins un service.';
     rcList.innerHTML = items.length
-      ? items.map((o) => {
+      ? items.map((rawO) => {
+          const o = (window.NeonPassI18N && window.NeonPassI18N.translateOffer) ? window.NeonPassI18N.translateOffer(rawO) : rawO;
           const d = durLabel(o.durationMonths || 12);
           return '<li><span>' + esc(o.name) + ' <small style="color:var(--muted)">(' + esc(d) + ')</small></span><span>' + esc(euro(Number(o.price))) + '</span></li>';
         }).join('')
-      : '<li class="empty">Sélectionne au moins un service.</li>';
+      : '<li class="empty">' + esc(emptyMsg) + '</li>';
     const parts = [];
-    if (discount) parts.push('Remise pack −' + dPct + ' %');
-    else if (items.length && dPct > 0) parts.push('Ajoute ' + (dMin - items.length) + ' service(s) pour la remise de ' + dPct + ' %');
+    const discLabel = (window.t && window.t('comp_discount_pack')) || 'Remise pack';
+    if (discount) parts.push(discLabel + ' −' + dPct + ' %');
+    else if (items.length && dPct > 0) {
+      const addMoreTpl = (window.t && window.t('comp_add_more')) || 'Ajoute {n} service(s) pour la remise de {pct} %';
+      parts.push(addMoreTpl.replace('{n}', dMin - items.length).replace('{pct}', dPct));
+    }
     if (PROMO && items.length) parts.push('code ' + PROMO.code + ' −' + PROMO.pct + ' %');
     if ($('rcDisc')) $('rcDisc').textContent = parts.join(' · ') + (items.length && sum > total ? ' (−' + euro(Math.round((sum - total) * 100) / 100) + ')' : '');
     const rcTotLbl = $('rcTotalLabel');
-    if (rcTotLbl) rcTotLbl.textContent = 'Total commande';
+    if (rcTotLbl) rcTotLbl.textContent = (window.t && window.t('comp_total_order')) || 'Total commande';
     animateTotal(total);
     if ($('rcBtn')) {
       $('rcBtn').setAttribute('aria-disabled', items.length ? 'false' : 'true');
-      const msg =
-        'Bonjour, je souhaite composer ce pack : ' +
-        items.map((o) => o.name + ' (' + durLabel(o.durationMonths || 12) + ')').join(' + ') +
-        '. Total : ' + euro(total) + '.' + DEMO_TAIL;
+      const rawPackMsg = (window.t && window.t('wa_pack_msg')) || 'Bonjour, je souhaite composer ce pack : {items}. Total : {total}.';
+      const itemsDesc = items.map((rawO) => {
+        const o = (window.NeonPassI18N && window.NeonPassI18N.translateOffer) ? window.NeonPassI18N.translateOffer(rawO) : rawO;
+        return o.name + ' (' + durLabel(o.durationMonths || 12) + ')';
+      }).join(' + ');
+      const msg = rawPackMsg.replace('{items}', itemsDesc).replace('{total}', euro(total)) + DEMO_TAIL;
       $('rcBtn').href = items.length ? waLink(msg) : '#';
+      const orderBtnLabel = (window.t && window.t('comp_order_btn')) || 'Commander ce pack';
+      const svg = $('rcBtn').querySelector('svg');
+      if (svg) {
+        $('rcBtn').innerHTML = svg.outerHTML + ' ' + esc(orderBtnLabel);
+      }
     }
   }
 
@@ -406,7 +453,8 @@
 
   // ---------- Initialisation ----------
   function setWaLinks() {
-    const href = waLink('Bonjour, j\'ai une question sur vos offres.' + DEMO_TAIL);
+    const rawQuestion = (window.t && window.t('wa_question_msg')) || "Bonjour, j'ai une question sur vos offres.";
+    const href = waLink(rawQuestion + DEMO_TAIL);
     if ($('navWa')) $('navWa').href = href;
     if ($('floatWa')) $('floatWa').href = href;
   }
@@ -426,7 +474,15 @@
       }
     }
     const ow = $('offerWord');
-    if (ow) ow.textContent = OFFERS.length > 1 ? 'offres disponibles' : 'offre disponible';
+    if (ow) {
+      if (window.t) {
+        ow.textContent = OFFERS.length > 1
+          ? window.t('hero_offers_count_plural', 'offres disponibles')
+          : window.t('hero_offers_count_singular', 'offre disponible');
+      } else {
+        ow.textContent = OFFERS.length > 1 ? 'offres disponibles' : 'offre disponible';
+      }
+    }
   }
 
   async function init() {
@@ -505,7 +561,9 @@
         const open = inp.hidden;
         inp.hidden = !open;
         t.setAttribute('aria-expanded', String(open));
-        t.textContent = open ? '− Affiliation' : '+ Affiliation';
+        const addTxt = (window.t && window.t('card_affil_add')) || '+ Affiliation';
+        const remTxt = (window.t && window.t('card_affil_remove')) || '− Affiliation';
+        t.textContent = open ? remTxt : addTxt;
         if (open) inp.focus();
         return;
       }
@@ -542,6 +600,17 @@
       placeOrder([...picked], name, affil, phone);
     });
   }
+
+  // Écoute du changement de langue pour rafraîchir en temps réel l'interface dynamique
+  window.addEventListener('languagechange', () => {
+    try { setWaLinks(); } catch (_) {}
+    try { renderStats(); } catch (_) {}
+    try { renderTicker(); } catch (_) {}
+    try { renderTabs(); } catch (_) {}
+    try { renderGrid(); } catch (_) {}
+    try { renderChips(); } catch (_) {}
+    try { updateComposer(); } catch (_) {}
+  });
 
   init();
 })();

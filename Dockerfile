@@ -10,6 +10,7 @@ RUN npm install --omit=dev && npm cache clean --force
 
 COPY server.js ./
 COPY db ./db
+COPY data ./data
 COPY public ./public
 COPY admin ./admin
 

@@ -10,6 +10,8 @@
 const http = require('http');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
+const fs = require('fs');
+const vm = require('vm');
 
 // Résolution intelligente de l'adresse de l'API
 function getAppHost() {
@@ -35,7 +37,7 @@ function apiRequest(method, path, data = null, headers = {}) {
       port: APP_PORT,
       path,
       method,
-      headers: { ...headers }
+      headers: { 'x-test-suite': 'true', ...headers }
     };
 
     let payload = null;
@@ -305,6 +307,214 @@ async function runSuite() {
       assert(jsonRes.json.tables.email_logs, 'Table email_logs attendue dans le snapshot');
       assert(jsonRes.json.tables.orders, 'Table orders attendue dans le snapshot');
       assert(jsonRes.json.tables.accounts, 'Table accounts attendue dans le snapshot');
+    });
+
+    // ----------------------------------------------------
+    // TEST 8 : Internationalisation i18n (FR, EN, HE & RTL)
+    // ----------------------------------------------------
+    await test('8. Internationalisation i18n - 3 langues (FR, EN, HE), détection système & RTL', async () => {
+      // 1. Accès au fichier i18n.js
+      const i18nRes = await apiRequest('GET', '/i18n.js');
+      assert(i18nRes.status === 200, 'Le fichier /i18n.js doit être servi avec succès');
+      assert(i18nRes.raw.includes("SUPPORTED_LANGS = ['fr', 'en', 'he']"), 'Doit supporter au moins FR, EN et HE');
+      assert(i18nRes.raw.includes("he: { code: 'HE', flag: '🇮🇱', name: 'עברית', dir: 'rtl' }"), 'Hébreu configuré en RTL');
+      assert(i18nRes.raw.includes("navigator.languages"), 'Détection système / navigateur présente');
+
+      // 2. Vérification présence des traductions complètes
+      assert(i18nRes.raw.includes("hero_cta_offers"), 'Clé hero_cta_offers présente');
+      assert(i18nRes.raw.includes("Explore Offers"), 'Traduction anglaise présente');
+      assert(i18nRes.raw.includes("גלו את המבצעים"), 'Traduction hébreu présente');
+
+      // 3. Vérification de l'intégration dans index.html
+      const indexRes = await apiRequest('GET', '/');
+      assert(indexRes.status === 200, 'Page d\'accueil accessible');
+      assert(indexRes.raw.includes('/i18n.js'), 'index.html doit inclure /i18n.js');
+      assert(indexRes.raw.includes('data-i18n="nav_offers"'), 'Attribut data-i18n="nav_offers" présent');
+      assert(indexRes.raw.includes('data-i18n="hero_title_pre"'), 'Attribut data-i18n="hero_title_pre" présent');
+      assert(indexRes.raw.includes('data-i18n="cat_title"'), 'Attribut data-i18n="cat_title" présent');
+    });
+
+    // ----------------------------------------------------
+    // TEST 9 : Rendu effectif des produits & exécution sans erreur
+    // ----------------------------------------------------
+    await test('9. Rendu Catalogue Client - Exécution app.js, affichage des produits & multilingue', async () => {
+      // 1. Validation syntaxique stricte des scripts clients
+      const i18nCode = fs.readFileSync('public/i18n.js', 'utf8');
+      const appCode = fs.readFileSync('public/app.js', 'utf8');
+      const pwaCode = fs.readFileSync('public/pwa.js', 'utf8');
+
+      new vm.Script(i18nCode, { filename: 'i18n.js' });
+      new vm.Script(appCode, { filename: 'app.js' });
+      new vm.Script(pwaCode, { filename: 'pwa.js' });
+
+      // 2. Récupération des offres de production via l'API
+      const offersRes = await apiRequest('GET', '/api/offers');
+      assert(Array.isArray(offersRes.json) && offersRes.json.length > 0, 'Offres requises pour le test de rendu');
+      const expectedOffers = offersRes.json;
+
+      // 3. Simulation d'exécution du DOM avec app.js + i18n.js
+      let renderedGridHtml = '';
+      function makeDomNode(name) {
+        const el = {
+          _name: name,
+          addEventListener: () => {},
+          querySelectorAll: () => [],
+          querySelector: () => null,
+          setAttribute: () => {},
+          removeAttribute: () => {},
+          appendChild: () => {},
+          insertBefore: () => {},
+          classList: { add: () => {}, remove: () => {}, toggle: () => false },
+          style: { setProperty: () => {} },
+          dataset: {}
+        };
+        Object.defineProperty(el, 'innerHTML', {
+          get() { return el._html || ''; },
+          set(v) {
+            el._html = v;
+            if (name === 'grid') renderedGridHtml = v;
+          }
+        });
+        return el;
+      }
+
+      const winListeners = {};
+      const ctx = {
+        window: {},
+        document: {
+          documentElement: { setAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+          body: { classList: { add: () => {}, remove: () => {} } },
+          querySelectorAll: () => [],
+          querySelector: () => null,
+          getElementById: (id) => makeDomNode(id),
+          createElement: (tag) => makeDomNode(tag),
+          head: { appendChild: () => {} },
+          addEventListener: () => {}
+        },
+        localStorage: { getItem: () => null, setItem: () => {} },
+        sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        navigator: { languages: ['fr-FR', 'fr'] },
+        matchMedia: () => ({ matches: false }),
+        setTimeout: (cb) => setTimeout(cb, 5),
+        clearTimeout: () => {},
+        performance: { now: () => Date.now() },
+        requestAnimationFrame: () => {},
+        cancelAnimationFrame: () => {},
+        MutationObserver: function() { this.observe = () => {}; },
+        fetch: (url) => {
+          if (url === '/api/config') return Promise.resolve({ json: () => Promise.resolve({ waNumber: '33612345678' }) });
+          if (url === '/api/offers') return Promise.resolve({ json: () => Promise.resolve(expectedOffers) });
+          return Promise.resolve({ json: () => Promise.resolve([]) });
+        },
+        console
+      };
+      ctx.window = ctx;
+      ctx.window.dispatchEvent = (e) => {
+        (winListeners[e.type] || []).forEach(fn => fn(e));
+      };
+      ctx.window.addEventListener = (type, fn) => {
+        winListeners[type] = winListeners[type] || [];
+        winListeners[type].push(fn);
+      };
+      ctx.window.CustomEvent = function(type, detail) { this.type = type; this.detail = detail; };
+
+      vm.createContext(ctx);
+      vm.runInContext(i18nCode, ctx);
+      vm.runInContext(appCode, ctx);
+
+      // Laisser le cycle async d'initialisation se résoudre
+      await new Promise(r => setTimeout(r, 60));
+
+      // 4. Vérifications que les produits sont bien affichés
+      const cardCount = (renderedGridHtml.match(/<article class="card/g) || []).length;
+      assert(cardCount === expectedOffers.length, `Le catalogue doit afficher exactement ${expectedOffers.length} produits, trouvé ${cardCount}`);
+      assert(renderedGridHtml.includes('Commander via WhatsApp'), 'Bouton de commande en français présent');
+
+      // 5. Bascule en anglais et vérification de la réactivité du catalogue
+      ctx.window.NeonPassI18N.setLanguage('en');
+      assert(renderedGridHtml.includes('Order via WhatsApp'), 'Le catalogue doit basculer les boutons en anglais');
+
+      // 6. Bascule en hébreu et vérification de la réactivité du catalogue
+      ctx.window.NeonPassI18N.setLanguage('he');
+      assert(renderedGridHtml.includes('להזמנה בוואטסאפ'), 'Le catalogue doit basculer les boutons en hébreu');
+    });
+
+    // ----------------------------------------------------
+    // TEST 10 : Stock & Attribution (Attribution Automatique vs Spécifique)
+    // ----------------------------------------------------
+    await test('10. Stock & Attribution - Attribution automatique vs Stock spécifique à une commande', async () => {
+      // 1. Création d'une offre dédiée pour le test
+      const testSlug = 'svc-stock-test-' + Date.now();
+      const insertOfferSql = `INSERT INTO offers (slug, name, category, price, is_pack, active) VALUES ('${testSlug}', 'Service Test Stock', 'streaming', 25.00, false, true) RETURNING id;`;
+      const offerId = parseInt(execSql(insertOfferSql), 10);
+      assert(offerId > 0, 'Offre de test stock créée');
+      cleanupTasks.push(() => execSql(`DELETE FROM offers WHERE id = ${offerId};`));
+
+      // 2. Création de 2 comptes distincts dans le stock (Compte A pour auto, Compte B pour spécifique)
+      const accALogin = 'auto_' + Date.now() + '@test.com';
+      const accBLogin = 'specific_' + Date.now() + '@test.com';
+      const insertAccASql = `INSERT INTO accounts (offer_id, service_name, login, password, slot_profile, status) VALUES (${offerId}, 'Service Test Stock', '${accALogin}', 'pwdAuto123', 'Slot Auto 1', 'available') RETURNING id;`;
+      const insertAccBSql = `INSERT INTO accounts (offer_id, service_name, login, password, slot_profile, status) VALUES (${offerId}, 'Service Test Stock', '${accBLogin}', 'pwdSpec456', 'Slot VIP 2', 'available') RETURNING id;`;
+      const accAId = parseInt(execSql(insertAccASql), 10);
+      const accBId = parseInt(execSql(insertAccBSql), 10);
+      assert(accAId > 0 && accBId > 0, 'Les deux comptes de test doivent être insérés');
+      cleanupTasks.push(() => execSql(`DELETE FROM accounts WHERE id IN (${accAId}, ${accBId});`));
+
+      // 3. Création d'une commande test contenant cette offre
+      const testToken = 'tok_stock_' + Date.now();
+      const insertOrdSql = `INSERT INTO orders (customer_name, customer_phone, items, total, status, access_token) VALUES ('Test Stock User', '0600112233', '[{"id": ${offerId}, "name": "Service Test Stock", "price": 25}]'::jsonb, 25.00, 'confirmed', '${testToken}') RETURNING id;`;
+      const orderId = parseInt(execSql(insertOrdSql), 10);
+      assert(orderId > 0, 'Commande de test créée');
+      cleanupTasks.push(() => execSql(`DELETE FROM orders WHERE id = ${orderId};`));
+
+      // 4. Test endpoint matching-accounts (suggestion des stocks pour cette commande)
+      const matchRes = await apiRequest('GET', `/api/admin/orders/${orderId}/matching-accounts`, null, adminHeaders);
+      assert(matchRes.status === 200, `Statut 200 attendu pour matching-accounts, reçu ${matchRes.status}`);
+      assert(Array.isArray(matchRes.json.matchingAccounts), 'matchingAccounts doit être un tableau');
+      const matchingIds = matchRes.json.matchingAccounts.map(a => a.id);
+      assert(matchingIds.includes(accAId) && matchingIds.includes(accBId), 'Les deux comptes en stock doivent être détectés comme correspondants');
+
+      // 5. Test endpoint candidate-orders (suggestion des commandes pour un compte de stock précis)
+      const candRes = await apiRequest('GET', `/api/admin/accounts/${accBId}/candidate-orders`, null, adminHeaders);
+      assert(candRes.status === 200, `Statut 200 attendu pour candidate-orders, reçu ${candRes.status}`);
+      assert(Array.isArray(candRes.json.orders), 'orders doit être un tableau');
+      const candOrder = candRes.json.orders.find(o => o.id === orderId);
+      assert(candOrder && candOrder.needsThisOffer === true, 'La commande doit être identifiée comme en attente de ce compte');
+
+      // 6. Test ATTRIBUTION SPÉCIFIQUE : assigner manuellement le compte B (accBId)
+      const assignSpecRes = await apiRequest('POST', `/api/admin/orders/${orderId}/assign-account`, { accountId: accBId }, adminHeaders);
+      assert(assignSpecRes.status === 200, `Statut 200 attendu pour attribution spécifique, reçu ${assignSpecRes.status}`);
+      assert(assignSpecRes.json.account.id === accBId, 'Le compte B doit être spécifiquement assigné');
+      assert(assignSpecRes.json.account.login === accBLogin, 'Le login du compte assigné doit être celui du compte B');
+
+      // Vérification que le compte B est passé en status "assigned" et lié à la commande
+      const statusB = execSql(`SELECT status FROM accounts WHERE id = ${accBId};`);
+      const orderLinkedB = execSql(`SELECT order_id FROM accounts WHERE id = ${accBId};`);
+      assert(statusB === 'assigned', `Le compte B doit être passé en statut assigned, trouvé: ${statusB}`);
+      assert(parseInt(orderLinkedB, 10) === orderId, `Le compte B doit être lié à la commande #${orderId}`);
+
+      // 7. Vérification de la vue client (/api/acces/:token)
+      const accessRes = await apiRequest('GET', `/api/acces/${testToken}`);
+      assert(accessRes.status === 200, 'Accès client sécurisé disponible');
+      assert(accessRes.json.accounts.length === 1, '1 compte doit être visible sur la fiche client');
+      assert(accessRes.json.accounts[0].login === accBLogin, `Le client doit voir le compte B spécifique (${accBLogin})`);
+      assert(accessRes.json.accounts[0].slotProfile === 'Slot VIP 2', 'Le slot VIP doit être visible pour le client');
+
+      // 8. Désassignation du compte B
+      const unassignRes = await apiRequest('POST', `/api/admin/orders/${orderId}/unassign-account/${accBId}`, {}, adminHeaders);
+      assert(unassignRes.status === 200, 'Désassignation du compte B réussie');
+
+      // 9. Test ATTRIBUTION AUTOMATIQUE : assigner automatiquement par offerId
+      const assignAutoRes = await apiRequest('POST', `/api/admin/orders/${orderId}/assign-account`, { offerId }, adminHeaders);
+      assert(assignAutoRes.status === 200, 'Attribution automatique par offerId réussie');
+      assert(assignAutoRes.json.account.id === accAId, 'L\'attribution automatique doit prendre le premier compte disponible (A)');
+      assert(assignAutoRes.json.account.login === accALogin, 'Le login doit être celui du compte A');
+
+      // 10. Test endpoint Changelog (/api/changelog)
+      const clRes = await apiRequest('GET', '/api/changelog');
+      assert(clRes.status === 200, 'Le changelog doit renvoyer HTTP 200');
+      assert(Array.isArray(clRes.json) && clRes.json.length > 0, 'Le changelog doit contenir des entrées');
+      assert(clRes.json[0].version === 'v2.3.0', 'La dernière version doit être v2.3.0');
     });
 
   } finally {

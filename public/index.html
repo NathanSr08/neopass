@@ -446,16 +446,16 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <div class="wrap nav-in">
     <a class="logo" href="#top"><img src="/logo.svg" alt="" width="32" height="32"><span>Neon</span>Pass</a>
     <nav class="nav-links" aria-label="Navigation">
-      <a href="#offres">Offres</a>
-      <a href="#composer">Composer</a>
-      <a href="/news"><span>Nouveautés</span><i class="nav-live-dot" title="Concours & sorties"></i></a>
-      <a href="/suivi">Suivi</a>
-      <a href="/status">Statut</a>
-      <a href="#faq">FAQ</a>
+      <a href="#offres" data-i18n="nav_offers">Offres</a>
+      <a href="#composer" data-i18n="nav_composer">Composer</a>
+      <a href="/news"><span data-i18n="nav_news">Nouveautés</span><i class="nav-live-dot" title="Concours & sorties"></i></a>
+      <a href="/suivi" data-i18n="nav_tracking">Suivi</a>
+      <a href="/status" data-i18n="nav_status">Statut</a>
+      <a href="#faq" data-i18n="nav_faq">FAQ</a>
     </nav>
     <a class="btn btn-primary" id="navLogin" href="/compte" aria-label="Accéder à mon espace client">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span class="btn-label-text">Connexion</span>
+      <span class="btn-label-text" data-i18n="nav_login">Connexion</span>
     </a>
   </div>
 </header>
@@ -468,38 +468,38 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
       <div>
         <a href="/news" style="display:inline-flex;align-items:center;gap:10px;padding:6px 14px;border-radius:999px;background:rgba(255,77,148,0.14);border:1px solid rgba(255,77,148,0.35);color:#ff9cc4;font-size:12px;font-family:var(--font-mono);font-weight:700;text-decoration:none;margin-bottom:14px;transition:all .2s">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--pink);box-shadow:0 0 8px var(--pink)"></span>
-          <span>Concours Instagram en cours : 1 an de Netflix, Disney+ et VPN à gagner</span>
+          <span data-i18n="hero_tag">Concours Instagram en cours : 1 an de Netflix, Disney+ et VPN à gagner</span>
           <span style="color:var(--cyan)">&rarr;</span>
         </a>
-        <h1>Votre divertissement, au prix d'un <span class="grad">café par mois.</span></h1>
-        <p class="lead">Streaming, VPN, musique et chaînes TV. Des formules annuelles à tarif fixe, une commande en un message WhatsApp, un interlocuteur unique jusqu'à l'activation.</p>
+        <h1><span data-i18n="hero_title_pre">Votre divertissement, au prix d'un </span><span class="grad" data-i18n="hero_title_highlight">café par mois.</span></h1>
+        <p class="lead" data-i18n="hero_lead">Streaming, VPN, musique et chaînes TV. Des formules annuelles à tarif fixe, une commande en un message WhatsApp, un interlocuteur unique jusqu'à l'activation.</p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="#offres">Découvrir les offres</a>
-          <a class="btn btn-ghost" href="#composer">Composer mon pack</a>
+          <a class="btn btn-primary" href="#offres" data-i18n="hero_cta_offers">Découvrir les offres</a>
+          <a class="btn btn-ghost" href="#composer" data-i18n="hero_cta_composer">Composer mon pack</a>
         </div>
         <div class="hero-stats">
-          <div class="stat"><b><span id="statCount" data-count="7">7</span></b><span id="offerWord">formules annuelles</span></div>
-          <div class="stat"><b>dès <span id="statMin" data-count="15">15</span> €</b><span>par an</span></div>
-          <div class="stat"><b><span data-count="1">1</span> msg</b><span>pour commander</span></div>
+          <div class="stat"><b><span id="statCount" data-count="7">7</span></b><span id="offerWord" data-i18n="hero_stat_plans">formules annuelles</span></div>
+          <div class="stat"><b><span data-i18n="hero_stat_from">dès</span> <span id="statMin" data-count="15">15</span> €</b><span data-i18n="hero_stat_per_year">par an</span></div>
+          <div class="stat"><b><span data-count="1">1</span> <span data-i18n="hero_stat_msg">msg</span></b><span data-i18n="hero_stat_to_order">pour commander</span></div>
         </div>
       </div>
 
       <div class="stage" aria-hidden="true">
         <div class="fcard fc-a">
-          <div class="fc-head"><h3>Disney+</h3><span class="badge">EN LECTURE</span></div>
-          <small>Soirée film · épisode 4</small>
+          <div class="fc-head"><h3>Disney+</h3><span class="badge" data-i18n="fcard_now_playing">EN LECTURE</span></div>
+          <small data-i18n="fcard_movie_night">Soirée film · épisode 4</small>
           <div class="bar"><i></i></div>
         </div>
         <div class="fcard fc-b">
-          <div class="fc-head"><h3>NordVPN</h3><span class="badge">PROTÉGÉ</span></div>
+          <div class="fc-head"><h3>NordVPN</h3><span class="badge" data-i18n="fcard_protected">PROTÉGÉ</span></div>
           <div class="shield">
             <div class="shield-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.500-3 8-7 10-4-2-7-5.500-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
-            <div><h3 style="font-size:14px">Connexion chiffrée</h3><small>Serveur · Paris</small></div>
+            <div><h3 style="font-size:14px" data-i18n="fcard_encrypted_conn">Connexion chiffrée</h3><small data-i18n="fcard_server_paris">Serveur · Paris</small></div>
           </div>
         </div>
         <div class="fcard fc-c">
-          <div class="fc-head"><h3>Spotify</h3><span class="badge">LIVE</span></div>
-          <small>Playlist · Nuit néon</small>
+          <div class="fc-head"><h3>Spotify</h3><span class="badge" data-i18n="fcard_live">LIVE</span></div>
+          <small data-i18n="fcard_playlist_neon">Playlist · Nuit néon</small>
           <div class="eq"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
         </div>
       </div>
@@ -513,14 +513,14 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <section id="offres">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="eyebrow">Catalogue & Formules</span>
-        <h2>Des abonnements premium au meilleur tarif.</h2>
-        <p>Abonnements vérifiés avec durée garantie (1 mois, 6 mois, 1 an). Accès instantané et support dédié 7j/7.</p>
+        <span class="eyebrow" data-i18n="cat_eyebrow">Catalogue & Formules</span>
+        <h2 data-i18n="cat_title">Des abonnements premium au meilleur tarif.</h2>
+        <p data-i18n="cat_desc">Abonnements vérifiés avec durée garantie (1 mois, 6 mois, 1 an). Accès instantané et support dédié 7j/7.</p>
       </div>
 
       <div class="tabs" role="tablist" aria-label="Filtrer les offres" id="tabs"></div>
       <div class="promo-banner" id="promoBanner" hidden></div>
-      <div class="grid" id="grid"><p class="muted">Chargement du catalogue…</p></div>
+      <div class="grid" id="grid"><p class="muted" data-i18n="loading_catalog">Chargement du catalogue…</p></div>
     </div>
   </section>
 
@@ -528,28 +528,28 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
     <div class="wrap">
       <div class="composer rv">
         <div>
-          <span class="eyebrow">Sur mesure</span>
-          <h2 style="font-size:clamp(24px,3.6vw,38px);margin-top:12px;font-weight:700">Composez votre pack.</h2>
-          <p style="color:var(--muted);margin:14px 0 0;max-width:50ch">Sélectionnez les services et abonnements de votre choix. Une remise s'applique automatiquement dès 3 services.</p>
+          <span class="eyebrow" data-i18n="comp_eyebrow">Sur mesure</span>
+          <h2 style="font-size:clamp(24px,3.6vw,38px);margin-top:12px;font-weight:700" data-i18n="comp_title">Composez votre pack.</h2>
+          <p style="color:var(--muted);margin:14px 0 0;max-width:50ch" data-i18n="comp_desc">Sélectionnez les services et abonnements de votre choix. Une remise s'applique automatiquement dès 3 services.</p>
           <div class="chips" id="chips"></div>
         </div>
         <div class="receipt">
-          <span class="eyebrow">Votre pack</span>
+          <span class="eyebrow" data-i18n="comp_receipt_title">Votre pack</span>
           <ul id="rcList"></ul>
           <hr>
-          <div class="total"><span style="color:var(--muted);font-size:14px" id="rcTotalLabel">Total / an</span><b id="rcTotal">0 €</b></div>
+          <div class="total"><span style="color:var(--muted);font-size:14px" id="rcTotalLabel" data-i18n="comp_total_order">Total commande</span><b id="rcTotal">0 €</b></div>
           <div class="disc" id="rcDisc"></div>
           <form class="promo" id="promoForm" novalidate>
-            <input class="name-input" id="promoInput" type="text" maxlength="30" placeholder="Code promo" autocomplete="off" spellcheck="false" aria-label="Code promo">
-            <button class="btn btn-ghost" type="submit">Appliquer</button>
+            <input class="name-input" id="promoInput" type="text" maxlength="30" placeholder="Code promo" data-i18n-placeholder="comp_promo_placeholder" autocomplete="off" spellcheck="false" aria-label="Code promo">
+            <button class="btn btn-ghost" type="submit" data-i18n="comp_promo_apply">Appliquer</button>
           </form>
-          <div class="promo-ok" id="promoOk" hidden><span id="promoOkText"></span><button type="button" id="promoRemove">Retirer</button></div>
-          <input class="name-input" id="rcAffil" type="text" maxlength="60" placeholder="Affiliation : nom du parrain (facultatif)" aria-label="Affiliation">
-          <input class="name-input" id="rcName" type="text" maxlength="60" placeholder="Votre prénom (facultatif)" autocomplete="given-name" aria-label="Votre prénom">
-          <input class="name-input" id="rcPhone" type="tel" maxlength="30" placeholder="Votre numéro WhatsApp (facultatif)" autocomplete="tel" aria-label="Votre numéro WhatsApp">
+          <div class="promo-ok" id="promoOk" hidden><span id="promoOkText"></span><button type="button" id="promoRemove" data-i18n="comp_promo_remove">Retirer</button></div>
+          <input class="name-input" id="rcAffil" type="text" maxlength="60" placeholder="Affiliation : nom du parrain (facultatif)" data-i18n-placeholder="comp_affil_placeholder" aria-label="Affiliation">
+          <input class="name-input" id="rcName" type="text" maxlength="60" placeholder="Votre prénom (facultatif)" data-i18n-placeholder="comp_name_placeholder" autocomplete="given-name" aria-label="Votre prénom">
+          <input class="name-input" id="rcPhone" type="tel" maxlength="30" placeholder="Votre numéro WhatsApp (facultatif)" data-i18n-placeholder="comp_phone_placeholder" autocomplete="tel" aria-label="Votre numéro WhatsApp">
           <a class="btn btn-primary" id="rcBtn" href="#" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.600 15.100L2 22l5-1.300A10 10 0 1 0 12 2zm0 18.200a8.200 8.200 0 0 1-4.200-1.200l-.3-.2-3 .8.8-2.900-.2-.3A8.200 8.200 0 1 1 12 20.200z"/></svg>
-            Commander ce pack
+            <span data-i18n="comp_order_btn">Commander ce pack</span>
           </a>
         </div>
       </div>
@@ -559,13 +559,13 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <section id="etapes" style="padding-top:0">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="eyebrow">Commande</span>
-        <h2>Trois étapes, aucun formulaire.</h2>
+        <span class="eyebrow" data-i18n="steps_eyebrow">Commande</span>
+        <h2 data-i18n="steps_title">Trois étapes, aucun formulaire.</h2>
       </div>
       <div class="steps">
-        <div class="step rv"><h3>Choisissez une formule</h3><p>Parcourez le catalogue ou composez votre pack sur mesure avec le sélecteur.</p></div>
-        <div class="step rv"><h3>Le message se prépare</h3><p>WhatsApp s'ouvre avec un message pré-rempli : offre, tarif annuel et numéro de référence. Vous gardez la main avant l'envoi.</p></div>
-        <div class="step rv"><h3>Confirmez la commande</h3><p>Le paiement et l'activation se règlent directement dans la conversation, avec un interlocuteur dédié.</p></div>
+        <div class="step rv"><h3 data-i18n="step1_title">Choisissez une formule</h3><p data-i18n="step1_desc">Parcourez le catalogue ou composez votre pack sur mesure avec le sélecteur.</p></div>
+        <div class="step rv"><h3 data-i18n="step2_title">Le message se prépare</h3><p data-i18n="step2_desc">WhatsApp s'ouvre avec un message pré-rempli : offre, tarif annuel et numéro de référence. Vous gardez la main avant l'envoi.</p></div>
+        <div class="step rv"><h3 data-i18n="step3_title">Confirmez la commande</h3><p data-i18n="step3_desc">Le paiement et l'activation se règlent directement dans la conversation, avec un interlocuteur dédié.</p></div>
       </div>
     </div>
   </section>
@@ -573,17 +573,17 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <section id="faq" style="padding-top:0">
     <div class="wrap">
       <div class="sec-head rv">
-        <span class="eyebrow">Questions fréquentes</span>
-        <h2>L'essentiel à connaître.</h2>
+        <span class="eyebrow" data-i18n="faq_eyebrow">Questions fréquentes</span>
+        <h2 data-i18n="faq_title">L'essentiel à connaître.</h2>
       </div>
-            <div class="faq rv">
-        <details open><summary>Comment se passe une commande ?</summary><p>Vous choisissez une formule, le message pré-rempli s'ouvre dans WhatsApp avec l'offre et son tarif. Vous l'envoyez : nous confirmons la disponibilité et vous transmettons les instructions de paiement, avec un numéro de référence pour le suivi.</p></details>
-        <details><summary>Quels moyens de paiement acceptez-vous ?</summary><p>Revolut ou crypto (USDT, BTC ou ETH selon le réseau disponible). Aucune coordonnée bancaire n'est saisie sur le site : tout se règle dans la conversation WhatsApp, une fois le tarif confirmé.</p></details>
-        <details><summary>Sous quel délai l'accès est-il livré ?</summary><p>Dès réception du paiement, l'activation est immédiate, 7 jours sur 7. Comptez quelques minutes en cas de forte affluence ; au-delà de 30 minutes, relancez-nous dans la même conversation.</p></details>
-        <details><summary>Que couvre la garantie ?</summary><p>Chaque abonnement est couvert pendant toute sa durée, soit 12 mois à compter de la date d'achat. Si l'accès est interrompu, nous remplaçons le service ou remboursons au prorata des mois restants.</p></details>
-        <details><summary>Sur combien d'appareils puis-je en profiter ?</summary><p>Chaque formule est prévue pour un usage personnel, sur un appareil à la fois, sauf mention contraire sur la fiche. Pour plusieurs écrans en simultané, choisissez une formule famille.</p></details>
-        <details><summary>Puis-je commander pour un proche ?</summary><p>Oui. Indiquez son nom dans le champ « Affiliation » : il est ajouté au message et la personne est créditée du parrainage.</p></details>
-        <details><summary>Que se passe-t-il à la fin de l'année ?</summary><p>L'accès s'arrête à échéance, sans reconduction automatique. Un rappel vous est envoyé avant la fin si vous souhaitez renouveler.</p></details>
+      <div class="faq rv">
+        <details open><summary data-i18n="faq_q1">Comment se passe une commande ?</summary><p data-i18n="faq_a1">Vous choisissez une formule, le message pré-rempli s'ouvre dans WhatsApp avec l'offre et son tarif. Vous l'envoyez : nous confirmons la disponibilité et vous transmettons les instructions de paiement, avec un numéro de référence pour le suivi.</p></details>
+        <details><summary data-i18n="faq_q2">Quels moyens de paiement acceptez-vous ?</summary><p data-i18n="faq_a2">Revolut ou crypto (USDT, BTC ou ETH selon le réseau disponible). Aucune coordonnée bancaire n'est saisie sur le site : tout se règle dans la conversation WhatsApp, une fois le tarif confirmé.</p></details>
+        <details><summary data-i18n="faq_q3">Sous quel délai l'accès est-il livré ?</summary><p data-i18n="faq_a3">Dès réception du paiement, l'activation est immédiate, 7 jours sur 7. Comptez quelques minutes en cas de forte affluence ; au-delà de 30 minutes, relancez-nous dans la même conversation.</p></details>
+        <details><summary data-i18n="faq_q4">Que couvre la garantie ?</summary><p data-i18n="faq_a4">Chaque abonnement est couvert pendant toute sa durée, soit 12 mois à compter de la date d'achat. Si l'accès est interrompu, nous remplaçons le service ou remboursons au prorata des mois restants.</p></details>
+        <details><summary data-i18n="faq_q5">Sur combien d'appareils puis-je en profiter ?</summary><p data-i18n="faq_a5">Chaque formule est prévue pour un usage personnel, sur un appareil à la fois, sauf mention contraire sur la fiche. Pour plusieurs écrans en simultané, choisissez une formule famille.</p></details>
+        <details><summary data-i18n="faq_q6">Puis-je commander pour un proche ?</summary><p data-i18n="faq_a6">Oui. Indiquez son nom dans le champ « Affiliation » : il est ajouté au message et la personne est créditée du parrainage.</p></details>
+        <details><summary data-i18n="faq_q7">Que se passe-t-il à la fin de l'année ?</summary><p data-i18n="faq_a7">L'accès s'arrête à échéance, sans reconduction automatique. Un rappel vous est envoyé avant la fin si vous souhaitez renouveler.</p></details>
       </div>
     </div>
   </section>
@@ -597,7 +597,7 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
           <img src="/logo.svg" alt="" width="24" height="24">
           <span>NeonPass</span>
         </div>
-        <p>Distribution de formules annuelles d'abonnements numériques et de divertissement. Service d'assistance réactif 7j/7 et garantie totale sur toute la durée souscrite.</p>
+        <p data-i18n="foot_desc">Distribution de formules annuelles d'abonnements numériques et de divertissement. Service d'assistance réactif 7j/7 et garantie totale sur toute la durée souscrite.</p>
         <div style="margin-top:14px">
           <a href="https://instagram.com/neonpass_officiel" target="_blank" rel="noopener" class="social-link">
             <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
@@ -607,55 +607,55 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
       </div>
 
       <div class="foot-col">
-        <h4>Services & Nouveautés</h4>
+        <h4 data-i18n="foot_services">Services & Nouveautés</h4>
         <ul class="foot-links-list">
-          <li><a href="#offres">Formules Annuelles</a></li>
-          <li><a href="#composer">Composez votre Pack</a></li>
-          <li><a href="/news">Actualités & Concours</a></li>
-          <li><a href="/status">État du Réseau en direct</a></li>
+          <li><a href="#offres" data-i18n="foot_plans">Formules Annuelles</a></li>
+          <li><a href="#composer" data-i18n="foot_custom_pack">Composez votre Pack</a></li>
+          <li><a href="/news" data-i18n="foot_news_contest">Actualités & Concours</a></li>
+          <li><a href="/status" data-i18n="foot_network_status">État du Réseau en direct</a></li>
         </ul>
       </div>
 
       <div class="foot-col">
-        <h4>Espace Abonné & SAV</h4>
+        <h4 data-i18n="foot_portal_support">Espace Abonné & SAV</h4>
         <ul class="foot-links-list">
-          <li><a href="/compte">Mon Espace Client</a></li>
-          <li><a href="/suivi">Retrouver mes accès</a></li>
-          <li><a href="/garantie">Charte de Garantie & SAV</a></li>
-          <li><a href="#faq">Foire aux questions</a></li>
-          <li><a href="#etapes">Procédure de commande</a></li>
-          <li class="pwa-install-link"><a href="#" onclick="window.NeonPassPWA && window.NeonPassPWA.install(); return false;">Installer l'application</a></li>
+          <li><a href="/compte" data-i18n="foot_my_account">Mon Espace Client</a></li>
+          <li><a href="/suivi" data-i18n="foot_find_access">Retrouver mes accès</a></li>
+          <li><a href="/garantie" data-i18n="foot_warranty_charter">Charte de Garantie & SAV</a></li>
+          <li><a href="#faq" data-i18n="foot_faq_link">Foire aux questions</a></li>
+          <li><a href="#etapes" data-i18n="foot_order_procedure">Procédure de commande</a></li>
+          <li class="pwa-install-link"><a href="#" onclick="window.NeonPassPWA && window.NeonPassPWA.install(); return false;" data-i18n="foot_install_app">Installer l'application</a></li>
         </ul>
       </div>
 
       <div class="foot-col">
-        <h4>Cadre Légal & Sécurité</h4>
+        <h4 data-i18n="foot_legal_security">Cadre Légal & Sécurité</h4>
         <ul class="foot-links-list">
-          <li><a href="/cgv">Conditions Générales de Vente</a></li>
-          <li><a href="/mentions-legales">Mentions Légales</a></li>
-          <li><a href="/mentions-legales#rgpd">Protection des données RGPD</a></li>
-          <li><span style="color:#7f7b9f">Transactions chiffrées SSL</span></li>
+          <li><a href="/cgv" data-i18n="foot_terms">Conditions Générales de Vente</a></li>
+          <li><a href="/mentions-legales" data-i18n="foot_legal">Mentions Légales</a></li>
+          <li><a href="/mentions-legales#rgpd" data-i18n="foot_rgpd">Protection des données RGPD</a></li>
+          <li><span style="color:#7f7b9f" data-i18n="foot_ssl">Transactions chiffrées SSL</span></li>
         </ul>
       </div>
     </div>
 
     <div class="foot-bottom">
-      <div>&copy; 2026 NeonPass. Tous droits réservés.</div>
-      <div>Paiements sécurisés via Revolut, Virement SEPA et Réseaux Cryptographiques. Aucune reconduction automatique.</div>
+      <div data-i18n="foot_rights">&copy; 2026 NeonPass. Tous droits réservés.</div>
+      <div data-i18n="foot_payments">Paiements sécurisés via Revolut, Virement SEPA et Réseaux Cryptographiques. Aucune reconduction automatique.</div>
     </div>
   </div>
 </footer>
 
-<a class="wa-float" id="floatWa" href="#" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp">
+<a class="wa-float" id="floatWa" href="#" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp" data-i18n-aria="wa_float_aria">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.600 15.100L2 22l5-1.300A10 10 0 1 0 12 2zm0 18.200a8.200 8.200 0 0 1-4.200-1.200l-.3-.2-3 .8.8-2.900-.2-.3A8.200 8.200 0 1 1 12 20.200z"/></svg>
-  <span>Une question ?</span>
+  <span data-i18n="wa_float_text">WhatsApp</span>
 </a>
 
 
 <dialog class="rv-dlg" id="rvDlg" aria-labelledby="rvTitle">
   <div class="rv-head">
     <div>
-      <span class="eyebrow">Avis clients</span>
+      <span class="eyebrow" data-i18n="reviews_title">Avis clients</span>
       <h3 id="rvTitle" style="margin-top:8px">Avis</h3>
     </div>
     <button class="rv-close" type="button" id="rvClose" aria-label="Fermer">×</button>
@@ -663,7 +663,7 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   <div class="rv-sum" id="rvSum"></div>
   <ul class="rv-list" id="rvList"></ul>
   <form class="rv-form" id="rvForm" novalidate>
-    <h4>Donner mon avis</h4>
+    <h4 data-i18n="reviews_leave_title">Donner mon avis</h4>
     <fieldset class="star-input" aria-label="Ta note">
       <input type="radio" name="rating" id="st5" value="5"><label for="st5" title="5 étoiles">★</label>
       <input type="radio" name="rating" id="st4" value="4"><label for="st4" title="4 étoiles">★</label>
@@ -671,15 +671,16 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
       <input type="radio" name="rating" id="st2" value="2"><label for="st2" title="2 étoiles">★</label>
       <input type="radio" name="rating" id="st1" value="1"><label for="st1" title="1 étoile">★</label>
     </fieldset>
-    <input class="name-input" id="rvAuthor" type="text" maxlength="40" placeholder="Ton prénom" autocomplete="given-name" aria-label="Ton prénom" required>
-    <textarea class="name-input" id="rvComment" maxlength="600" placeholder="Ton expérience avec cette offre…" aria-label="Ton avis" required></textarea>
-    <p class="rv-note">Les avis sont vérifiés avant publication.</p>
-    <button class="btn btn-primary" type="submit" id="rvSubmit">Publier mon avis</button>
+    <input class="name-input" id="rvAuthor" type="text" maxlength="40" placeholder="Ton prénom" data-i18n-placeholder="reviews_your_name" autocomplete="given-name" aria-label="Ton prénom" required>
+    <textarea class="name-input" id="rvComment" maxlength="600" placeholder="Ton expérience avec cette offre…" data-i18n-placeholder="reviews_your_comment" aria-label="Ton avis" required></textarea>
+    <p class="rv-note" data-i18n="reviews_note">Les avis sont vérifiés avant publication.</p>
+    <button class="btn btn-primary" type="submit" id="rvSubmit" data-i18n="reviews_submit">Publier mon avis</button>
   </form>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="/app.js?v=2.1.0"></script>
-<script src="/pwa.js?v=2.1.0" defer></script>
+<script src="/i18n.js?v=2.2.0"></script>
+<script src="/app.js?v=2.2.0"></script>
+<script src="/pwa.js?v=2.2.0" defer></script>
 </body>
 </html>
