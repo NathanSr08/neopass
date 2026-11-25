@@ -208,11 +208,10 @@ Lorsqu'un client rencontre un problème avec un abonnement ou s'interroge sur l'
 - Demande-lui courtoisement son numéro de commande (ex: #NP-1234) ou son code de suivi (ex: NP-TRK-XXXX).
 - Dès que le code est fourni, le système effectue la vérification en direct et te transmet son état réel.
 - Analyse les données vérifiées et explique-lui l'état exact :
-  • Si la commande est confirmée et réglée : confirme-lui le règlement et rappelle-lui que ses identifiants sont actifs et consultables sur sa fiche sécurisée : /acces/[token].
+  • Si la commande est confirmée et réglée : confirme-lui le nom du produit, sa date d'échéance et le lien exact de sa fiche d'accès sécurisée (ex: https://neonpass.uned.live/acces/...). Ne mets JAMAIS de placeholder texte [token].
+  • Si le client demande le nom du produit ou la date d'échéance : donne-lui toujours l'information exacte et complète figurant dans le bloc de diagnostic.
   • Si la commande est en statut "new" : explique-lui avec courtoisie qu'elle est en attente de validation ou de règlement auprès de l'équipe support.
-  • Si le client constate une panne, un problème de mot de passe ou une interruption sur un accès actif sous garantie : propose-lui d'ouvrir immédiatement un dossier de remplacement SAV :
-    1. Soit en toute autonomie sur son Espace Client (/compte, section SAV & Remplacement).
-    2. Soit en contactant l'équipe support sur WhatsApp avec son code commande pour une prise en charge prioritaire.
+  • Si le client signale une panne, une coupure ou souhaite ouvrir un SAV : confirme-lui l'enregistrement immédiat de sa demande de SAV (#SAV-NP-...) sous garantie et rassure-le sur la prise en charge prioritaire par notre équipe.
 
 6. PROCESSUS DE COMMANDE ET TRANSPARENCE :
 - Les commandes se finalisent par WhatsApp pour un échange direct et une activation guidée.
@@ -1432,10 +1431,15 @@ async function lookupOrderDiagnostic(pool, text, rawHistory = []) {
 
     const candidates = [];
 
-    // Codes de suivi : NP-TRK-XXXX
-    const trackingMatches = combinedText.match(/\bNP[-_]TRK[-_][A-Z0-9]{4,16}\b/gi) || [];
+    // Codes de suivi complets ou segmentés : NP-TRK-237F-5894-E4B9, NP-TRK-XXXX, 237F-5894-E4B9
+    const trackingMatches = combinedText.match(/\bNP[-_]TRK[-_][A-Z0-9\-]{4,32}\b/gi) || [];
     for (const m of trackingMatches) {
       candidates.push({ type: 'tracking', val: m.toUpperCase() });
+    }
+
+    const trkSegments = combinedText.match(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/gi) || [];
+    for (const m of trkSegments) {
+      candidates.push({ type: 'tracking_segment', val: m.toUpperCase() });
     }
 
     // Numéros de commande explicites : NP-1234, #1234, commande 1234
@@ -1479,8 +1483,11 @@ async function lookupOrderDiagnostic(pool, text, rawHistory = []) {
         query = 'SELECT * FROM orders WHERE id = $1';
         params = [cand.val];
       } else if (cand.type === 'tracking') {
-        query = 'SELECT * FROM orders WHERE upper(tracking_code) = $1';
-        params = [cand.val];
+        query = 'SELECT * FROM orders WHERE upper(tracking_code) = $1 OR upper(tracking_code) LIKE $2';
+        params = [cand.val, `%${cand.val}%`];
+      } else if (cand.type === 'tracking_segment') {
+        query = 'SELECT * FROM orders WHERE upper(tracking_code) LIKE $1';
+        params = [`%${cand.val}%`];
       } else if (cand.type === 'email') {
         query = 'SELECT * FROM orders WHERE lower(customer_email) = $1 ORDER BY id DESC LIMIT 1';
         params = [cand.val];
@@ -1521,7 +1528,7 @@ async function callGeminiChat({ apiKey, model, systemPrompt, messages, temperatu
         contents: messages,
         generationConfig: {
           temperature,
-          maxOutputTokens: 2500
+          maxOutputTokens: 3000
         }
       };
 
@@ -1597,48 +1604,131 @@ app.post(
       return res.status(400).json({ error: 'Message trop long (1500 caractères maximum).' });
     }
 
+    // Assainissement de l'historique multi-tours avec alternance stricte 'user' / 'model'
     const rawHistory = Array.isArray(req.body.history) ? req.body.history : [];
     const contents = [];
-    for (const h of rawHistory.slice(-8)) {
-      if (h.role === 'user' && typeof h.text === 'string' && h.text.trim()) {
-        contents.push({ role: 'user', parts: [{ text: h.text.trim().slice(0, 1500) }] });
-      } else if (h.role === 'model' && typeof h.text === 'string' && h.text.trim()) {
-        contents.push({ role: 'model', parts: [{ text: h.text.trim().slice(0, 2000) }] });
-      }
+    let lastRole = null;
+
+    for (const h of rawHistory.slice(-12)) {
+      const role = h.role === 'user' ? 'user' : (h.role === 'model' ? 'model' : null);
+      const text = typeof h.text === 'string' ? h.text.trim() : '';
+      if (!role || !text) continue;
+      if (role === lastRole) continue; // Évite les rôles consécutifs identiques
+
+      contents.push({
+        role,
+        parts: [{ text: text.slice(0, role === 'user' ? 1500 : 3000) }]
+      });
+      lastRole = role;
     }
-    contents.push({ role: 'user', parts: [{ text: userMessage }] });
+
+    // Le message actuel doit clore la conversation en rôle 'user'
+    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+      contents[contents.length - 1] = { role: 'user', parts: [{ text: userMessage }] };
+    } else {
+      contents.push({ role: 'user', parts: [{ text: userMessage }] });
+    }
 
     let systemPrompt = await buildChatbotContext(pool, s.chatbotSystemPrompt);
 
     // Diagnostic temps réel si une commande est identifiée
     const diag = await lookupOrderDiagnostic(pool, userMessage, rawHistory);
+    let orderInfo = null;
+    let savTicketNumber = null;
+
     if (diag && diag.order) {
       const ord = diag.order;
       const isConfirmed = ord.status === 'confirmed';
       const isExpired = ord.expires_at ? (new Date(ord.expires_at) < new Date()) : false;
       const accountsCount = diag.accounts.length;
-      const hasSavClaim = diag.accounts.some(a => a.warranty_claim || (a.defect_reason && a.defect_reason.length > 0));
+      let hasSavClaim = diag.accounts.some(a => a.warranty_claim || (a.defect_reason && a.defect_reason.length > 0));
 
-      let diagText = `\n\n=== DIAGNOSTIC EN TEMPS RÉEL DE LA COMMANDE CLIENT DÉTECTÉE (#NP-${ord.id}) ===\n`;
-      diagText += `• Numéro de référence : #NP-${ord.id}\n`;
-      diagText += `• Code de suivi : ${ord.tracking_code || 'Non renseigné'}\n`;
-      diagText += `• Nom client : ${ord.customer_name || 'Client'} (${ord.customer_email || 'Email non renseigné'})\n`;
-      diagText += `• Date de commande : ${new Date(ord.created_at).toLocaleDateString('fr-FR')}\n`;
-      diagText += `• Règlement : ${isConfirmed ? 'RÉGLÉE ET CONFIRMÉE' : (ord.status === 'new' ? 'EN ATTENTE DE RÈGLEMENT' : 'ANNULÉE')}\n`;
-      diagText += `• Échéance : ${ord.expires_at ? new Date(ord.expires_at).toLocaleDateString('fr-FR') : 'Non définie'}${isExpired ? ' (EXPIRÉ)' : (isConfirmed ? ' (ACTIF)' : '')}\n`;
-      diagText += `• Identifiants & Accès : ${accountsCount > 0 ? `${accountsCount} service(s) configuré(s) et actif(s)` : 'En cours d\'affectation'}\n`;
-      diagText += `• Lien d'accès sécurisé direct : /acces/${ord.access_token || ''}\n`;
-      diagText += `• Statut SAV : ${hasSavClaim ? 'Dossier SAV en cours' : 'Aucun SAV actif'}\n\n`;
-      diagText += `CONSIGNES POUR CE DIAGNOSTIC :\n`;
-      diagText += `- Confirme au client que tu as vérifié sa commande #NP-${ord.id}.\n`;
-      if (isConfirmed && accountsCount > 0 && !isExpired) {
-        diagText += `- Indique-lui que la commande est bien réglée, active et que ses identifiants sont accessibles sur /acces/${ord.access_token}.\n`;
-        diagText += `- Si le client signale que le service ne fonctionne pas ou est coupé, rassure-le sur sa garantie et propose-lui d'ouvrir un dossier de remplacement SAV depuis son espace client (/compte, section SAV & Remplacement) ou directement sur WhatsApp avec son numéro de commande.\n`;
-      } else if (!isConfirmed) {
-        diagText += `- Indique-lui que sa commande est en attente de validation ou de règlement auprès de l'équipe support.\n`;
-      } else if (isExpired) {
-        diagText += `- Indique-lui que la période d'abonnement est arrivée à son terme et propose-lui de la renouveler.\n`;
+      // 1. Extraire clairement les noms de tous les produits commandés
+      let productNames = [];
+      if (Array.isArray(ord.items)) {
+        productNames = ord.items.map(it => it.name || it.title || it.slug).filter(Boolean);
       }
+      if (productNames.length === 0 && diag.accounts.length > 0) {
+        productNames = diag.accounts.map(a => a.service_name).filter(Boolean);
+      }
+      const productsDisplay = productNames.length > 0 ? productNames.join(', ') : 'Abonnement numérique NeonPass';
+
+      // 2. Date d'échéance formatée
+      let expiryDisplay = 'Non renseignée';
+      if (ord.expires_at) {
+        const expDate = new Date(ord.expires_at);
+        expiryDisplay = expDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+
+      // 3. Lien d'accès sécurisé réel
+      const accessUrl = ord.access_token ? `https://neonpass.uned.live/acces/${ord.access_token}` : '';
+
+      // 4. Détection automatique d'une demande d'ouverture de SAV dans le message client
+      const isSavIntent = /(?:ouvr(?:ir|e)|cr[eé]er|demande|d[eé]clar(?:er|e)|besoin de|faire)\s+.*sav\b|sav\s+(?:svp|stp|merci|urgent|pour)|(?:ne\s+fonctionne\s+pas|ne\s+marche\s+pas|panne|coupure|bloqu[eé]|mot\s+de\s+passe\s+incorrect|accès\s+coupé|identifiants\s+invalides)/i.test(userMessage);
+
+      let savOpenedNow = false;
+      if (isSavIntent && isConfirmed && !hasSavClaim && diag.accounts.length > 0) {
+        try {
+          const reason = `Demande SAV client via Assistant Chatbot : ${userMessage.slice(0, 200)}`;
+          await pool.query(
+            `UPDATE accounts
+             SET warranty_claim = TRUE, defect_reason = $1, defect_at = now()
+             WHERE order_id = $2 AND status = 'assigned'`,
+            [reason, ord.id]
+          );
+          await audit(req, 'CHATBOT_SAV_REQUEST', {
+            orderId: ord.id,
+            trackingCode: ord.tracking_code,
+            reason
+          });
+          savOpenedNow = true;
+          hasSavClaim = true;
+        } catch (savErr) {
+          console.error('[Chatbot SAV Error]', savErr.message);
+        }
+      }
+
+      if (hasSavClaim) {
+        savTicketNumber = `SAV-NP-${ord.id}`;
+      }
+
+      orderInfo = {
+        id: ord.id,
+        trackingCode: ord.tracking_code || '',
+        customerName: ord.customer_name || 'Client',
+        products: productsDisplay,
+        expiresAt: expiryDisplay,
+        isConfirmed,
+        isExpired,
+        accessUrl,
+        hasSavClaim,
+        canOpenSav: isConfirmed && !isExpired
+      };
+
+      let diagText = `\n\n=== INFORMATIONS VÉRIFIÉES EN TEMPS RÉEL SUR LA COMMANDE CLIENT (#NP-${ord.id}) ===\n`;
+      diagText += `• Numéro de commande : #NP-${ord.id}\n`;
+      diagText += `• Code de suivi : ${ord.tracking_code || 'Non renseigné'}\n`;
+      diagText += `• Nom du client : ${ord.customer_name || 'Client'}\n`;
+      diagText += `• Produit(s) commandé(s) : ${productsDisplay}\n`;
+      diagText += `• Règlement : ${isConfirmed ? 'RÉGLÉE ET CONFIRMÉE' : (ord.status === 'new' ? 'EN ATTENTE DE RÈGLEMENT' : 'ANNULÉE')}\n`;
+      diagText += `• Statut du service : ${isConfirmed && !isExpired ? 'ACTIF ET EN COURS' : (isExpired ? 'EXPIRÉ' : 'EN ATTENTE D\'ACTIVATION')}\n`;
+      diagText += `• Date d'échéance exacte : ${expiryDisplay}${isExpired ? ' (EXPIRÉ)' : ' (EN COURS)'}\n`;
+      diagText += `• Lien d'accès sécurisé direct : ${accessUrl || 'Non disponible'}\n`;
+      diagText += `• Dossier SAV : ${hasSavClaim ? `Dossier actif (#SAV-NP-${ord.id})` : 'Aucun SAV actif (Garantie 100% active)'}\n\n`;
+
+      diagText += `CONSIGNES STRICTES POUR CETTE COMMANDE :\n`;
+      diagText += `1. NOM DU PRODUIT : Si le client te demande quel est le produit de sa commande, donne-lui TOUJOURS précisément : "${productsDisplay}". Ne dis JAMAIS que le produit est confidentiel ou masqué.\n`;
+      diagText += `2. DATE D'ÉCHÉANCE : Si le client te demande la date d'échéance ou de validité, donne-lui explicitement : "${expiryDisplay}".\n`;
+      diagText += `3. LIEN D'ACCÈS : Écris TOUJOURS le lien d'accès réel complet ${accessUrl}. Ne mets JAMAIS de placeholder texte [token].\n`;
+
+      if (savOpenedNow) {
+        diagText += `4. OUVERTURE SAV CONFIRMÉE : Le dossier de SAV #SAV-NP-${ord.id} vient d'être officiellement OUVERT DANS LE SYSTÈME pour ${productsDisplay}. Confirme-lui que son dossier SAV est ouvert avec ce numéro de référence, rassure-le sur le traitement prioritaire de son remplacement sous garantie, et rappelle-lui que ses nouveaux identifiants apparaîtront sur ${accessUrl}.\n`;
+      } else if (hasSavClaim) {
+        diagText += `4. ÉTAT SAV : Un dossier de SAV (#SAV-NP-${ord.id}) est déjà ouvert et en cours de traitement pour cette commande. Rassure le client sur la prise en charge prioritaire.\n`;
+      } else if (isConfirmed && !isExpired) {
+        diagText += `4. PROPOSITION SAV : Si le client signale que le service ne fonctionne pas, rassure-le sur sa garantie et confirme-lui qu'il peut déclencher un remplacement SAV immédiatement en le demandant ici même ou en cliquant sur le bouton SAV.\n`;
+      }
+
       systemPrompt += diagText;
     }
 
@@ -1652,7 +1742,13 @@ app.post(
         systemPrompt,
         messages: contents
       });
-      res.json({ ok: true, reply });
+
+      res.json({
+        ok: true,
+        reply,
+        order: orderInfo,
+        savTicket: savTicketNumber
+      });
     } catch (err) {
       console.error('[Chatbot Error]', err.message);
       res.status(502).json({
@@ -1661,6 +1757,51 @@ app.post(
         details: err.message
       });
     }
+  })
+);
+
+app.post(
+  '/api/chat/sav',
+  wrap(async (req, res) => {
+    const { orderId, trackingCode, reason } = req.body || {};
+    let query = '';
+    let params = [];
+    if (orderId) {
+      query = 'SELECT * FROM orders WHERE id = $1';
+      params = [orderId];
+    } else if (trackingCode) {
+      query = 'SELECT * FROM orders WHERE upper(tracking_code) = $1';
+      params = [String(trackingCode).trim().toUpperCase()];
+    } else {
+      throw new HttpError(400, 'Numéro de commande ou code de suivi requis.');
+    }
+
+    const { rows } = await pool.query(query, params);
+    if (rows.length === 0) throw new HttpError(404, 'Commande introuvable.');
+
+    const ord = rows[0];
+    const fullReason = (reason || 'Demande SAV ouverte via l\'Assistant Chatbot Volt').slice(0, 300);
+
+    const upd = await pool.query(
+      `UPDATE accounts
+       SET warranty_claim = TRUE, defect_reason = $1, defect_at = now()
+       WHERE order_id = $2 AND status = 'assigned' RETURNING id`,
+      [fullReason, ord.id]
+    );
+
+    await audit(req, 'CHATBOT_SAV_REQUEST', {
+      orderId: ord.id,
+      trackingCode: ord.tracking_code,
+      reason: fullReason,
+      accountsAffected: upd.rowCount
+    });
+
+    res.json({
+      ok: true,
+      ticketId: `SAV-NP-${ord.id}`,
+      orderId: ord.id,
+      message: 'Demande de SAV enregistrée avec succès.'
+    });
   })
 );
 

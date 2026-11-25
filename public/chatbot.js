@@ -9,7 +9,7 @@
   if (window.__NEONPASS_CHATBOT_INITIALIZED__) return;
   window.__NEONPASS_CHATBOT_INITIALIZED__ = true;
 
-  const STORAGE_KEY = 'np_chat_history_v1';
+  const STORAGE_KEY = 'np_chat_history_v2';
   let isChatOpen = false;
   let isSending = false;
   let chatHistory = [];
@@ -403,6 +403,50 @@
         font-weight: 500;
       }
 
+      /* Barre d'actions rapides et SAV */
+      .np-chat-actions-bar {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .np-chat-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        background: rgba(239, 68, 68, 0.12);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+        text-align: left;
+      }
+      .np-chat-action-btn:hover {
+        background: rgba(239, 68, 68, 0.25);
+        border-color: rgba(239, 68, 68, 0.6);
+        color: #ffffff;
+        transform: translateY(-1px);
+      }
+      .np-chat-action-btn svg {
+        flex-shrink: 0;
+      }
+      .np-chat-sav-badge {
+        margin-top: 8px;
+        padding: 7px 11px;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #6ee7b7;
+        border-radius: 8px;
+        font-size: 11.5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       /* Quick chips */
       .np-chat-chips {
         display: flex;
@@ -649,7 +693,7 @@
     if (box) box.scrollTop = box.scrollHeight;
   }
 
-  function renderMessage(role, text) {
+  function renderMessage(role, text, meta) {
     const box = document.getElementById('npChatMessages');
     if (!box) return;
 
@@ -660,9 +704,42 @@
     content.className = 'np-msg-content';
     content.innerHTML = formatMarkdown(text);
 
+    // Bouton interactif SAV si une commande active sans SAV est détectée
+    if (role === 'model' && meta && meta.order && meta.order.canOpenSav && !meta.order.hasSavClaim) {
+      const actions = document.createElement('div');
+      actions.className = 'np-chat-actions-bar';
+      actions.innerHTML = `
+        <button type="button" class="np-chat-action-btn np-sav-btn" data-order-id="${meta.order.id}" data-tracking="${meta.order.trackingCode}">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span>🔧 Ouvrir une demande de SAV (Remplacement sous garantie)</span>
+        </button>
+      `;
+      content.appendChild(actions);
+
+      const savBtn = actions.querySelector('.np-sav-btn');
+      if (savBtn) {
+        savBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          triggerSavRequest(meta.order.id, meta.order.trackingCode);
+        });
+      }
+    }
+
+    // Badge si un ticket de SAV a été activé
+    if (role === 'model' && meta && meta.savTicket) {
+      const badge = document.createElement('div');
+      badge.className = 'np-chat-sav-badge';
+      badge.innerHTML = `🛡️ <strong>Dossier ${escapeHtml(meta.savTicket)} actif</strong> · Prise en charge prioritaire sous garantie`;
+      content.appendChild(badge);
+    }
+
     msg.appendChild(content);
     box.appendChild(msg);
     scrollToBottom();
+  }
+
+  function triggerSavRequest(orderId, trackingCode) {
+    sendMessage(`Je souhaite ouvrir une demande de SAV pour ma commande #${orderId} (${trackingCode}) car mon accès ne fonctionne pas.`);
   }
 
   function renderWelcomeMessage() {
@@ -704,22 +781,44 @@
   }
 
   function loadHistory() {
-    const saved = sessionStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        chatHistory = JSON.parse(saved);
-        if (Array.isArray(chatHistory) && chatHistory.length > 0) {
-          chatHistory.forEach(m => renderMessage(m.role, m.text));
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          // Expiration après 24 heures
+          if (!parsed.savedAt || (Date.now() - parsed.savedAt) < 24 * 3600 * 1000) {
+            chatHistory = parsed.messages;
+            chatHistory.forEach(m => renderMessage(m.role, m.text, m.meta));
+            return;
+          }
+        } else if (Array.isArray(parsed) && parsed.length > 0) {
+          chatHistory = parsed;
+          chatHistory.forEach(m => renderMessage(m.role, m.text, m.meta));
           return;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
     chatHistory = [];
     renderWelcomeMessage();
   }
 
+  function saveHistory() {
+    try {
+      const data = {
+        savedAt: Date.now(),
+        messages: chatHistory.slice(-20)
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (_) {}
+  }
+
   function clearChat() {
-    sessionStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch (_) {}
     chatHistory = [];
     const box = document.getElementById('npChatMessages');
     if (box) box.innerHTML = '';
@@ -771,8 +870,12 @@
     const sendBtn = document.getElementById('npChatSendBtn');
     if (sendBtn) sendBtn.disabled = true;
 
+    // Prélèvement de l'historique antérieur (les 12 derniers tours) AVANT d'ajouter le nouveau message
+    const historyToSend = chatHistory.slice(-12).map(m => ({ role: m.role, text: m.text }));
+
     renderMessage('user', text);
     chatHistory.push({ role: 'user', text });
+    saveHistory();
 
     showTyping();
 
@@ -782,7 +885,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: chatHistory.slice(-8)
+          history: historyToSend
         })
       });
 
@@ -794,9 +897,10 @@
         renderMessage('model', errText);
       } else {
         const botReply = data.reply;
-        renderMessage('model', botReply);
-        chatHistory.push({ role: 'model', text: botReply });
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(chatHistory));
+        const meta = { order: data.order, savTicket: data.savTicket };
+        renderMessage('model', botReply, meta);
+        chatHistory.push({ role: 'model', text: botReply, meta });
+        saveHistory();
       }
     } catch (err) {
       hideTyping();

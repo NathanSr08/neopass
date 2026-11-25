@@ -163,7 +163,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="tab" role="tab" data-panel="settings" aria-selected="false">Paramètres</button>
     <button class="tab" role="tab" data-panel="security" aria-selected="false">Sécurité</button>
     <button class="tab" role="tab" data-panel="audit" aria-selected="false">Journal</button>
-    <button class="tab" role="tab" data-panel="changelog" aria-selected="false" id="changelogTab">Changelog <span class="pill on" style="font-size:10px;padding:1px 6px;margin-left:4px">v2.4.2</span></button>
+    <button class="tab" role="tab" data-panel="changelog" aria-selected="false" id="changelogTab">Changelog <span class="pill on" style="font-size:10px;padding:1px 6px;margin-left:4px">v2.4.3</span></button>
   </div>
 
   <section class="panel" id="panel-orders">
@@ -877,7 +877,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <div>
         <h2 style="margin:0;display:flex;align-items:center;gap:10px">
           <span>📜 Journal des Mises à Jour & Évolutions</span>
-          <span class="pill on" style="font-size:11px">v2.4.2</span>
+          <span class="pill on" style="font-size:11px">v2.4.3</span>
         </h2>
         <p class="hint" style="margin:4px 0 0">Historique détaillé et horodaté de toutes les modifications, fonctionnalités et correctifs apportés à NeonPass.</p>
       </div>
@@ -4622,11 +4622,10 @@ Lorsqu'un client rencontre un problème avec un abonnement ou s'interroge sur l'
 - Demande-lui courtoisement son numéro de commande (ex: #NP-1234) ou son code de suivi (ex: NP-TRK-XXXX).
 - Dès que le code est fourni, le système effectue la vérification en direct et te transmet son état réel.
 - Analyse les données vérifiées et explique-lui l'état exact :
-  • Si la commande est confirmée et réglée : confirme-lui le règlement et rappelle-lui que ses identifiants sont actifs et consultables sur sa fiche sécurisée : /acces/[token].
+  • Si la commande est confirmée et réglée : confirme-lui le nom du produit, sa date d'échéance et le lien exact de sa fiche d'accès sécurisée (ex: https://neonpass.uned.live/acces/...). Ne mets JAMAIS de placeholder texte [token].
+  • Si le client demande le nom du produit ou la date d'échéance : donne-lui toujours l'information exacte et complète figurant dans le bloc de diagnostic.
   • Si la commande est en statut "new" : explique-lui avec courtoisie qu'elle est en attente de validation ou de règlement auprès de l'équipe support.
-  • Si le client constate une panne, un problème de mot de passe ou une interruption sur un accès actif sous garantie : propose-lui d'ouvrir immédiatement un dossier de remplacement SAV :
-    1. Soit en toute autonomie sur son Espace Client (/compte, section SAV & Remplacement).
-    2. Soit en contactant l'équipe support sur WhatsApp avec son code commande pour une prise en charge prioritaire.
+  • Si le client signale une panne, une coupure ou souhaite ouvrir un SAV : confirme-lui l'enregistrement immédiat de sa demande de SAV (#SAV-NP-...) sous garantie et rassure-le sur la prise en charge prioritaire par notre équipe.
 
 6. PROCESSUS DE COMMANDE ET TRANSPARENCE :
 - Les commandes se finalisent par WhatsApp pour un échange direct et une activation guidée.

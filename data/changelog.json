@@ -1,5 +1,23 @@
 [
   {
+    "id": "cl-2026-11-25-5",
+    "version": "v2.4.3",
+    "date": "2026-11-25",
+    "time": "11:50",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté & Correctif",
+    "title": "Historique Chat Persistant 24h, Détails Produits, Date d'Échéance & Ouverture SAV en Direct",
+    "summary": "Maintien intégral de la mémoire de conversation sur 24h sans collision de rôles, communication claire des produits et dates d'échéance de commande, et ouverture directe de dossier SAV avec bouton interactif dans le chat.",
+    "details": [
+      "Mémoire & Historique multi-tours fiabilisé : Stockage persistant localStorage/sessionStorage sur 24h permettant au client de changer de page sans perdre le fil, et assainissement strict de l'alternance des rôles ('user'/'model') éliminant toute coupure de génération.",
+      "Transmission transparente des produits commandés : Injection automatique de l'ensemble des articles du panier (items) et noms de services assignés pour que l'IA réponde immédiatement sans masquer les intitulés.",
+      "Date d'échéance exacte & Lien d'accès réel : Indication précise de la date de fin d'abonnement au format JJ/MM/AAAA et transmission systématique de l'URL sécurisée complète sans balise placeholder.",
+      "Ouverture directe de dossier SAV : Détection automatique des demandes de SAV ou incidents techniques dans le chat avec mise à jour immédiate en base PostgreSQL (warranty_claim = true), attribution d'un ticket (#SAV-NP-XXXX) et bouton d'action interactif [🔧 Ouvrir une demande de SAV] dans le widget.",
+      "Plafond de génération étendu à 3000 tokens : Garantie de réponses complètes sans coupure, même sur des explications techniques ou tutoriels pas-à-pas.",
+      "Bust du cache navigateur : Version chatbot.js?v=2.4.3 déployée sur toutes les pages publiques."
+    ]
+  },
+  {
     "id": "cl-2026-11-25-4",
     "version": "v2.4.2",
     "date": "2026-11-25",
