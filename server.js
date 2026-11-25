@@ -166,38 +166,61 @@ const REVIEW_AGG = `
 
 const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
-const DEFAULT_CHATBOT_PROMPT = `Tu es Volt, l'assistant virtuel IA officiel de NeonPass (https://neonpass.uned.live).
-NeonPass est la référence e-commerce d'abonnements numériques premium et licences logicielles (IPTV, VPN, Streaming vidéo & musical, Outils IA & Dev).
+const DEFAULT_CHATBOT_PROMPT = `Tu es Volt, l'assistant officiel du support client de NeonPass (https://neonpass.uned.live).
+NeonPass est la référence e-commerce pour les abonnements numériques et licences logicielles premium (IPTV, VPN, Streaming vidéo & musical, Outils IA & Développement).
 
-Ton objectif est d'accueillir les visiteurs, de les guider avec enthousiasme et précision, et de répondre à toutes leurs questions sur les offres, les prix, la disponibilité du stock, la passation de commande, la livraison, la garantie et le service après-vente (SAV).
+DIRECTIVES STRICTES DE COMMUNICATION :
+1. TON PROFESSIONNEL ET SOBRE :
+- Adopte un ton poli, rigoureux, mesuré, clair et hautement professionnel (comme un support client institutionnel de premier plan).
+- N'utilise quasiment pas d'émojis (au maximum 0 ou 1 seul par message si strictement pertinent, jamais de séries d'émojis).
+- Structure tes réponses de façon concise et lisible avec des puces et du texte en gras pour les éléments essentiels.
+- Réponds toujours dans la langue de l'interlocuteur (français par défaut, anglais si l'utilisateur s'exprime en anglais, hébreu si en hébreu).
 
-RÈGLES D'OR :
-1. PRÉCISION DU CATALOGUE :
-Toutes les offres, prix en euros (€), durées et disponibilités en stock te sont fournies dynamiquement ci-dessous. Tu dois TOUJOURS te baser sur ces données réelles et ne jamais inventer de produit ou de tarif.
-2. PARCOURS DE COMMANDE SIMPLE SUR WHATSAPP :
-- Le client choisit son offre sur la boutique NeonPass.
-- Il clique sur le bouton "Commander sur WhatsApp" pour ouvrir une discussion directe avec l'équipe support avec son panier pré-rempli.
-- Le paiement est sécurisé sans engagement ni reconduction automatique forcée (Revolut, Virement bancaire SEPA, Cryptomonnaies).
-3. LIVRAISON INSTANTANÉE & ESPACE SÉCURISÉ :
-- Dès confirmation de commande, le client reçoit son lien privé 24/7 (/acces/:token) pour consulter ses identifiants (identifiant, mot de passe, clé de licence, guide de configuration).
-4. ESPACE CLIENT & GARANTIE TOTALE SAV :
-- Le client peut créer son compte client sécurisé sur /compte (protégé par code OTP email).
-- Il y retrouve l'historique de ses abonnements, ses dates d'expiration et son cumul d'achats.
-- Garantie 100% active durant toute la validité : en cas de souci d'accès, il déclenche un remplacement gratuit en 1 clic dans son espace /compte via le bouton "Demande de SAV".
-5. REMISES ET PARRAINAGE :
-- Remise automatique multi-produits dans le panier.
-- Programme Parrainage : chaque client a un code unique (NP-REF-XXXX). À chaque palier de 5 commandes validées de filleuls, un code promo exceptionnel de -50% est automatiquement débloqué !
-6. TRANSPARENCE ET SUPPORT :
+2. RÈGLE STRICTE DE CONFIDENTIALITÉ DES STOCKS :
+- Ne mentionne JAMAIS de chiffres, quantités ou statistiques de stock interne.
+- Confirme simplement et poliment que le service demandé est actif, disponible et prêt pour une mise en service immédiate.
+
+3. SPÉCIFICITÉ SPOTIFY (COMPTE PERSONNEL DU CLIENT) :
+- Pour Spotify (et services similaires de mise à niveau personnelle), l'activation s'effectue directement sur le propre compte personnel existant du client.
+- Le client conserve ainsi l'intégralité de ses playlists, favoris, historique d'écoute et bibliothèque musicale, sans aucune perte de données ni changement d'identifiants.
+
+4. TUTORIELS ET CONFIGURATION IPTV :
+Si un utilisateur demande comment installer, configurer ou utiliser son abonnement IPTV, fournis-lui une procédure claire et structurée :
+- Applications recommandées par équipement :
+  • Smart TV Samsung / LG : IBO Player, IPTV Smarters Pro, Nanomid Player, Flix IPTV.
+  • Android TV / Google TV / Fire TV Stick : TiviMate (recommandée pour sa fluidité et son ergonomie), IPTV Smarters Pro, XCIPTV.
+  • Apple TV / iOS (iPhone, iPad) : GSE Smart IPTV, IPTV Smarters, UHF.
+  • PC / Mac : IPTV Smarters Pro (Windows/Mac) ou VLC Media Player.
+  • Boîtiers MAG / Formuler : configuration via l'adresse MAC et l'URL Portal ou application MyTVOnline.
+- Méthode standard de configuration (Xtream Codes API) :
+  1. Installer l'application choisie sur son appareil.
+  2. Sélectionner "Connexion avec API Xtream Codes" (ou "Login with Xtream Codes API").
+  3. Saisir les 4 informations présentes sur la fiche d'accès sécurisée NeonPass :
+     - Nom de connexion (ex: NeonPass)
+     - Nom d'utilisateur (Username)
+     - Mot de passe (Password)
+     - URL du serveur (Server URL / DNS avec le port)
+  4. Valider pour charger les chaînes en direct (Live TV), les films (VOD) et séries avec le guide des programmes (EPG).
+- Recommandation technique : Privilégier une connexion filaire Ethernet ou Wi-Fi 5 GHz. En cas de buffering, redémarrer la box internet ou basculer le flux sur le format HLS/TS.
+
+5. ASSISTANCE COMMANDE, VÉRIFICATION ET SAV :
+Lorsqu'un client rencontre un problème avec un abonnement ou s'interroge sur l'état de sa commande :
+- Demande-lui courtoisement son numéro de commande (ex: #NP-1234) ou son code de suivi (ex: NP-TRK-XXXX).
+- Dès que le code est fourni, le système effectue la vérification en direct et te transmet son état réel.
+- Analyse les données vérifiées et explique-lui l'état exact :
+  • Si la commande est confirmée et réglée : confirme-lui le règlement et rappelle-lui que ses identifiants sont actifs et consultables sur sa fiche sécurisée : /acces/[token].
+  • Si la commande est en statut "new" : explique-lui avec courtoisie qu'elle est en attente de validation ou de règlement auprès de l'équipe support.
+  • Si le client constate une panne, un problème de mot de passe ou une interruption sur un accès actif sous garantie : propose-lui d'ouvrir immédiatement un dossier de remplacement SAV :
+    1. Soit en toute autonomie sur son Espace Client (/compte, section SAV & Remplacement).
+    2. Soit en contactant l'équipe support sur WhatsApp avec son code commande pour une prise en charge prioritaire.
+
+6. PROCESSUS DE COMMANDE ET TRANSPARENCE :
+- Les commandes se finalisent par WhatsApp pour un échange direct et une activation guidée.
+- Paiements sécurisés sans engagement ni prélèvement automatique forcé.
 - Suivi de commande en temps réel : /suivi.
-- Météo du réseau et statut serveurs en direct : /status.
-- Si le client souhaite parler à un humain, oriente-le chaleureusement vers WhatsApp.
+- Statut du réseau et des serveurs : /status.`;
 
-TON ET FORMAT :
-- Style cyber-néon moderne, courtois, chaleureux, concis et ultra-professionnel.
-- Fais des réponses aérées avec puces et gras pour faciliter la lecture sur smartphone.
-- Réponds toujours dans la langue de l'interlocuteur (français par défaut, anglais si l'utilisateur s'exprime en anglais, hébreu si en hébreu).`;
-
-const DEFAULT_CHATBOT_WELCOME = "⚡ Bonjour ! Je suis Volt, l'assistant IA de NeonPass. Comment puis-je vous aider aujourd'hui ? (tarifs, stock, commande, SAV...)";
+const DEFAULT_CHATBOT_WELCOME = "Bonjour, je suis Volt, l'assistant du support client NeonPass. Comment puis-je vous renseigner aujourd'hui ? (offres, commande, tutoriel IPTV, suivi de commande ou SAV)";
 
 async function getSettings() {
   const { rows } = await pool.query('SELECT key, value FROM settings');
@@ -1362,13 +1385,10 @@ async function buildChatbotContext(pool, customPrompt) {
   try {
     const { rows: offers } = await pool.query(`
       SELECT o.id, o.name, o.category, o.price, o.was_price, o.duration_months, o.description, o.features, o.is_pack,
-             coalesce(r.rating_avg, 5.0) as rating, coalesce(r.review_count, 0) as reviews,
-             count(a.id) FILTER (WHERE a.status = 'available')::int as stock_available
+             coalesce(r.rating_avg, 5.0) as rating, coalesce(r.review_count, 0) as reviews
       FROM offers o
-      LEFT JOIN accounts a ON a.offer_id = o.id
       LEFT JOIN (SELECT offer_id, avg(rating) as rating_avg, count(*) as review_count FROM reviews WHERE approved GROUP BY offer_id) r ON r.offer_id = o.id
       WHERE o.active
-      GROUP BY o.id, r.rating_avg, r.review_count
       ORDER BY o.sort ASC, o.id ASC
     `);
 
@@ -1378,16 +1398,19 @@ async function buildChatbotContext(pool, customPrompt) {
     `);
 
     let context = `${basePrompt}\n\n`;
-    context += `--- CATALOGUE OFFICIEL & STOCKS EN DIRECT NEONPASS ---\n`;
-    context += `Note globale de la boutique : ${Math.round((reviewStats[0]?.global_rating || 5) * 10) / 10}/5 (${reviewStats[0]?.total_reviews || 0} avis clients vérifiés).\n\n`;
-    context += `Offres actuellement en ligne :\n`;
+    context += `--- CATALOGUE OFFICIEL NEONPASS (DONNÉES EN DIRECT) ---\n`;
+    context += `Évaluation globale : ${Math.round((reviewStats[0]?.global_rating || 5) * 10) / 10}/5 (${reviewStats[0]?.total_reviews || 0} avis clients certifiés).\n\n`;
+    context += `Offres actuellement au catalogue :\n`;
 
     offers.forEach((o) => {
-      const was = o.was_price ? ` (prix barré: ${o.was_price}€)` : '';
-      const stock = o.stock_available > 0 ? `En stock (${o.stock_available} disponibles)` : 'Disponible à la commande';
-      const ratingStr = o.reviews > 0 ? `Note: ${Math.round(o.rating * 10) / 10}/5 (${o.reviews} avis)` : 'Note: 5/5';
+      const was = o.was_price ? ` (ancien prix barré: ${o.was_price}€)` : '';
+      const ratingStr = o.reviews > 0 ? `Note certifiée: ${Math.round(o.rating * 10) / 10}/5 (${o.reviews} avis)` : 'Note: 5/5';
       const feats = Array.isArray(o.features) ? o.features.join(' | ') : '';
-      context += `• ${o.name} [${o.category}] : ${o.price}€ pour ${o.duration_months} mois${was} - Statut: ${stock} - ${ratingStr}\n`;
+      let specificNote = '';
+      if (o.name.toLowerCase().includes('spotify')) {
+        specificNote = ' [Important: Activation directe sur le propre compte personnel du client, conservation intégrale de ses playlists et favoris]';
+      }
+      context += `• ${o.name} [Catégorie: ${o.category}] : ${o.price}€ pour ${o.duration_months} mois${was} - Disponibilité: Service actif & disponible immédiatement - ${ratingStr}${specificNote}\n`;
       if (o.description) context += `  Description: ${o.description}\n`;
       if (feats) context += `  Caractéristiques: ${feats}\n`;
     });
@@ -1397,6 +1420,89 @@ async function buildChatbotContext(pool, customPrompt) {
     console.error('[buildChatbotContext Error]', err.message);
     return basePrompt;
   }
+}
+
+// Recherche & Diagnostic automatique d'une commande client
+async function lookupOrderDiagnostic(pool, text, rawHistory = []) {
+  try {
+    const combinedText = [
+      text,
+      ...(rawHistory.slice(-4).map(h => (typeof h.text === 'string' ? h.text : '')))
+    ].join(' ');
+
+    const candidates = [];
+
+    // Codes de suivi : NP-TRK-XXXX
+    const trackingMatches = combinedText.match(/\bNP[-_]TRK[-_][A-Z0-9]{4,16}\b/gi) || [];
+    for (const m of trackingMatches) {
+      candidates.push({ type: 'tracking', val: m.toUpperCase() });
+    }
+
+    // Numéros de commande explicites : NP-1234, #1234, commande 1234
+    const npOrderMatches = combinedText.match(/\bNP[-_](\d{1,8})\b/gi) || [];
+    for (const m of npOrderMatches) {
+      const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+      if (num > 0) candidates.push({ type: 'id', val: num });
+    }
+
+    const hashMatches = combinedText.match(/#(\d{1,8})\b/g) || [];
+    for (const m of hashMatches) {
+      const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+      if (num > 0) candidates.push({ type: 'id', val: num });
+    }
+
+    const explicitOrderMatch = text.match(/(?:commande|numero|numéro|code)\s*(?:est\s*|n°|numéro|numero)?\s*[:\s#]*(\d{1,8})\b/i);
+    if (explicitOrderMatch) {
+      const num = parseInt(explicitOrderMatch[1], 10);
+      if (num > 0) candidates.push({ type: 'id', val: num });
+    }
+
+    // Message très court contenant uniquement un ID numérique
+    const pureNumMatch = text.trim().match(/^(\d{1,8})$/);
+    if (pureNumMatch) {
+      const num = parseInt(pureNumMatch[1], 10);
+      if (num > 0) candidates.push({ type: 'id', val: num });
+    }
+
+    // Email client
+    const emailMatch = combinedText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/);
+    if (emailMatch) {
+      candidates.push({ type: 'email', val: emailMatch[0].toLowerCase() });
+    }
+
+    if (candidates.length === 0) return null;
+
+    for (const cand of candidates) {
+      let query = '';
+      let params = [];
+      if (cand.type === 'id') {
+        query = 'SELECT * FROM orders WHERE id = $1';
+        params = [cand.val];
+      } else if (cand.type === 'tracking') {
+        query = 'SELECT * FROM orders WHERE upper(tracking_code) = $1';
+        params = [cand.val];
+      } else if (cand.type === 'email') {
+        query = 'SELECT * FROM orders WHERE lower(customer_email) = $1 ORDER BY id DESC LIMIT 1';
+        params = [cand.val];
+      }
+
+      if (query) {
+        const { rows } = await pool.query(query, params);
+        if (rows.length > 0) {
+          const order = rows[0];
+          const { rows: accs } = await pool.query(
+            `SELECT id, service_name, login, status, warranty_claim, defect_reason, assigned_at
+             FROM accounts WHERE order_id = $1`,
+            [order.id]
+          );
+          return { order, accounts: accs };
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[lookupOrderDiagnostic Error]', err.message);
+  }
+  return null;
 }
 
 async function callGeminiChat({ apiKey, model, systemPrompt, messages, temperature = 0.7 }) {
@@ -1482,7 +1588,40 @@ app.post(
     }
     contents.push({ role: 'user', parts: [{ text: userMessage }] });
 
-    const systemPrompt = await buildChatbotContext(pool, s.chatbotSystemPrompt);
+    let systemPrompt = await buildChatbotContext(pool, s.chatbotSystemPrompt);
+
+    // Diagnostic temps réel si une commande est identifiée
+    const diag = await lookupOrderDiagnostic(pool, userMessage, rawHistory);
+    if (diag && diag.order) {
+      const ord = diag.order;
+      const isConfirmed = ord.status === 'confirmed';
+      const isExpired = ord.expires_at ? (new Date(ord.expires_at) < new Date()) : false;
+      const accountsCount = diag.accounts.length;
+      const hasSavClaim = diag.accounts.some(a => a.warranty_claim || (a.defect_reason && a.defect_reason.length > 0));
+
+      let diagText = `\n\n=== DIAGNOSTIC EN TEMPS RÉEL DE LA COMMANDE CLIENT DÉTECTÉE (#NP-${ord.id}) ===\n`;
+      diagText += `• Numéro de référence : #NP-${ord.id}\n`;
+      diagText += `• Code de suivi : ${ord.tracking_code || 'Non renseigné'}\n`;
+      diagText += `• Nom client : ${ord.customer_name || 'Client'} (${ord.customer_email || 'Email non renseigné'})\n`;
+      diagText += `• Date de commande : ${new Date(ord.created_at).toLocaleDateString('fr-FR')}\n`;
+      diagText += `• Règlement : ${isConfirmed ? 'RÉGLÉE ET CONFIRMÉE' : (ord.status === 'new' ? 'EN ATTENTE DE RÈGLEMENT' : 'ANNULÉE')}\n`;
+      diagText += `• Échéance : ${ord.expires_at ? new Date(ord.expires_at).toLocaleDateString('fr-FR') : 'Non définie'}${isExpired ? ' (EXPIRÉ)' : (isConfirmed ? ' (ACTIF)' : '')}\n`;
+      diagText += `• Identifiants & Accès : ${accountsCount > 0 ? `${accountsCount} service(s) configuré(s) et actif(s)` : 'En cours d\'affectation'}\n`;
+      diagText += `• Lien d'accès sécurisé direct : /acces/${ord.access_token || ''}\n`;
+      diagText += `• Statut SAV : ${hasSavClaim ? 'Dossier SAV en cours' : 'Aucun SAV actif'}\n\n`;
+      diagText += `CONSIGNES POUR CE DIAGNOSTIC :\n`;
+      diagText += `- Confirme au client que tu as vérifié sa commande #NP-${ord.id}.\n`;
+      if (isConfirmed && accountsCount > 0 && !isExpired) {
+        diagText += `- Indique-lui que la commande est bien réglée, active et que ses identifiants sont accessibles sur /acces/${ord.access_token}.\n`;
+        diagText += `- Si le client signale que le service ne fonctionne pas ou est coupé, rassure-le sur sa garantie et propose-lui d'ouvrir un dossier de remplacement SAV depuis son espace client (/compte, section SAV & Remplacement) ou directement sur WhatsApp avec son numéro de commande.\n`;
+      } else if (!isConfirmed) {
+        diagText += `- Indique-lui que sa commande est en attente de validation ou de règlement auprès de l'équipe support.\n`;
+      } else if (isExpired) {
+        diagText += `- Indique-lui que la période d'abonnement est arrivée à son terme et propose-lui de la renouveler.\n`;
+      }
+      systemPrompt += diagText;
+    }
+
     const apiKey = s.chatbotApiKey || DEFAULT_GEMINI_KEY;
     const model = s.chatbotModel || DEFAULT_GEMINI_MODEL;
 
@@ -1498,7 +1637,7 @@ app.post(
       console.error('[Chatbot Error]', err.message);
       res.status(502).json({
         ok: false,
-        error: 'L\'assistant IA est temporairement indisponible. Notre équipe reste à votre écoute sur WhatsApp !',
+        error: 'L\'assistant est temporairement indisponible. Notre équipe reste à votre écoute sur WhatsApp.',
         details: err.message
       });
     }

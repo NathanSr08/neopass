@@ -514,11 +514,11 @@ async function runSuite() {
       const clRes = await apiRequest('GET', '/api/changelog');
       assert(clRes.status === 200, 'Le changelog public doit renvoyer HTTP 200');
       assert(Array.isArray(clRes.json) && clRes.json.length > 0, 'Le changelog doit contenir des entrées');
-      assert(clRes.json[0].version === 'v2.4.0', 'La dernière version doit être v2.4.0');
+      assert(clRes.json[0].version === 'v2.4.1', 'La dernière version doit être v2.4.1');
 
       const clAdminRes = await apiRequest('GET', '/api/admin/changelog', null, adminHeaders);
       assert(clAdminRes.status === 200, 'Le changelog admin doit renvoyer HTTP 200');
-      assert(Array.isArray(clAdminRes.json) && clAdminRes.json.length >= 17, 'Le changelog admin doit contenir toutes les versions');
+      assert(Array.isArray(clAdminRes.json) && clAdminRes.json.length >= 18, 'Le changelog admin doit contenir toutes les versions');
     });
 
     // 11. Test Chatbot IA & Configuration

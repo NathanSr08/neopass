@@ -1,5 +1,23 @@
 [
   {
+    "id": "cl-2026-11-25-3",
+    "version": "v2.4.1",
+    "date": "2026-11-25",
+    "time": "11:15",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Bouton Support Épuré, Tutoriels IPTV, Diagnostic Commande & Ton Professionnel",
+    "summary": "Harmonisation complète du bouton d'assistance flottant, intégration de tutoriels d'installation IPTV pas-à-pas, diagnostic automatique des commandes client en temps réel avec SAV, activation Spotify sur compte personnel et confidentialité stricte des stocks.",
+    "details": [
+      "Bouton flottant d'assistance unifié : Remplacement du bouton texte WhatsApp par une icône bulle de discussion épurée, fluide et moderne en bas à droite déclenchant directement l'assistant de support.",
+      "Confidentialité absolue des stocks : Masquage total des chiffres de stock interne pour les visiteurs, confirmation sobre de disponibilité et activation immédiate.",
+      "Activation Spotify sur compte existant : Précision systématique que la mise à niveau Spotify s'effectue directement sur le compte personnel du client avec conservation intégrale des playlists et favoris.",
+      "Tutoriels et guides IPTV complets : Procédures détaillées par appareil (Smart TV Samsung/LG avec IBO Player/Smarters, Fire TV / Android TV avec TiviMate, Apple TV, PC/Mac) avec identifiants Xtream Codes et M3U.",
+      "Diagnostic commande en temps réel & SAV : Détection automatique des numéros de commande (#NP-XXXX, suivi NP-TRK-XXXX ou email) avec vérification instantanée du règlement, des identifiants et assistance SAV de remplacement.",
+      "Ton professionnel et épuré : Réduction drastique des émojis pour une communication institutionnelle, claire et rassurante."
+    ]
+  },
+  {
     "id": "cl-2026-11-25-2",
     "version": "v2.4.0",
     "date": "2026-11-25",

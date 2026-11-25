@@ -456,7 +456,6 @@
     const rawQuestion = (window.t && window.t('wa_question_msg')) || "Bonjour, j'ai une question sur vos offres.";
     const href = waLink(rawQuestion + DEMO_TAIL);
     if ($('navWa')) $('navWa').href = href;
-    if ($('floatWa')) $('floatWa').href = href;
   }
 
   function renderStats() {

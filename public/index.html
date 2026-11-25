@@ -302,15 +302,19 @@ footer { border-top: 1px solid var(--line); background: #080714; padding-block: 
 .social-link svg { width: 16px; height: 16px; fill: currentColor; }
 .foot-bottom { border-top: 1px solid rgba(160, 150, 255, 0.08); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 12px; }
 
-/* WhatsApp float */
-.wa-float {
-  position: fixed; z-index: 35; right: calc(max(16px, env(safe-area-inset-right, 0px))); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  display: inline-flex; align-items: center; gap: 10px; padding: 14px 18px; border-radius: 999px;
-  background: var(--text); color: var(--ink); text-decoration: none; font: 600 14px/1 var(--font-body);
-  box-shadow: 0 10px 34px -6px rgba(43, 230, 255, .5); transition: transform .2s;
+/* AI Support Chat float */
+.wa-float, #npChatTrigger {
+  position: fixed; z-index: 9990; right: calc(max(16px, env(safe-area-inset-right, 0px))); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; padding: 0; border-radius: 50%;
+  background: var(--text); color: var(--ink); border: none; cursor: pointer;
+  box-shadow: 0 10px 34px -6px rgba(43, 230, 255, .5); transition: transform .2s, box-shadow .2s;
 }
-.wa-float:hover { transform: translateY(-3px); }
-.wa-float svg { width: 20px; height: 20px; }
+.wa-float:hover, #npChatTrigger:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 14px 40px -4px rgba(43, 230, 255, .7); }
+.wa-float svg, #npChatTrigger svg { width: 24px; height: 24px; fill: currentColor; }
+html[dir="rtl"] .wa-float, html[dir="rtl"] #npChatTrigger { right: auto; left: calc(max(16px, env(safe-area-inset-left, 0px))); }
+@media (max-width: 480px) {
+  .wa-float, #npChatTrigger { width: 48px; height: 48px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* Scroll reveal (starts partly visible, ends fully visible) */
 @supports (animation-timeline: view()) {
@@ -646,10 +650,9 @@ dialog.rv-dlg::backdrop { background: rgba(5, 4, 14, .75); backdrop-filter: blur
   </div>
 </footer>
 
-<a class="wa-float" id="floatWa" href="#" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp" data-i18n-aria="wa_float_aria">
+<button class="wa-float" id="npChatTrigger" type="button" aria-label="Support & Assistant IA">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.600 15.100L2 22l5-1.300A10 10 0 1 0 12 2zm0 18.200a8.200 8.200 0 0 1-4.200-1.200l-.3-.2-3 .8.8-2.900-.2-.3A8.200 8.200 0 1 1 12 20.200z"/></svg>
-  <span data-i18n="wa_float_text">WhatsApp</span>
-</a>
+</button>
 
 
 <dialog class="rv-dlg" id="rvDlg" aria-labelledby="rvTitle">
