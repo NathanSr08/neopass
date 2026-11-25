@@ -1,12 +1,28 @@
 [
   {
+    "id": "cl-2026-11-25-1",
+    "version": "v2.3.1",
+    "date": "2026-11-25",
+    "time": "09:15",
+    "category": "security",
+    "categoryLabel": "🔒 Sécurité & Routage",
+    "title": "Hub Central Changelog & Correctif Routage API Admin",
+    "summary": "Résolution définitive de l'erreur introuvable sur l'onglet Changelog de l'admin, double routage API et intégration de l'historique complet depuis l'origine.",
+    "details": [
+      "Correction de routage API : ajout de la route admin.get('/changelog') sur le routeur admin express et déclaration multiple app.get(['/api/changelog', '/api/admin/changelog']).",
+      "Résilience client : mécanisme de secours automatique (fallback) dans l'interface admin interrogeant l'API publique en cas d'indisponibilité du routeur admin.",
+      "Historique complet réintégré : traçabilité exhaustive de l'ensemble des 16 versions et étapes de développement depuis la création du projet.",
+      "Mise à jour des tests automatisés : validation de l'accessibilité continue des deux endpoints du Changelog."
+    ]
+  },
+  {
     "id": "cl-2026-11-24-1",
     "version": "v2.3.0",
     "date": "2026-11-24",
     "time": "08:30",
     "category": "feature",
     "categoryLabel": "✨ Nouveauté",
-    "title": "Attribution de Stock Avancée (Automatique ou Spécifique)",
+    "title": "Attribution de Stock Avancée (Mode Automatique vs Stock Spécifique)",
     "summary": "Système à deux vitesses pour attribuer les accès : attribution automatique du premier stock libre ou sélection manuelle précise d'un compte spécifique.",
     "details": [
       "Fiche Commande : Ajout du bouton « 🎯 Attribuer un stock spécifique » ouvrant un sélecteur interactif avec recherche en temps réel et filtre par offre.",
@@ -24,16 +40,17 @@
     "time": "11:00",
     "category": "improvement",
     "categoryLabel": "⚡ Amélioration",
-    "title": "Gestion personnalisée des durées d'abonnement & SAV",
-    "summary": "Support des durées personnalisées sur les commandes (ex: abonnements 1 mois pour Claude Nolimittoken).",
+    "title": "Gestion Personnalisée des Durées d'Abonnement & Régularisation Claude Code",
+    "summary": "Support des durées d'abonnement sur mesure avec recalcul instantané de l'échéance et ajustement des commandes spécifiques.",
     "details": [
       "Prise en compte fine de la durée unitaire (1 mois, 6 mois, 12 mois) avec recalcul automatique de la date d'échéance exacte.",
-      "Ajustement réussi sur la commande #31 (Claude Nolimittoken) passée à 1 mois avec expiration au 11 décembre 2026.",
+      "Endpoint d'ajustement rapide de l'échéance : POST /api/admin/orders/:id/set-expiry avec validation stricte.",
+      "Régularisation manuelle réussie sur la commande #31 (Claude Code NoLimitToken) pour contact@2atelecom.fr : passage de 1 an à 1 mois avec expiration au 11/12/2026.",
       "Maintien de la cohérence d'affichage sur l'espace abonné client (/compte) et la fiche sécurisée (/acces/:token)."
     ]
   },
   {
-    "id": "cl-2026-11-17-2",
+    "id": "cl-2026-11-17-3",
     "version": "v2.2.0",
     "date": "2026-11-17",
     "time": "13:00",
@@ -42,60 +59,216 @@
     "title": "Moteur Internationalisation Multilingue (FR, EN, HE) & RTL Hébreu",
     "summary": "Déploiement du support de 3 langues avec détection automatique du navigateur et mode de lecture droite-à-gauche pour l'hébreu.",
     "details": [
-      "Détection automatique de la langue système de l'utilisateur (navigator.languages / navigator.language) avec bascule automatique.",
-      "Sélecteur de langue interactif dans la barre de navigation et dans le tiroir mobile avec mémorisation localStorage.",
+      "Support natif de 3 langues : Français (FR), Anglais (EN) et Hébreu (עברית - HE).",
+      "Détection automatique de la langue système de l'utilisateur (navigator.languages / navigator.language) avec bascule automatique dès la première visite.",
+      "Sélecteur de langue interactif dans la barre de navigation et dans le tiroir mobile avec mémorisation localStorage (np_lang).",
       "Support complet de l'hébreu en mode RTL (dir='rtl') : inversion des marges, boutons flottants WhatsApp et sens de lecture.",
       "Dictionnaire OFFERS_I18N : Traduction complète et dynamique des 16 produits du catalogue (nom, tag, description et liste à puces des fonctionnalités).",
       "Suite de tests n°8 & n°9 : Couverture i18n et exécution headless app.js validant le rendu du catalogue dans les 3 langues."
     ]
   },
   {
-    "id": "cl-2026-11-17-1",
+    "id": "cl-2026-11-17-2",
     "version": "v2.1.0",
     "date": "2026-11-17",
     "time": "08:30",
     "category": "feature",
     "categoryLabel": "✨ Nouveauté",
-    "title": "Programme de Parrainage (-50%) & Assignation Automatique CRM",
-    "summary": "Système de parrainage automatisé récompensant les clients fidèles et outil CRM d'attribution de commandes en 1 clic.",
+    "title": "Programme de Parrainage (-50%) & Module Communication Admin",
+    "summary": "Système de parrainage récompensant les clients d'un bon de -50% dès 5 commandes validées, et suite marketing email.",
     "details": [
-      "Génération automatique d'un code de parrainage unique (NP-REF-XXXX) pour chaque compte client vérifié.",
-      "Comptabilisation des commandes confirmées des filleuls et déblocage automatique d'un bon unique -50% dès le palier de 5 commandes atteint.",
-      "Tableau de bord parrainage dans l'espace client avec bouton de partage du lien de parrainage.",
-      "Bouton d'assignation automatique dans le CRM admin pour lier toutes les commandes non rattachées d'un client à son compte vérifié."
+      "Génération automatique d'un code de parrainage unique (NP-REF-XXXX) et d'un lien d'affiliation personnalisé (/?ref=NP-REF-XXXX).",
+      "Comptabilisation stricte basée uniquement sur les commandes confirmées des filleuls (status = 'confirmed').",
+      "Déblocage automatique du code promo -50% (PARRAIN50-XXXX) dès le palier de 5 commandes validées atteint avec email de félicitations.",
+      "Tableau de bord parrainage dans l'espace client : compteurs KPI en direct, jauge de progression animée, carte du bon débloqué et tableau d'historique.",
+      "Module Communication & Marketing dans l'Admin : campagnes email ciblées avec éditeur visuel, variables dynamiques, segmentation d'audience et assistant d'invitation WhatsApp."
     ]
   },
   {
-    "id": "cl-2026-11-16-1",
-    "version": "v2.0.5",
-    "date": "2026-11-16",
-    "time": "11:30",
-    "category": "security",
-    "categoryLabel": "🔒 Sécurité",
-    "title": "Sauvegarde & Restauration Intégrée (SQL & JSON v2)",
-    "summary": "Moteur complet de sauvegarde préventive et de restauration directe depuis le panneau admin.",
+    "id": "cl-2026-11-17-1",
+    "version": "v2.0.0",
+    "date": "2026-11-17",
+    "time": "07:56",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Espace Mon Compte (/compte), Sécurité OTP Gmail & Module SAV Libre-Service",
+    "summary": "Lancement de l'espace client unifié, sécurisation de l'authentification par email OTP, module SAV autonome et assignation 1-clic.",
     "details": [
-      "Snapshot JSON v2 englobant l'intégralité des 12 tables applicatives avec respect de l'ordre topologique des clés étrangères.",
-      "Dump SQL PostgreSQL complet généré à la volée avec pg_dump --clean.",
-      "Sauvegarde préventive automatique créée avant chaque restauration pour sécuriser l'opération.",
-      "Purge sélective du journal d'audit par période (1h, 6h, 12h, 1j, 3j, 7j, 30j ou totale)."
+      "Portail Client complet (/compte) : connexion sécurisée avec dérivation de clé scrypt et codes OTP 6 chiffres hachés en SHA-256 (expiration 10 min).",
+      "Détection proactive de nouvel appareil ou nouvelle IP (device_hash) imposant un challenge OTP supplémentaire.",
+      "Tableau de bord abonné : visualisation du cumul des dépenses, liste des abonnements actifs avec identifiants et dates de fin.",
+      "Module SAV en libre-service : signalement direct d'une panne ou d'un problème d'accès sous garantie depuis l'espace client.",
+      "Bouton d'assignation automatique dans le CRM admin pour lier en 1 clic toutes les commandes non rattachées d'un client à son compte vérifié.",
+      "Migration SMTP vers Gmail (smtp.gmail.com:465 SSL) avec journalisation complète (email_logs).",
+      "Sauvegarde & Restauration BDD v2 : export JSON v2 et dump SQL couvrant l'intégralité des 12 tables applicatives avec intégrité des contraintes."
+    ]
+  },
+  {
+    "id": "cl-2026-11-15-5",
+    "version": "v1.9.0",
+    "date": "2026-11-15",
+    "time": "15:15",
+    "category": "improvement",
+    "categoryLabel": "⚡ Amélioration",
+    "title": "Détection PWA Stricte, Purge d'Audit & Dépôt d'Avis sur Accès",
+    "summary": "Ajustements avancés de détection PWA réservée aux smartphones, outils d'administration et avis vérifiés.",
+    "details": [
+      "Détection stricte de l'environnement PWA : le bandeau d'installation ne s'affiche plus sur desktop et reste exclusif aux mobiles et tablettes.",
+      "Outil de purge sélective du journal d'audit (/api/admin/audit/purge) : suppression des entrées par période pour préserver les performances BDD.",
+      "Dépôt d'avis certifié direct : les clients peuvent évaluer leur abonnement directement depuis leur fiche d'accès sécurisée (/acces/:token).",
+      "Paramétrage des durées d'offres : configuration de la durée de validité par défaut directement depuis l'éditeur d'offres du panel admin."
+    ]
+  },
+  {
+    "id": "cl-2026-11-15-4",
+    "version": "v1.8.0",
+    "date": "2026-11-15",
+    "time": "14:07",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Transformation Progressive Web App (PWA) & Navigation Responsive Mobile",
+    "summary": "Conversion de NeonPass en application web installable sur smartphone et refonte responsive totale.",
+    "details": [
+      "Progressive Web App (PWA) : manifeste d'installation manifest.webmanifest, icônes tactiles et Service Worker offline performant.",
+      "Barre de navigation inférieure native (Bottom Bar) sur mobile pour un accès rapide aux pages clés (Boutique, Suivi, Compte, Statut).",
+      "Drawer latéral animé avec bouton hamburger fluide sur l'ensemble des pages de la plateforme.",
+      "Sélecteur de durée multi-paliers sur la boutique (1 mois, 6 mois, 12 mois, personnalisé) avec recalcul des tarifs.",
+      "Correction des débordements horizontaux et optimisation CSS pour les écrans ultra-compacts (iPhone SE / Galaxy Fold)."
+    ]
+  },
+  {
+    "id": "cl-2026-11-15-3",
+    "version": "v1.7.0",
+    "date": "2026-11-15",
+    "time": "13:00",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Pages de Confiance, Statut Réseau en Direct & Hub Nouveautés",
+    "summary": "Déploiement des pages de transparence client, météo du réseau en temps réel, conditions légales et page nouveautés.",
+    "details": [
+      "Page Suivi de Commande (/suivi) : outil de recherche autonome par code de commande ou suivi WhatsApp avec rate-limiting anti-bruteforce.",
+      "Page Statut Réseau (/status) : tableau de bord de disponibilité des serveurs et services avec temps de latence et indicateurs de santé en direct.",
+      "Pages Légales complètes : Conditions Générales de Vente (/cgv), Garantie & Remplacement (/garantie), Mentions Légales (/mentions-legales).",
+      "Pied de page professionnel : suppression des émojis informels, ajout du lien Instagram officiel @neonpass_officiel.",
+      "Page Concours & Nouveautés (/news) : vitrine interactive pour les actualités, annonces de jeux concours et promotions spéciales."
+    ]
+  },
+  {
+    "id": "cl-2026-11-15-2",
+    "version": "v1.6.0",
+    "date": "2026-11-15",
+    "time": "12:00",
+    "category": "improvement",
+    "categoryLabel": "⚡ Amélioration",
+    "title": "Refonte Fiche Commande, Durées Multiples & Sauvegarde Admin BDD",
+    "summary": "Amélioration ergonomique majeure des fiches commandes, sélecteur de durée (1m, 6m, 12m) et outil de backup/restore intégré.",
+    "details": [
+      "Fiche Commande optimisée : ouverture directe en mode consultation avec bouton croix de fermeture rapide, préservant la lisibilité sur petits écrans.",
+      "Gestion granulaire des durées d'abonnements : sélection 1 mois, 6 mois ou 12 mois avec ajustement automatique de l'échéance.",
+      "Sauvegarde & Restauration dans l'Admin : génération et téléchargement direct de dumps SQL (.sql) et de snapshots JSON.",
+      "Restauration en 1 clic : téléversement de fichier de sauvegarde avec synchronisation automatique des index et séquences.",
+      "Messages de livraison WhatsApp enrichis : intégration automatique du récapitulatif des identifiants et du lien d'accès sécurisé."
     ]
   },
   {
     "id": "cl-2026-11-15-1",
-    "version": "v2.0.0",
+    "version": "v1.5.0",
     "date": "2026-11-15",
-    "time": "16:00",
+    "time": "11:10",
     "category": "feature",
     "categoryLabel": "✨ Nouveauté",
-    "title": "Espace Mon Compte, Sécurité OTP Gmail & Module SAV",
-    "summary": "Lancement de l'espace client unifié, sécurisation de l'authentification par email OTP et gestion des garanties SAV.",
+    "title": "Coffre-Fort de Licences, Gestion de Stock & Espace Abonné Sécurisé",
+    "summary": "Découplage total des offres commerciales et des identifiants stock, alertes de réapprovisionnement et portail d'accès 24/7.",
     "details": [
-      "Espace /compte : Visualisation du montant total dépensé, liste des abonnements actifs, dates d'échéance et identifiants.",
-      "Bouton Demande de remplacement SAV pour signaler un accès défectueux sous garantie.",
-      "Résolution SAV Admin en un clic avec préparation du message WhatsApp et expédition automatique des nouveaux accès par email.",
-      "Migration SMTP vers Gmail (smtp.gmail.com:465 SSL) avec journalisation complète (email_logs).",
-      "Charte visuelle cyber-néon unifiée sur tous les emails transactionnels et pages de la plateforme."
+      "Table accounts : coffre-fort centralisé des identifiants (identifiant, mot de passe, URL de connexion, clés de licence, fournisseur, coût d'achat).",
+      "Gestion du stock : support des comptes unitaires et des packs multi-produits.",
+      "Espace Abonné Sécurisé 24/7 (/acces/:token) : lien unique chiffré permettant au client de consulter ses identifiants et l'état de son abonnement sans mot de passe.",
+      "Alertes de rupture de stock : réglage du seuil minimal d'alerte par produit et notifications Telegram/Discord de réapprovisionnement.",
+      "Nettoyage de l'administration : suppression des références obsolètes à SubManager au profit du moteur de stock interne."
+    ]
+  },
+  {
+    "id": "cl-2026-11-08-5",
+    "version": "v1.4.0",
+    "date": "2026-11-08",
+    "time": "15:52",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Gestion des Échéances, Renouvellements & Identité Visuelle NeonPass",
+    "summary": "Suivi des abonnements arrivant à terme, rappels de renouvellement automatiques et nouvelle identité visuelle.",
+    "details": [
+      "Calcul et affectation automatique de la date d'échéance (+12 mois par défaut) dès la confirmation de commande.",
+      "Onglet Échéances dans l'administration : filtrage par fenêtre (7j, 30j, 60j, 90j et expirés < 30j).",
+      "Relance client WhatsApp en un clic : message pré-rempli invitant au renouvellement avec conservation des accès.",
+      "Rapport hebdomadaire automatique sur Telegram chaque lundi à 9h listant les abonnements à renouveler.",
+      "Identité visuelle de la marque : logo SVG néon cyberpunk, favicons multi-résolutions (16, 32, 48, 512px) et apple-touch-icon."
+    ]
+  },
+  {
+    "id": "cl-2026-11-08-4",
+    "version": "v1.3.0",
+    "date": "2026-11-08",
+    "time": "15:24",
+    "category": "security",
+    "categoryLabel": "🔒 Sécurité",
+    "title": "Sécurité Renforcée Admin (2FA TOTP, Anti-Bruteforce & Journal d'Audit)",
+    "summary": "Remplacement de HTTP Basic par un portail d'authentification dédié avec double facteur TOTP et journalisation inviolable.",
+    "details": [
+      "Portail /admin/login avec sessions sécurisées par jetons en base (validité 12h, cookies HttpOnly, Secure et SameSite=Strict).",
+      "Authentification à deux facteurs (2FA TOTP RFC 6238) : configuration par QR Code (Google Authenticator, Authy, 1Password) et codes de secours imprimables.",
+      "Protection anti-bruteforce : blocage temporaire d'IP (15 min) après 5 échecs de connexion et alertes Telegram automatiques.",
+      "Protection anti-CSRF : contrôle strict de l'en-tête X-NP-Admin sur toutes les requêtes d'écriture.",
+      "Journal d'audit intègre (admin_audit) traçant l'ensemble des connexions, modifications de stock et opérations d'administration."
+    ]
+  },
+  {
+    "id": "cl-2026-11-08-3",
+    "version": "v1.2.0",
+    "date": "2026-11-08",
+    "time": "15:03",
+    "category": "improvement",
+    "categoryLabel": "⚡ Amélioration",
+    "title": "Saisie Manuelle de Commandes Admin & Découplage des Packs",
+    "summary": "Prise en charge des commandes manuelles par l'administrateur et intégration transparente des packs sur mesure.",
+    "details": [
+      "Création de commande depuis l'Admin : modal complète (nom, prénom, téléphone, sélection des produits, moyen de paiement, prix forcé ou calculé, statut et notes internes).",
+      "Découplage des packs : possibilité d'associer et cumuler des packs commerciaux avec d'autres produits unitaires dans le composeur sur-mesure.",
+      "Correction de l'affichage du code promo dans le tunnel de vente pour éviter les bulles vides et persistance URL nettoyée.",
+      "Tableau des commandes enrichi : colonnes Client avec numéro cliquable, moyen de paiement et étiquette visuelle 'admin'."
+    ]
+  },
+  {
+    "id": "cl-2026-11-08-2",
+    "version": "v1.1.0",
+    "date": "2026-11-08",
+    "time": "14:40",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Avis Clients Certifiés, Codes Promo & Webhooks Discord / Telegram",
+    "summary": "Système de réassurance avec notes et avis étoiles, moteur de réduction par codes promo et alertes temps réel.",
+    "details": [
+      "Avis clients certifiés : formulaire public de notation (1 à 5 étoiles) avec modération préalable dans l'administration.",
+      "Affichage dynamique des notes moyennes et du nombre d'avis vérifiés sur chaque carte produit.",
+      "Moteur de codes promo : création de codes avec pourcentage de remise, date d'expiration et plafond d'utilisations.",
+      "Notifications instantanées : alertes automatiques sur Bot Telegram et Webhook Discord à chaque nouvelle commande ou avis déposé.",
+      "Calcul côté serveur du montant des remises pour une étanchéité financière totale."
+    ]
+  },
+  {
+    "id": "cl-2026-11-08-1",
+    "version": "v1.0.0",
+    "date": "2026-11-08",
+    "time": "12:33",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Lancement Initial de la Plateforme NeonPass",
+    "summary": "Architecture initiale du site e-commerce néon cyberpunk avec catalogue de licences, panier interactif et tunnel de commande WhatsApp direct.",
+    "details": [
+      "Boutique en ligne Cyberpunk Neon avec catalogue dynamique de 16 offres et licences (IPTV, VPN, Streaming, Outils Pro).",
+      "Panier d'achat interactif avec calcul instantané des totaux et remises multi-produits.",
+      "Tunnel de commande WhatsApp direct : génération de liens d'échange pré-remplis avec récapitulatif clair.",
+      "Modèle de données PostgreSQL : tables offers, orders, order_items et settings.",
+      "Conteneurisation Docker & Docker-Compose avec reverse-proxy Traefik et certificats SSL Let's Encrypt automatiques."
     ]
   }
 ]

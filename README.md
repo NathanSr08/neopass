@@ -235,7 +235,7 @@
   * Historique horodaté (date et heure exacte) de l'ensemble des releases, fonctionnalités majeures, améliorations techniques et correctifs de sécurité.
   * Structure de données normalisée dans `data/changelog.json`.
 * **Intégration directe dans le Dashboard Admin (`/admin`)** :
-  * Onglet dédié **`Changelog v2.3.0`** dans la barre de navigation de l'administration.
+  * Onglet dédié **`Changelog v2.3.1`** dans la barre de navigation de l'administration.
   * Barre de recherche instantanée (filtrage par version, mot-clé, composant ou description).
   * Filtres par pastilles de catégories : *Toutes*, *✨ Fonctionnalités*, *🚀 Améliorations*, *🛡️ Sécurité*.
   * Timeline visuelle cyberpunk sombre avec puces de version, dates formatées, badges de composants et liste détaillée des changements.

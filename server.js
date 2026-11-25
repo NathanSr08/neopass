@@ -1296,7 +1296,7 @@ app.get('/cgv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'cgv.h
 app.get('/garantie', (req, res) => res.sendFile(path.join(__dirname, 'public', 'garantie.html')));
 app.get('/mentions-legales', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mentions-legales.html')));
 
-app.get('/api/changelog', (req, res) => {
+app.get(['/api/changelog', '/api/admin/changelog'], (req, res) => {
   try {
     const p = path.join(__dirname, 'data', 'changelog.json');
     if (fs.existsSync(p)) {
@@ -5552,6 +5552,19 @@ admin.put(
     res.json({ ok: true, stockAlertsEnabled });
   })
 );
+
+admin.get('/changelog', (req, res) => {
+  try {
+    const p = path.join(__dirname, 'data', 'changelog.json');
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return res.json(data);
+    }
+    res.json([]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la lecture du changelog' });
+  }
+});
 
 app.use('/api/admin', admin);
 

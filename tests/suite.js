@@ -510,11 +510,15 @@ async function runSuite() {
       assert(assignAutoRes.json.account.id === accAId, 'L\'attribution automatique doit prendre le premier compte disponible (A)');
       assert(assignAutoRes.json.account.login === accALogin, 'Le login doit être celui du compte A');
 
-      // 10. Test endpoint Changelog (/api/changelog)
+      // 10. Test endpoint Changelog (/api/changelog & /api/admin/changelog)
       const clRes = await apiRequest('GET', '/api/changelog');
-      assert(clRes.status === 200, 'Le changelog doit renvoyer HTTP 200');
+      assert(clRes.status === 200, 'Le changelog public doit renvoyer HTTP 200');
       assert(Array.isArray(clRes.json) && clRes.json.length > 0, 'Le changelog doit contenir des entrées');
-      assert(clRes.json[0].version === 'v2.3.0', 'La dernière version doit être v2.3.0');
+      assert(clRes.json[0].version === 'v2.3.1', 'La dernière version doit être v2.3.1');
+
+      const clAdminRes = await apiRequest('GET', '/api/admin/changelog', null, adminHeaders);
+      assert(clAdminRes.status === 200, 'Le changelog admin doit renvoyer HTTP 200');
+      assert(Array.isArray(clAdminRes.json) && clAdminRes.json.length >= 16, 'Le changelog admin doit contenir toutes les versions');
     });
 
   } finally {
