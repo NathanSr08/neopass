@@ -163,7 +163,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
     <button class="tab" role="tab" data-panel="settings" aria-selected="false">Paramètres</button>
     <button class="tab" role="tab" data-panel="security" aria-selected="false">Sécurité</button>
     <button class="tab" role="tab" data-panel="audit" aria-selected="false">Journal</button>
-    <button class="tab" role="tab" data-panel="changelog" aria-selected="false" id="changelogTab">Changelog <span class="pill on" style="font-size:10px;padding:1px 6px;margin-left:4px">v2.3.1</span></button>
+    <button class="tab" role="tab" data-panel="changelog" aria-selected="false" id="changelogTab">Changelog <span class="pill on" style="font-size:10px;padding:1px 6px;margin-left:4px">v2.4.0</span></button>
   </div>
 
   <section class="panel" id="panel-orders">
@@ -675,6 +675,68 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       </div>
     </div>
 
+    <!-- Module Chatbot & Assistant IA Google Studio -->
+    <div class="sec-block" style="background:rgba(180,75,255,.03);border:1px solid rgba(180,75,255,.3);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <h3 style="margin:0;font-size:16px">🤖 Assistant IA & Chatbot Client (Google AI Studio)</h3>
+            <span id="chatbotStatusPill" class="pill on">Actif</span>
+          </div>
+          <p class="hint" style="margin:0">Configurez le chatbot intelligent qui répond en direct aux visiteurs sur le site (prix, stock, avis, SAV, tunnel WhatsApp).</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label class="check" style="cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);padding:8px 14px;border-radius:10px;border:1px solid var(--line);margin:0">
+            <input type="checkbox" id="chatbotEnabledToggle" checked>
+            <span id="chatbotToggleLabel">Chatbot activé</span>
+          </label>
+        </div>
+      </div>
+
+      <form id="chatbotSettingsForm" style="display:grid;gap:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px">
+          <div>
+            <label for="chatbotApiKeyInp" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span>Clé API Google AI Studio</span>
+              <button type="button" id="toggleApiKeyVisibility" class="btn small" style="padding:2px 8px;font-size:11px">👁️ Afficher</button>
+            </label>
+            <input type="password" id="chatbotApiKeyInp" class="input" placeholder="Clé API Google AI Studio..." autocomplete="off" style="font-family:'JetBrains Mono',monospace;width:100%">
+          </div>
+          <div>
+            <label for="chatbotModelSelect" style="display:block;margin-bottom:6px">Modèle Gemini</label>
+            <select id="chatbotModelSelect" class="input" style="width:100%">
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Ultra-rapide & Recommandé)</option>
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Avancé)</option>
+              <option value="gemini-flash-latest">gemini-flash-latest</option>
+              <option value="gemini-2.5-pro">gemini-2.5-pro (Raisonnement)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="chatbotWelcomeInp" style="display:block;margin-bottom:6px">Message d'accueil automatique du chatbot</label>
+          <input type="text" id="chatbotWelcomeInp" class="input" placeholder="⚡ Bonjour ! Je suis Volt..." style="width:100%">
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label for="chatbotSystemPromptInp" style="margin:0">Prompt Système personnalisé (Instructions & Personnalité)</label>
+            <button type="button" id="resetChatbotPromptBtn" class="btn small" style="padding:2px 8px;font-size:11px">🔄 Réinitialiser le prompt</button>
+          </div>
+          <textarea id="chatbotSystemPromptInp" class="input" rows="8" style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.4" placeholder="Instructions du chatbot..."></textarea>
+          <small class="hint">💡 Le système injecte dynamiquement en temps réel le catalogue de 16 offres, prix, stock, avis et liens WhatsApp dans le prompt.</small>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:6px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" type="submit" id="saveChatbotBtn">💾 Enregistrer les paramètres IA</button>
+            <button class="btn" type="button" id="testChatbotBtn">🧪 Tester l'assistant en direct</button>
+          </div>
+          <span id="chatbotTestStatus" style="font-size:12.5px;color:var(--muted)"></span>
+        </div>
+      </form>
+    </div>
+
     <div class="sec-block">
       <div class="toolbar" style="margin-bottom:12px">
         <h3 style="margin:0">État et santé du système</h3>
@@ -815,7 +877,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       <div>
         <h2 style="margin:0;display:flex;align-items:center;gap:10px">
           <span>📜 Journal des Mises à Jour & Évolutions</span>
-          <span class="pill on" style="font-size:11px">v2.3.1</span>
+          <span class="pill on" style="font-size:11px">v2.4.0</span>
         </h2>
         <p class="hint" style="margin:4px 0 0">Historique détaillé et horodaté de toutes les modifications, fonctionnalités et correctifs apportés à NeonPass.</p>
       </div>
@@ -4369,6 +4431,23 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
 
     currentStockThresholds = s.stockThresholds || [];
     renderStockThresholdsList(currentStockThresholds);
+
+    // Initialisation Chatbot IA
+    const cbToggle = $('#chatbotEnabledToggle');
+    const cbPill = $('#chatbotStatusPill');
+    const cbLabel = $('#chatbotToggleLabel');
+    const isCbAct = s.chatbotEnabled !== false;
+    if (cbToggle) cbToggle.checked = isCbAct;
+    if (cbPill) {
+      cbPill.className = 'pill ' + (isCbAct ? 'on' : 'off');
+      cbPill.textContent = isCbAct ? 'Actif' : 'Désactivé';
+    }
+    if (cbLabel) cbLabel.textContent = isCbAct ? 'Chatbot activé' : 'Chatbot désactivé';
+
+    if ($('#chatbotApiKeyInp')) $('#chatbotApiKeyInp').value = s.chatbotApiKey || '';
+    if ($('#chatbotModelSelect')) $('#chatbotModelSelect').value = s.chatbotModel || 'gemini-3.5-flash-lite';
+    if ($('#chatbotWelcomeInp')) $('#chatbotWelcomeInp').value = s.chatbotWelcomeMessage || '';
+    if ($('#chatbotSystemPromptInp')) $('#chatbotSystemPromptInp').value = s.chatbotSystemPrompt || '';
   }
 
   function updateStockAlertsUI() {
@@ -4499,6 +4578,130 @@ label.check input { width: 18px; height: 18px; accent-color: var(--pink); }
       toast('Réglages de remise enregistrés.');
     } catch (err) { toast(err.message, true); }
   });
+
+  // ----- Logique Chatbot IA Google Studio -----
+  const DEFAULT_CHATBOT_PROMPT_CLIENT = `Tu es Volt, l'assistant virtuel IA officiel de NeonPass (https://neonpass.uned.live).
+NeonPass est la référence e-commerce d'abonnements numériques premium et licences logicielles (IPTV, VPN, Streaming vidéo & musical, Outils IA & Dev).
+
+Ton objectif est d'accueillir les visiteurs, de les guider avec enthousiasme et précision, et de répondre à toutes leurs questions sur les offres, les prix, la disponibilité du stock, la passation de commande, la livraison, la garantie et le service après-vente (SAV).
+
+RÈGLES D'OR :
+1. PRÉCISION DU CATALOGUE :
+Toutes les offres, prix en euros (€), durées et disponibilités en stock te sont fournies dynamiquement ci-dessous. Tu dois TOUJOURS te baser sur ces données réelles et ne jamais inventer de produit ou de tarif.
+2. PARCOURS DE COMMANDE SIMPLE SUR WHATSAPP :
+- Le client choisit son offre sur la boutique NeonPass.
+- Il clique sur le bouton "Commander sur WhatsApp" pour ouvrir une discussion directe avec l'équipe support avec son panier pré-rempli.
+- Le paiement est sécurisé sans engagement ni reconduction automatique forcée (Revolut, Virement bancaire SEPA, Cryptomonnaies).
+3. LIVRAISON INSTANTANÉE & ESPACE SÉCURISÉ :
+- Dès confirmation de commande, le client reçoit son lien privé 24/7 (/acces/:token) pour consulter ses identifiants (identifiant, mot de passe, clé de licence, guide de configuration).
+4. ESPACE CLIENT & GARANTIE TOTALE SAV :
+- Le client peut créer son compte client sécurisé sur /compte (protégé par code OTP email).
+- Il y retrouve l'historique de ses abonnements, ses dates d'expiration et son cumul d'achats.
+- Garantie 100% active durant toute la validité : en cas de souci d'accès, il déclenche un remplacement gratuit en 1 clic dans son espace /compte via le bouton "Demande de SAV".
+5. REMISES ET PARRAINAGE :
+- Remise automatique multi-produits dans le panier.
+- Programme Parrainage : chaque client a un code unique (NP-REF-XXXX). À chaque palier de 5 commandes validées de filleuls, un code promo exceptionnel de -50% est automatiquement débloqué !
+6. TRANSPARENCE ET SUPPORT :
+- Suivi de commande en temps réel : /suivi.
+- Météo du réseau et statut serveurs en direct : /status.
+- Si le client souhaite parler à un humain, oriente-le chaleureusement vers WhatsApp.
+
+TON ET FORMAT :
+- Style cyber-néon moderne, courtois, chaleureux, concis et ultra-professionnel.
+- Fais des réponses aérées avec puces et gras pour faciliter la lecture sur smartphone.
+- Réponds toujours dans la langue de l'interlocuteur (français par défaut, anglais si l'utilisateur s'exprime en anglais, hébreu si en hébreu).`;
+
+  const cbToggleEl = $('#chatbotEnabledToggle');
+  if (cbToggleEl) {
+    cbToggleEl.onchange = () => {
+      const act = cbToggleEl.checked;
+      const pill = $('#chatbotStatusPill');
+      const lbl = $('#chatbotToggleLabel');
+      if (pill) {
+        pill.className = 'pill ' + (act ? 'on' : 'off');
+        pill.textContent = act ? 'Actif' : 'Désactivé';
+      }
+      if (lbl) lbl.textContent = act ? 'Chatbot activé' : 'Chatbot désactivé';
+    };
+  }
+
+  const toggleEyeEl = $('#toggleApiKeyVisibility');
+  if (toggleEyeEl) {
+    toggleEyeEl.onclick = () => {
+      const inp = $('#chatbotApiKeyInp');
+      if (!inp) return;
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        toggleEyeEl.textContent = '🔒 Masquer';
+      } else {
+        inp.type = 'password';
+        toggleEyeEl.textContent = '👁️ Afficher';
+      }
+    };
+  }
+
+  const resetPromptBtn = $('#resetChatbotPromptBtn');
+  if (resetPromptBtn) {
+    resetPromptBtn.onclick = () => {
+      if (confirm('Voulez-vous réinitialiser le prompt système au modèle par défaut de NeonPass ?')) {
+        $('#chatbotSystemPromptInp').value = DEFAULT_CHATBOT_PROMPT_CLIENT;
+        toast('Prompt réinitialisé par défaut.');
+      }
+    };
+  }
+
+  const cbForm = $('#chatbotSettingsForm');
+  if (cbForm) {
+    cbForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const saveBtn = $('#saveChatbotBtn');
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        await api('/settings/chatbot', {
+          method: 'PUT',
+          body: {
+            enabled: $('#chatbotEnabledToggle').checked,
+            apiKey: $('#chatbotApiKeyInp').value.trim(),
+            model: $('#chatbotModelSelect').value,
+            welcomeMessage: $('#chatbotWelcomeInp').value.trim(),
+            systemPrompt: $('#chatbotSystemPromptInp').value.trim()
+          }
+        });
+        toast('Paramètres du Chatbot IA enregistrés !');
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    };
+  }
+
+  const testCbBtn = $('#testChatbotBtn');
+  if (testCbBtn) {
+    testCbBtn.onclick = async () => {
+      const statusEl = $('#chatbotTestStatus');
+      testCbBtn.disabled = true;
+      if (statusEl) statusEl.textContent = '⏳ Envoi du test à Google AI Studio...';
+      try {
+        const res = await api('/settings/chatbot/test', {
+          method: 'POST',
+          body: {
+            apiKey: $('#chatbotApiKeyInp').value.trim(),
+            model: $('#chatbotModelSelect').value,
+            systemPrompt: $('#chatbotSystemPromptInp').value.trim(),
+            message: 'Bonjour Volt ! Donne-moi en 2 phrases le prix de deux de tes offres et comment payer.'
+          }
+        });
+        if (statusEl) statusEl.textContent = '✅ Test réussi (' + (res.model || 'Gemini') + ') !';
+        alert('🤖 Réponse de test reçue de Volt (' + res.model + ') :\n\n' + res.reply);
+      } catch (err) {
+        if (statusEl) statusEl.textContent = '❌ Échec du test';
+        toast('Erreur test IA : ' + err.message, true);
+      } finally {
+        testCbBtn.disabled = false;
+      }
+    };
+  }
 
   // ----- Codes de secours, liste blanche d'IP, ventes -----
   function showBackupCodes(codes) {

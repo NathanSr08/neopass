@@ -32,6 +32,7 @@
   - [Programme de Parrainage (-50%)](#11-programme-de-parrainage--récompenses--50-dès-5-commandes-validées)
   - [Multi-langue & RTL (FR, EN, HE)](#12-moteur-multi-langue-internationalisation-i18n--rtl)
   - [Changelog & Historique](#13-journal-des-mises-à-jour--changelog)
+  - [Assistant IA Chatbot (Gemini)](#14-assistant-ia--chatbot-client-google-ai-studio)
 - [Architecture & Stack Technique](#-architecture--stack-technique)
 - [Installation & Déploiement](#-installation--déploiement)
 - [Variables d'Environnement](#-variables-denvironnement-env)
@@ -235,13 +236,29 @@
   * Historique horodaté (date et heure exacte) de l'ensemble des releases, fonctionnalités majeures, améliorations techniques et correctifs de sécurité.
   * Structure de données normalisée dans `data/changelog.json`.
 * **Intégration directe dans le Dashboard Admin (`/admin`)** :
-  * Onglet dédié **`Changelog v2.3.1`** dans la barre de navigation de l'administration.
+  * Onglet dédié **`Changelog v2.4.0`** dans la barre de navigation de l'administration.
   * Barre de recherche instantanée (filtrage par version, mot-clé, composant ou description).
   * Filtres par pastilles de catégories : *Toutes*, *✨ Fonctionnalités*, *🚀 Améliorations*, *🛡️ Sécurité*.
   * Timeline visuelle cyberpunk sombre avec puces de version, dates formatées, badges de composants et liste détaillée des changements.
 * **Page Standalone & API REST** :
   * Page autonome accessible sur `/changelog` et `/admin/changelog`.
   * Endpoint REST dédié `GET /api/changelog` pour synchronisation ou intégrations externes.
+
+### 14. Assistant IA & Chatbot Client (Google AI Studio)
+* **Widget conversationnel Cyberpunk Volt** :
+  * Bulle flottante interactive animée en bas à droite et fenêtre de discussion néon (glassmorphism avec avatar, bulles stylisées, rendu markdown fluide, suggestions de questions rapides et persistance de la conversation en session).
+* **Intelligence connectée au catalogue en temps réel** :
+  * Connaissance instantanée des 16 produits, prix en euros, stock disponible, notes et avis clients certifiés, parcours de commande WhatsApp et politiques SAV.
+  * Réponses immédiates adaptées à la langue du visiteur (Français, Anglais ou Hébreu).
+* **Panneau de contrôle dans les Réglages Admin** :
+  * Activation / Désactivation en 1 clic (`chatbot_enabled`).
+  * Clé API Google AI Studio modifiable avec bouton pour afficher/masquer.
+  * Sélecteur de modèle Gemini (`gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-2.5-pro`).
+  * Visualisation et personnalisation intégrale du System Prompt avec bouton de réinitialisation par défaut.
+  * Bouton de test en direct permettant d'éprouver le prompt et la clé API immédiatement depuis l'administration.
+* **Sécurité & Proxy Serveur** :
+  * Clé API strictement protégée côté serveur, jamais divulguée au navigateur.
+  * Endpoint proxy `POST /api/chat` avec rate limiting anti-abus (30 requêtes/minute/IP).
 
 ---
 

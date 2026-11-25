@@ -1,5 +1,22 @@
 [
   {
+    "id": "cl-2026-11-25-2",
+    "version": "v2.4.0",
+    "date": "2026-11-25",
+    "time": "09:55",
+    "category": "feature",
+    "categoryLabel": "✨ Nouveauté",
+    "title": "Assistant IA & Chatbot Client Cyberpunk (Google AI Studio)",
+    "summary": "Intégration d'un assistant conversationnel intelligent propulsé par Google Gemini avec fenêtre popup néon, injection dynamique du catalogue et panneau d'administration dédié.",
+    "details": [
+      "Widget Chatbot Cyber-Néon : Bouton flottant animé et fenêtre popup de discussion interactive en bas à droite de l'écran avec conservation de l'historique en session.",
+      "Intelligence temps réel : Injection automatique du catalogue complet de 16 offres, prix en euros, notes certifiées, stock disponible et conditions SAV dans le prompt système.",
+      "Administration complète dans Paramètres : Activation/désactivation en 1 clic, saisie de la clé API Google Studio (avec bouton oeil pour masquer/afficher), sélecteur de modèle Gemini (gemini-3.5-flash-lite), personnalisation du prompt système et bouton de test en direct.",
+      "Support multilingue & RTL : Détection de la langue du visiteur (Français, Anglais, Hébreu) avec inversion droite-à-gauche et messages adaptés.",
+      "Sécurité & Proxy Serveur : Endpoint POST /api/chat avec rate-limiting anti-spam, masque total de la clé API côté client et traitement sécurisé des flux."
+    ]
+  },
+  {
     "id": "cl-2026-11-25-1",
     "version": "v2.3.1",
     "date": "2026-11-25",

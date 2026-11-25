@@ -514,11 +514,48 @@ async function runSuite() {
       const clRes = await apiRequest('GET', '/api/changelog');
       assert(clRes.status === 200, 'Le changelog public doit renvoyer HTTP 200');
       assert(Array.isArray(clRes.json) && clRes.json.length > 0, 'Le changelog doit contenir des entrées');
-      assert(clRes.json[0].version === 'v2.3.1', 'La dernière version doit être v2.3.1');
+      assert(clRes.json[0].version === 'v2.4.0', 'La dernière version doit être v2.4.0');
 
       const clAdminRes = await apiRequest('GET', '/api/admin/changelog', null, adminHeaders);
       assert(clAdminRes.status === 200, 'Le changelog admin doit renvoyer HTTP 200');
-      assert(Array.isArray(clAdminRes.json) && clAdminRes.json.length >= 16, 'Le changelog admin doit contenir toutes les versions');
+      assert(Array.isArray(clAdminRes.json) && clAdminRes.json.length >= 17, 'Le changelog admin doit contenir toutes les versions');
+    });
+
+    // 11. Test Chatbot IA & Configuration
+    await test('11. Assistant IA Chatbot - Configuration, prompt dynamique & endpoint /api/chat', async () => {
+      // Vérification config publique
+      const cfg = await apiRequest('GET', '/api/config');
+      assert(cfg.status === 200, 'La configuration publique doit renvoyer 200');
+      assert(cfg.json.chatbotEnabled !== undefined, 'chatbotEnabled doit être exposé dans /api/config');
+
+      // Vérification réglages admin
+      const st = await apiRequest('GET', '/api/admin/settings', null, adminHeaders);
+      assert(st.status === 200, 'Les paramètres admin doivent renvoyer 200');
+      assert(st.json.chatbotApiKey && st.json.chatbotApiKey.length > 10, 'La clé API Chatbot doit être configurée');
+      assert(st.json.chatbotModel && st.json.chatbotModel.includes('gemini'), 'Le modèle Gemini doit être configuré');
+      assert(st.json.chatbotSystemPrompt && st.json.chatbotSystemPrompt.includes('Volt'), 'Le prompt système doit contenir les instructions Volt');
+
+      // Test mise à jour des paramètres du chatbot
+      const updateRes = await apiRequest('PUT', '/api/admin/settings/chatbot', {
+        enabled: true,
+        welcomeMessage: '⚡ Bonjour ! Je suis Volt, votre assistant test.'
+      }, adminHeaders);
+      assert(updateRes.status === 200, 'Mise à jour des paramètres chatbot réussie');
+      assert(updateRes.json.chatbotEnabled === true, 'Le chatbot doit rester actif');
+
+      // Test validation requête vide
+      const emptyRes = await apiRequest('POST', '/api/chat', { message: '   ' });
+      assert(emptyRes.status === 400, 'Message vide doit être rejeté avec 400');
+
+      // Test exécution chatbot avec requête de démo
+      const chatRes = await apiRequest('POST', '/api/chat', {
+        message: 'Donne-moi en une phrase le nom du site et ton nom.'
+      });
+      assert(chatRes.status === 200 || chatRes.status === 502, 'La route /api/chat doit répondre 200 ou 502 si quota Google temporaire');
+      if (chatRes.status === 200) {
+        assert(chatRes.json.ok === true, 'Le résultat doit être ok: true');
+        assert(typeof chatRes.json.reply === 'string' && chatRes.json.reply.length > 5, 'Une réponse textuelle doit être retournée');
+      }
     });
 
   } finally {

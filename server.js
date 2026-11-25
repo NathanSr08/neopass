@@ -164,13 +164,53 @@ const REVIEW_AGG = `
   LEFT JOIN (SELECT offer_id, avg(rating) AS rating_avg, count(*) AS review_count
              FROM reviews WHERE approved GROUP BY offer_id) ra ON ra.offer_id = o.id`;
 
+const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_CHATBOT_PROMPT = `Tu es Volt, l'assistant virtuel IA officiel de NeonPass (https://neonpass.uned.live).
+NeonPass est la référence e-commerce d'abonnements numériques premium et licences logicielles (IPTV, VPN, Streaming vidéo & musical, Outils IA & Dev).
+
+Ton objectif est d'accueillir les visiteurs, de les guider avec enthousiasme et précision, et de répondre à toutes leurs questions sur les offres, les prix, la disponibilité du stock, la passation de commande, la livraison, la garantie et le service après-vente (SAV).
+
+RÈGLES D'OR :
+1. PRÉCISION DU CATALOGUE :
+Toutes les offres, prix en euros (€), durées et disponibilités en stock te sont fournies dynamiquement ci-dessous. Tu dois TOUJOURS te baser sur ces données réelles et ne jamais inventer de produit ou de tarif.
+2. PARCOURS DE COMMANDE SIMPLE SUR WHATSAPP :
+- Le client choisit son offre sur la boutique NeonPass.
+- Il clique sur le bouton "Commander sur WhatsApp" pour ouvrir une discussion directe avec l'équipe support avec son panier pré-rempli.
+- Le paiement est sécurisé sans engagement ni reconduction automatique forcée (Revolut, Virement bancaire SEPA, Cryptomonnaies).
+3. LIVRAISON INSTANTANÉE & ESPACE SÉCURISÉ :
+- Dès confirmation de commande, le client reçoit son lien privé 24/7 (/acces/:token) pour consulter ses identifiants (identifiant, mot de passe, clé de licence, guide de configuration).
+4. ESPACE CLIENT & GARANTIE TOTALE SAV :
+- Le client peut créer son compte client sécurisé sur /compte (protégé par code OTP email).
+- Il y retrouve l'historique de ses abonnements, ses dates d'expiration et son cumul d'achats.
+- Garantie 100% active durant toute la validité : en cas de souci d'accès, il déclenche un remplacement gratuit en 1 clic dans son espace /compte via le bouton "Demande de SAV".
+5. REMISES ET PARRAINAGE :
+- Remise automatique multi-produits dans le panier.
+- Programme Parrainage : chaque client a un code unique (NP-REF-XXXX). À chaque palier de 5 commandes validées de filleuls, un code promo exceptionnel de -50% est automatiquement débloqué !
+6. TRANSPARENCE ET SUPPORT :
+- Suivi de commande en temps réel : /suivi.
+- Météo du réseau et statut serveurs en direct : /status.
+- Si le client souhaite parler à un humain, oriente-le chaleureusement vers WhatsApp.
+
+TON ET FORMAT :
+- Style cyber-néon moderne, courtois, chaleureux, concis et ultra-professionnel.
+- Fais des réponses aérées avec puces et gras pour faciliter la lecture sur smartphone.
+- Réponds toujours dans la langue de l'interlocuteur (français par défaut, anglais si l'utilisateur s'exprime en anglais, hébreu si en hébreu).`;
+
+const DEFAULT_CHATBOT_WELCOME = "⚡ Bonjour ! Je suis Volt, l'assistant IA de NeonPass. Comment puis-je vous aider aujourd'hui ? (tarifs, stock, commande, SAV...)";
+
 async function getSettings() {
   const { rows } = await pool.query('SELECT key, value FROM settings');
   const m = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return {
     discountPct: clampInt(m.discount_pct, 0, 90, 10),
     discountMin: clampInt(m.discount_min, 2, 10, 3),
-    stockAlertsEnabled: m.stock_alerts_enabled !== 'false'
+    stockAlertsEnabled: m.stock_alerts_enabled !== 'false',
+    chatbotEnabled: m.chatbot_enabled !== 'false',
+    chatbotApiKey: m.chatbot_api_key || DEFAULT_GEMINI_KEY,
+    chatbotModel: m.chatbot_model || DEFAULT_GEMINI_MODEL,
+    chatbotSystemPrompt: m.chatbot_system_prompt || DEFAULT_CHATBOT_PROMPT,
+    chatbotWelcomeMessage: m.chatbot_welcome_message || DEFAULT_CHATBOT_WELCOME
   };
 }
 
@@ -1024,7 +1064,13 @@ app.get(
   '/api/config',
   wrap(async (req, res) => {
     const s = await getSettings();
-    res.json({ waNumber: WA_NUMBER, discountPct: s.discountPct, discountMin: s.discountMin });
+    res.json({
+      waNumber: WA_NUMBER,
+      discountPct: s.discountPct,
+      discountMin: s.discountMin,
+      chatbotEnabled: s.chatbotEnabled,
+      chatbotWelcomeMessage: s.chatbotWelcomeMessage
+    });
   })
 );
 
@@ -1308,6 +1354,156 @@ app.get(['/api/changelog', '/api/admin/changelog'], (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la lecture du changelog' });
   }
 });
+
+// ----- Assistant IA Chatbot (Google AI Studio / Gemini) -----
+async function buildChatbotContext(pool, customPrompt) {
+  const basePrompt = (customPrompt && customPrompt.trim().length > 0) ? customPrompt.trim() : DEFAULT_CHATBOT_PROMPT;
+
+  try {
+    const { rows: offers } = await pool.query(`
+      SELECT o.id, o.name, o.category, o.price, o.was_price, o.duration_months, o.description, o.features, o.is_pack,
+             coalesce(r.rating_avg, 5.0) as rating, coalesce(r.review_count, 0) as reviews,
+             count(a.id) FILTER (WHERE a.status = 'available')::int as stock_available
+      FROM offers o
+      LEFT JOIN accounts a ON a.offer_id = o.id
+      LEFT JOIN (SELECT offer_id, avg(rating) as rating_avg, count(*) as review_count FROM reviews WHERE approved GROUP BY offer_id) r ON r.offer_id = o.id
+      WHERE o.active
+      GROUP BY o.id, r.rating_avg, r.review_count
+      ORDER BY o.sort ASC, o.id ASC
+    `);
+
+    const { rows: reviewStats } = await pool.query(`
+      SELECT count(*)::int as total_reviews, coalesce(avg(rating), 5.0) as global_rating
+      FROM reviews WHERE approved
+    `);
+
+    let context = `${basePrompt}\n\n`;
+    context += `--- CATALOGUE OFFICIEL & STOCKS EN DIRECT NEONPASS ---\n`;
+    context += `Note globale de la boutique : ${Math.round((reviewStats[0]?.global_rating || 5) * 10) / 10}/5 (${reviewStats[0]?.total_reviews || 0} avis clients vérifiés).\n\n`;
+    context += `Offres actuellement en ligne :\n`;
+
+    offers.forEach((o) => {
+      const was = o.was_price ? ` (prix barré: ${o.was_price}€)` : '';
+      const stock = o.stock_available > 0 ? `En stock (${o.stock_available} disponibles)` : 'Disponible à la commande';
+      const ratingStr = o.reviews > 0 ? `Note: ${Math.round(o.rating * 10) / 10}/5 (${o.reviews} avis)` : 'Note: 5/5';
+      const feats = Array.isArray(o.features) ? o.features.join(' | ') : '';
+      context += `• ${o.name} [${o.category}] : ${o.price}€ pour ${o.duration_months} mois${was} - Statut: ${stock} - ${ratingStr}\n`;
+      if (o.description) context += `  Description: ${o.description}\n`;
+      if (feats) context += `  Caractéristiques: ${feats}\n`;
+    });
+
+    return context;
+  } catch (err) {
+    console.error('[buildChatbotContext Error]', err.message);
+    return basePrompt;
+  }
+}
+
+async function callGeminiChat({ apiKey, model, systemPrompt, messages, temperature = 0.7 }) {
+  const chosenModel = model || DEFAULT_GEMINI_MODEL;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const body = {
+    system_instruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    contents: messages,
+    generationConfig: {
+      temperature,
+      maxOutputTokens: 800
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const errMsg = data.error?.message || `Erreur API Google Studio (${response.status})`;
+    throw new Error(errMsg);
+  }
+
+  const candidate = data.candidates?.[0];
+  const replyText = candidate?.content?.parts?.[0]?.text;
+  if (!replyText) {
+    throw new Error('Réponse vide reçue de l\'assistant IA.');
+  }
+
+  return replyText;
+}
+
+const chatRateLimits = new Map();
+function checkChatRateLimit(ip) {
+  const now = Date.now();
+  const entry = chatRateLimits.get(ip) || { count: 0, resetAt: now + 60000 };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + 60000;
+  }
+  entry.count++;
+  chatRateLimits.set(ip, entry);
+  return entry.count <= 30; // 30 messages par minute
+}
+
+app.post(
+  '/api/chat',
+  wrap(async (req, res) => {
+    const ip = req.ip || req.connection.remoteAddress || '127.0.0.1';
+    if (!checkChatRateLimit(ip)) {
+      return res.status(429).json({ error: 'Trop de requêtes. Veuillez patienter un instant.' });
+    }
+
+    const s = await getSettings();
+    if (!s.chatbotEnabled) {
+      return res.status(403).json({ error: 'Le chatbot est actuellement désactivé.' });
+    }
+
+    const userMessage = (req.body.message || '').trim();
+    if (!userMessage) {
+      return res.status(400).json({ error: 'Message vide.' });
+    }
+
+    if (userMessage.length > 1500) {
+      return res.status(400).json({ error: 'Message trop long (1500 caractères maximum).' });
+    }
+
+    const rawHistory = Array.isArray(req.body.history) ? req.body.history : [];
+    const contents = [];
+    for (const h of rawHistory.slice(-8)) {
+      if (h.role === 'user' && typeof h.text === 'string' && h.text.trim()) {
+        contents.push({ role: 'user', parts: [{ text: h.text.trim().slice(0, 1500) }] });
+      } else if (h.role === 'model' && typeof h.text === 'string' && h.text.trim()) {
+        contents.push({ role: 'model', parts: [{ text: h.text.trim().slice(0, 2000) }] });
+      }
+    }
+    contents.push({ role: 'user', parts: [{ text: userMessage }] });
+
+    const systemPrompt = await buildChatbotContext(pool, s.chatbotSystemPrompt);
+    const apiKey = s.chatbotApiKey || DEFAULT_GEMINI_KEY;
+    const model = s.chatbotModel || DEFAULT_GEMINI_MODEL;
+
+    try {
+      const reply = await callGeminiChat({
+        apiKey,
+        model,
+        systemPrompt,
+        messages: contents
+      });
+      res.json({ ok: true, reply });
+    } catch (err) {
+      console.error('[Chatbot Error]', err.message);
+      res.status(502).json({
+        ok: false,
+        error: 'L\'assistant IA est temporairement indisponible. Notre équipe reste à votre écoute sur WhatsApp !',
+        details: err.message
+      });
+    }
+  })
+);
 
 // API Suivi & Récupération sécurisée d'accès
 const suiviRateLimits = new Map();
@@ -5525,7 +5721,123 @@ admin.put(
       }
     }
 
+    if (req.body.chatbot && typeof req.body.chatbot === 'object') {
+      const cb = req.body.chatbot;
+      if (cb.enabled !== undefined) {
+        await pool.query(
+          `INSERT INTO settings (key, value) VALUES ('chatbot_enabled', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [String(cb.enabled === true || cb.enabled === 'true')]
+        );
+      }
+      if (typeof cb.apiKey === 'string') {
+        await pool.query(
+          `INSERT INTO settings (key, value) VALUES ('chatbot_api_key', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [cb.apiKey.trim()]
+        );
+      }
+      if (typeof cb.model === 'string' && cb.model.trim()) {
+        await pool.query(
+          `INSERT INTO settings (key, value) VALUES ('chatbot_model', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [cb.model.trim()]
+        );
+      }
+      if (typeof cb.systemPrompt === 'string') {
+        await pool.query(
+          `INSERT INTO settings (key, value) VALUES ('chatbot_system_prompt', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [cb.systemPrompt.trim()]
+        );
+      }
+      if (typeof cb.welcomeMessage === 'string') {
+        await pool.query(
+          `INSERT INTO settings (key, value) VALUES ('chatbot_welcome_message', $1)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [cb.welcomeMessage.trim()]
+        );
+      }
+    }
+
     res.json({ ok: true, discountPct: pct, discountMin: min, stockAlertsEnabled });
+  })
+);
+
+admin.put(
+  '/settings/chatbot',
+  wrap(async (req, res) => {
+    const cb = req.body || {};
+    if (cb.enabled !== undefined) {
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ('chatbot_enabled', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [String(cb.enabled === true || cb.enabled === 'true')]
+      );
+    }
+    if (typeof cb.apiKey === 'string') {
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ('chatbot_api_key', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [cb.apiKey.trim()]
+      );
+    }
+    if (typeof cb.model === 'string' && cb.model.trim()) {
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ('chatbot_model', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [cb.model.trim()]
+      );
+    }
+    if (typeof cb.systemPrompt === 'string') {
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ('chatbot_system_prompt', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [cb.systemPrompt.trim()]
+      );
+    }
+    if (typeof cb.welcomeMessage === 'string') {
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ('chatbot_welcome_message', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [cb.welcomeMessage.trim()]
+      );
+    }
+
+    const s = await getSettings();
+    res.json({
+      ok: true,
+      chatbotEnabled: s.chatbotEnabled,
+      chatbotApiKey: s.chatbotApiKey,
+      chatbotModel: s.chatbotModel,
+      chatbotSystemPrompt: s.chatbotSystemPrompt,
+      chatbotWelcomeMessage: s.chatbotWelcomeMessage
+    });
+  })
+);
+
+admin.post(
+  '/settings/chatbot/test',
+  wrap(async (req, res) => {
+    const s = await getSettings();
+    const apiKey = (req.body.apiKey || s.chatbotApiKey || DEFAULT_GEMINI_KEY).trim();
+    const model = (req.body.model || s.chatbotModel || DEFAULT_GEMINI_MODEL).trim();
+    const prompt = req.body.systemPrompt !== undefined ? req.body.systemPrompt : s.chatbotSystemPrompt;
+    const testMessage = (req.body.message || 'Bonjour Volt, présente NeonPass et donne-moi les prix de deux offres phares en 3 lignes.').trim();
+
+    const systemPrompt = await buildChatbotContext(pool, prompt);
+
+    try {
+      const reply = await callGeminiChat({
+        apiKey,
+        model,
+        systemPrompt,
+        messages: [{ role: 'user', parts: [{ text: testMessage }] }]
+      });
+      res.json({ ok: true, reply, model });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
   })
 );
 
