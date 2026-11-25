@@ -165,7 +165,7 @@ const REVIEW_AGG = `
              FROM reviews WHERE approved GROUP BY offer_id) ra ON ra.offer_id = o.id`;
 
 const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || '';
-const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest';
 const DEFAULT_CHATBOT_PROMPT = `Tu es Volt, l'assistant officiel du support client de NeonPass (https://neonpass.uned.live).
 NeonPass est la référence e-commerce pour les abonnements numériques et licences logicielles premium (IPTV, VPN, Streaming vidéo & musical, Outils IA & Développement).
 
@@ -1506,40 +1506,60 @@ async function lookupOrderDiagnostic(pool, text, rawHistory = []) {
 }
 
 async function callGeminiChat({ apiKey, model, systemPrompt, messages, temperature = 0.7 }) {
-  const chosenModel = model || DEFAULT_GEMINI_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const primaryModel = model || DEFAULT_GEMINI_MODEL;
+  const fallbackModel = (primaryModel === 'gemini-flash-lite-latest') ? 'gemini-3.5-flash-lite' : 'gemini-flash-lite-latest';
+  const modelsToTry = [primaryModel, fallbackModel];
 
-  const body = {
-    system_instruction: {
-      parts: [{ text: systemPrompt }]
-    },
-    contents: messages,
-    generationConfig: {
-      temperature,
-      maxOutputTokens: 800
+  let lastError = null;
+  for (const m of modelsToTry) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        system_instruction: {
+          parts: [{ text: systemPrompt }]
+        },
+        contents: messages,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: 2500
+        }
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const errMsg = data.error?.message || `Erreur API Google Studio (${response.status})`;
+        if (response.status === 503 || response.status === 429 || errMsg.includes('demand') || errMsg.includes('Unavailable') || errMsg.includes('Overloaded')) {
+          lastError = new Error(errMsg);
+          console.warn(`[Chatbot Gemini] Modèle ${m} surchargé (${errMsg}), bascule automatique sur ${fallbackModel}...`);
+          continue;
+        }
+        throw new Error(errMsg);
+      }
+
+      const candidate = data.candidates?.[0];
+      const replyText = candidate?.content?.parts?.[0]?.text;
+      if (!replyText) {
+        throw new Error('Réponse vide reçue de l\'assistant IA.');
+      }
+
+      return replyText;
+    } catch (err) {
+      lastError = err;
+      if (m === modelsToTry[0] && (err.message.includes('demand') || err.message.includes('503') || err.message.includes('Unavailable') || err.message.includes('Overloaded') || err.message.includes('fetch'))) {
+        continue;
+      }
+      throw err;
     }
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const errMsg = data.error?.message || `Erreur API Google Studio (${response.status})`;
-    throw new Error(errMsg);
   }
 
-  const candidate = data.candidates?.[0];
-  const replyText = candidate?.content?.parts?.[0]?.text;
-  if (!replyText) {
-    throw new Error('Réponse vide reçue de l\'assistant IA.');
-  }
-
-  return replyText;
+  throw lastError || new Error('Erreur de connexion à l\'assistant.');
 }
 
 const chatRateLimits = new Map();
@@ -6055,6 +6075,25 @@ async function initDb() {
         WHERE referral_code IS NULL;
       `);
       console.log('[db] schéma prêt');
+
+      // Nettoyage et synchronisation des paramètres du Chatbot
+      await pool.query(`
+        UPDATE settings
+        SET value = $1
+        WHERE key = 'chatbot_welcome_message' AND (value LIKE '%assistant test%' OR value = '');
+      `, [DEFAULT_CHATBOT_WELCOME]);
+
+      await pool.query(`
+        UPDATE settings
+        SET value = $1
+        WHERE key = 'chatbot_system_prompt' AND (value LIKE '%assistant virtuel IA officiel de NeonPass%' OR value = '');
+      `, [DEFAULT_CHATBOT_PROMPT]);
+
+      await pool.query(`
+        UPDATE settings
+        SET value = 'gemini-flash-lite-latest'
+        WHERE key = 'chatbot_model' AND (value = 'gemini-3.5-flash-lite' OR value = '' OR value IS NULL);
+      `);
       return;
     } catch (e) {
       console.log('[db] pas encore prête (' + i + '/30) : ' + e.message);

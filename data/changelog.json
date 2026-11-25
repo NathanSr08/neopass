@@ -1,5 +1,21 @@
 [
   {
+    "id": "cl-2026-11-25-4",
+    "version": "v2.4.2",
+    "date": "2026-11-25",
+    "time": "11:35",
+    "category": "fix",
+    "categoryLabel": "⚡ Correctif & Fiabilité",
+    "title": "Résolution Coupures Chatbot, Isolation des Tests & Haute Disponibilité",
+    "summary": "Élimination définitive de la mention 'assistant test' du message d'accueil, triplement du plafond de génération de tokens pour supprimer les réponses tronquées, et mécanisme de secours automatique Google Gemini.",
+    "details": [
+      "Correction du message d'accueil en direct : Restauration et protection du message d'accueil officiel Volt, avec isolation stricte des suites de tests automatisées évitant toute persistance en base de production.",
+      "Fin des réponses coupées : Augmentation du quota maxOutputTokens de 800 à 2500 tokens, garantissant des réponses complètes pour les tutoriels IPTV et explications détaillées.",
+      "Haute disponibilité & Bascule automatique Google Gemini : Adoption par défaut du modèle gemini-flash-lite-latest avec basculement transparent vers un modèle alternatif en cas de pic de charge ou indisponibilité 503.",
+      "Optimisation du parseur Markdown : Meilleur rendu des listes à puces et suppression des balises parasites entre les éléments de liste."
+    ]
+  },
+  {
     "id": "cl-2026-11-25-3",
     "version": "v2.4.1",
     "date": "2026-11-25",

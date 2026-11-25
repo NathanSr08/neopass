@@ -104,18 +104,33 @@
     if (!text) return '';
     let html = escapeHtml(text);
 
+    // Titres ### et ##
+    html = html.replace(/^###\s+(.*)$/gm, '<h5 class="chat-h5" style="margin:6px 0 3px;font-size:13px;font-weight:600;color:#38bdf8">$1</h5>');
+    html = html.replace(/^##\s+(.*)$/gm, '<h4 class="chat-h4" style="margin:8px 0 4px;font-size:14px;font-weight:700;color:#ffffff">$1</h4>');
+
+    // Puces : • ou - ou * en début de ligne (traité avant l'italique pour éviter toute collision)
+    html = html.replace(/^[•\-\*]\s+(.*)$/gm, '<li class="chat-li">$1</li>');
+    html = html.replace(/((?:<li class="chat-li">.*?<\/li>\s*)+)/gs, '<ul class="chat-ul">$1</ul>');
+
     // Gras : **texte**
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Italique : *texte*
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Italique : *texte* ou _texte_ (sans espaces après l'étoile ouvrante)
+    html = html.replace(/(?<!\*)\*(?!\s)([^\*\n]+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>');
+    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+
     // Code : `code`
     html = html.replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>');
-    // Puces : • ou -
-    html = html.replace(/^[•\-\*]\s+(.*)$/gm, '<li class="chat-li">$1</li>');
-    html = html.replace(/(<li class="chat-li">.*<\/li>(\n)?)+/g, '<ul class="chat-ul">$&</ul>');
+
     // Liens : [texte](url)
     html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+|\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="chat-link">$1</a>');
-    // Sauts de ligne
+
+    // Nettoyage des sauts de ligne superflus à l'intérieur des listes
+    html = html.replace(/<ul class="chat-ul">([\s\S]*?)<\/ul>/g, function(_, content) {
+      return '<ul class="chat-ul">' + content.replace(/<br\s*\/?>|\n/g, '') + '</ul>';
+    });
+
+    // Sauts de ligne généraux
     html = html.replace(/\n{2,}/g, '<br><br>');
     html = html.replace(/\n/g, '<br>');
 
