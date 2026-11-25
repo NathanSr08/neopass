@@ -19,7 +19,6 @@ services:
       SMTP_USER: ${SMTP_USER:-neonpass.officiel@gmail.com}
       SMTP_PASS: ${SMTP_PASS:-mrsbklwwfjmmiuvq}
       SMTP_FROM: "${SMTP_FROM:-NeonPass <neonpass.officiel@gmail.com>}"
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

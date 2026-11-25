@@ -1,5 +1,22 @@
 [
   {
+    "id": "cl-2026-11-25-6",
+    "version": "v2.5.0",
+    "date": "2026-11-25",
+    "time": "11:58",
+    "category": "feature",
+    "categoryLabel": "⚡ Suppression Feature",
+    "title": "Retrait Intégral du Chatbot IA & Rétablissement WhatsApp Direct",
+    "summary": "Suppression complète de la fonctionnalité d'assistant IA chatbot, du widget flottant, des endpoints serveur dédiés et des réglages associés, avec restauration du bouton officiel de contact WhatsApp direct.",
+    "details": [
+      "Retrait complet du widget chatbot côté client et suppression du fichier public/chatbot.js.",
+      "Rétablissement du bouton flottant WhatsApp d'origine en bas à droite avec lien d'ouverture directe vers le support WhatsApp.",
+      "Suppression des endpoints API /api/chat et /api/chat/sav ainsi que du proxy Google Gemini.",
+      "Suppression de la section de configuration du chatbot dans les paramètres de l'administration.",
+      "Nettoyage des clés de configuration en base de données PostgreSQL."
+    ]
+  },
+  {
     "id": "cl-2026-11-25-5",
     "version": "v2.4.3",
     "date": "2026-11-25",
